@@ -1,0 +1,10 @@
+node_modules/
+dist/
+functions/lib/
+.firebase/
+*.log
+.DS_Store
+.env
+.env.*
+tmp/
+docs/plans/
