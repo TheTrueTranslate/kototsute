@@ -1,0 +1,74 @@
+version: "3"
+
+vars:
+  ROOT: "."
+  FUNCTIONS_DIR: "functions"
+  PROJECT_ID: "kototsute"
+
+includes: {}
+
+silent: false
+
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
+
+  install:
+    desc: "Install root deps with pnpm"
+    cmds:
+      - pnpm install
+
+  install:all:
+    desc: "Install root and functions deps"
+    cmds:
+      - pnpm install
+      - pnpm -C {{.FUNCTIONS_DIR}} install
+
+  dev:
+    desc: "Run Vite dev server with Firebase emulators (core)"
+    cmds:
+      - task -p firebase:emulate dev:app functions:watch
+
+  dev:app:
+    desc: "Run Vite dev server"
+    cmds:
+      - pnpm dev
+
+  build:
+    desc: "Build web app"
+    cmds:
+      - pnpm build
+
+  preview:
+    desc: "Preview production build"
+    cmds:
+      - pnpm preview
+
+  functions:build:
+    desc: "Build Firebase Functions"
+    cmds:
+      - pnpm -C {{.FUNCTIONS_DIR}} build
+
+  functions:watch:
+    desc: "Watch Firebase Functions (tsc -w)"
+    cmds:
+      - pnpm -C {{.FUNCTIONS_DIR}} watch
+
+  firebase:emulate:
+    desc: "Start emulators (core)"
+    cmds:
+      - firebase emulators:start --project {{.PROJECT_ID}} --only functions,auth,firestore,storage
+
+  firebase:emulators:
+    desc: "Start Firebase emulators (all)"
+    cmds:
+      - firebase emulators:start --project {{.PROJECT_ID}}
+
+  clean:
+    desc: "Remove build outputs"
+    cmds:
+      - rm -rf dist
+      - rm -rf {{.FUNCTIONS_DIR}}/lib
