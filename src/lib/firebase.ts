@@ -5,13 +5,23 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC76BzHPD4Q2UYFeQoYmNMcW5X3iy-G0G0",
-  authDomain: "kototsute.firebaseapp.com",
-  projectId: "kototsute",
-  storageBucket: "kototsute.firebasestorage.app",
-  messagingSenderId: "413518052351",
-  appId: "1:413518052351:web:9975c8b537563edb8685ca"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingKeys.length > 0) {
+  throw new Error(
+    `Firebase 設定が不足しています: ${missingKeys.join(", ")}. .env を確認してください。`
+  );
+}
 
 const app = initializeApp(firebaseConfig);
 
