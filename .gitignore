@@ -1,6 +1,7 @@
 node_modules/
 dist/
 functions/lib/
+functions/node_modules/
 .firebase/
 *.log
 .DS_Store
@@ -8,3 +9,7 @@ functions/lib/
 .env.*
 tmp/
 docs/plans/
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+vite.config.js
+vite.config.d.ts
