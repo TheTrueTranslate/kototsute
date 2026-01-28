@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createAsset } from "../api/assets";
-import { isXrpAddress } from "@kototsute/shared";
+import { assetCreateSchema } from "@kototsute/shared";
 import FormAlert from "../../components/form-alert";
 import FormField from "../../components/form-field";
 import { Button } from "../../components/ui/button";
@@ -12,15 +12,7 @@ import styles from "../../styles/assetsPage.module.css";
 import { useNavigate } from "react-router-dom";
 import Breadcrumbs from "../../components/breadcrumbs";
 
-const schema = z.object({
-  label: z.string().min(1, "ラベルは必須です"),
-  address: z
-    .string()
-    .min(1, "アドレスは必須です")
-    .refine((value) => isXrpAddress(value), "XRPアドレスが不正です")
-});
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<typeof assetCreateSchema>;
 
 type AssetTypeOption = {
   id: "xrp-wallet" | "bank" | "securities" | "real-estate";
@@ -63,7 +55,7 @@ export default function AssetNewPage() {
   const [step, setStep] = useState<"type" | "form">("type");
   const navigate = useNavigate();
   const { register, handleSubmit, formState, reset } = useForm<FormValues>({
-    resolver: zodResolver(schema)
+    resolver: zodResolver(assetCreateSchema)
   });
 
   const onSubmit = handleSubmit(async (values) => {
