@@ -28,10 +28,10 @@ export default function Header({
   return (
     <header className={classes}>
       <div className={styles.inner}>
-        <div className={styles.branding}>
+        <a className={styles.branding} href="/">
           <img className={styles.logo} src={logoSrc} alt={logoAlt} />
           <span className={styles.brandText}>{brand}</span>
-        </div>
+        </a>
         {showNav ? (
           <nav className={styles.nav} aria-label="メインメニュー">
             {navItems.map((item) => (

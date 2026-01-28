@@ -7,11 +7,19 @@ import { Link } from "react-router-dom";
 export default function AssetsPage() {
   const [items, setItems] = useState<AssetListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     listAssets()
       .then(setItems)
-      .catch((err) => setError(err?.message ?? "取得に失敗しました"));
+      .catch((err) => {
+        if (err?.status === 401 || err?.message === "UNAUTHORIZED") {
+          setItems([]);
+          return;
+        }
+        setError(err?.message ?? "取得に失敗しました");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -25,17 +33,21 @@ export default function AssetsPage() {
         </div>
       </header>
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
-      <div className={styles.list}>
-        {items.map((item) => (
-          <div key={item.assetId} className={styles.row}>
-            <div>
-              <div className={styles.label}>{item.label}</div>
-              <div className={styles.address}>{item.address}</div>
+      {loading ? null : items.length === 0 ? (
+        <div className={styles.emptyState}>登録された資産はありません。</div>
+      ) : (
+        <div className={styles.list}>
+          {items.map((item) => (
+            <div key={item.assetId} className={styles.row}>
+              <div>
+                <div className={styles.label}>{item.label}</div>
+                <div className={styles.address}>{item.address}</div>
+              </div>
+              <div className={styles.meta}>{new Date(item.createdAt).toLocaleDateString()}</div>
             </div>
-            <div className={styles.meta}>{new Date(item.createdAt).toLocaleDateString()}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
