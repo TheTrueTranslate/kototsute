@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isXrpAddress } from "./xrp-address";
+import { isXrpAddress } from "./xrp-address.js";
 
 export const assetCreateSchema = z.object({
   label: z.string().min(1, "ラベルは必須です"),
