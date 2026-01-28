@@ -106,25 +106,23 @@ export default function InvitesReceivedPage() {
         ) : (
           <div className={styles.list}>
             {sortedInvites.map((invite) => (
-              <div key={invite.inviteId} className={styles.card}>
-                <div className={styles.cardHeader}>
-                  <div>
-                    <div className={styles.cardTitle}>{formatRelation(invite)}</div>
-                    <div className={styles.cardMeta}>
-                      送信者: {invite.ownerDisplayName ?? "不明"}
-                    </div>
+              <div key={invite.inviteId} className={styles.row}>
+                <div className={styles.rowMain}>
+                  <div className={styles.rowTitle}>{formatRelation(invite)}</div>
+                  <div className={styles.rowSub}>
+                    送信者: {invite.ownerDisplayName ?? "不明"}
                   </div>
+                  {invite.memo ? <div className={styles.rowMetaText}>{invite.memo}</div> : null}
+                </div>
+                <div className={styles.rowSide}>
                   <div className={styles.metaRow}>
                     <span className={styles.statusBadge}>
                       {statusLabels[invite.status] ?? "招待中"}
                     </span>
-                    <span className={styles.cardMeta}>
+                    <span className={styles.meta}>
                       {new Date(invite.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                </div>
-                <div className={styles.cardBody}>
-                  {invite.memo ? <p className={styles.cardMeta}>{invite.memo}</p> : null}
                   <div className={styles.actions}>
                     {invite.status === "pending" ? (
                       <>

@@ -231,34 +231,28 @@ export default function InvitesPage() {
         ) : (
           <div className={styles.list}>
             {sortedInvites.map((invite) => (
-              <div key={invite.inviteId} className={styles.card}>
-                <div className={styles.cardHeader}>
-                  <div>
-                    <div className={styles.cardTitle}>{invite.email}</div>
-                    <div className={styles.cardMeta}>{formatRelation(invite)}</div>
+              <div key={invite.inviteId} className={styles.row}>
+                <div className={styles.rowMain}>
+                  <div className={styles.rowTitle}>{invite.email}</div>
+                  <div className={styles.rowSub}>{formatRelation(invite)}</div>
+                  {invite.memo ? <div className={styles.rowMetaText}>{invite.memo}</div> : null}
+                  <div className={styles.rowMetaRow}>
+                    {invite.acceptedAt ? (
+                      <span>受諾: {new Date(invite.acceptedAt).toLocaleDateString()}</span>
+                    ) : null}
+                    {invite.declinedAt ? (
+                      <span>辞退: {new Date(invite.declinedAt).toLocaleDateString()}</span>
+                    ) : null}
                   </div>
+                </div>
+                <div className={styles.rowSide}>
                   <div className={styles.metaRow}>
                     <span className={styles.statusBadge}>
                       {statusLabels[invite.status] ?? "招待中"}
                     </span>
-                    <span className={styles.cardMeta}>
+                    <span className={styles.meta}>
                       {new Date(invite.createdAt).toLocaleDateString()}
                     </span>
-                  </div>
-                </div>
-                <div className={styles.cardBody}>
-                  {invite.memo ? <p className={styles.cardMeta}>{invite.memo}</p> : null}
-                  <div className={styles.metaRow}>
-                    {invite.acceptedAt ? (
-                      <span className={styles.cardMeta}>
-                        受諾: {new Date(invite.acceptedAt).toLocaleDateString()}
-                      </span>
-                    ) : null}
-                    {invite.declinedAt ? (
-                      <span className={styles.cardMeta}>
-                        辞退: {new Date(invite.declinedAt).toLocaleDateString()}
-                      </span>
-                    ) : null}
                   </div>
                   {invite.status === "declined" ? (
                     <div className={styles.actions}>
