@@ -6,6 +6,8 @@ import ResetPage from "./pages/ResetPage";
 import AssetsPage from "./pages/AssetsPage";
 import AssetNewPage from "./pages/AssetNewPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
+import InvitesPage from "./pages/InvitesPage";
+import InvitesReceivedPage from "./pages/InvitesReceivedPage";
 import MyPage from "./pages/MyPage";
 import AppSidebar from "../components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "../components/ui/sidebar";
@@ -83,6 +85,22 @@ function AppShell() {
               element={
                 <RequireAuth>
                   <AssetDetailPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/invites"
+              element={
+                <RequireAuth>
+                  <InvitesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/invites/received"
+              element={
+                <RequireAuth>
+                  <InvitesReceivedPage />
                 </RequireAuth>
               }
             />

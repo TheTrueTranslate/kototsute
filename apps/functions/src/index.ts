@@ -12,7 +12,7 @@ if (getApps().length === 0) {
 const handler = createApiHandler(createDefaultDeps());
 const corsHandler = cors({
   origin: true,
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 });
 

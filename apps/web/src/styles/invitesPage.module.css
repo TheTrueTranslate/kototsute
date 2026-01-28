@@ -1,0 +1,136 @@
+.page {
+  @apply mx-auto w-full max-w-[840px] px-6 py-10;
+}
+
+.header {
+  @apply mb-6 grid gap-4;
+}
+
+.headerRow {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.section {
+  @apply mt-6 grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
+}
+
+.sectionTitle {
+  @apply text-section text-foreground;
+}
+
+
+.form {
+  @apply grid gap-5;
+}
+
+.fieldRow {
+  @apply grid gap-4 md:grid-cols-2;
+}
+
+.select {
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-body-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.textarea {
+  @apply w-full min-h-[120px] rounded-xl border border-border bg-background px-3 py-2 text-body-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.list {
+  @apply mt-6 flex flex-col gap-4;
+}
+
+.row {
+  @apply flex flex-col gap-3 border-b border-border pb-4;
+}
+
+.rowMain {
+  @apply grid gap-1;
+}
+
+.rowSide {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.rowTitle {
+  @apply text-section text-foreground;
+}
+
+.rowSub {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.rowMetaText {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.rowMetaRow {
+  @apply flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground;
+}
+
+.metaRow {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.statusBadge {
+  @apply rounded-full border border-border bg-muted/40 px-3 py-1 text-meta font-medium text-foreground;
+}
+
+.meta {
+  @apply text-meta text-muted-foreground;
+}
+
+.emptyState {
+  @apply rounded-2xl border border-border bg-muted/40 px-6 py-8;
+}
+
+.emptyTitle {
+  @apply text-section text-foreground;
+}
+
+.emptyBody {
+  @apply mt-2 text-body text-muted-foreground;
+}
+
+.ownerNote {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.confirmDialog {
+  @apply border border-border/80 bg-background p-0 shadow-[0_24px_60px_rgba(15,23,42,0.18)];
+}
+
+.confirmBody {
+  @apply grid gap-4 px-6 py-5;
+}
+
+.confirmHeader {
+  @apply text-left;
+}
+
+.confirmTitle {
+  @apply text-lg font-semibold text-foreground;
+}
+
+.confirmDescription {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.confirmMeta {
+  @apply rounded-xl border border-border bg-muted/40 px-4 py-3;
+}
+
+.confirmEmail {
+  @apply text-body text-foreground;
+}
+
+.confirmRelation {
+  @apply mt-1 text-body-sm text-muted-foreground;
+}
+
+.confirmActions {
+  @apply flex flex-wrap items-center justify-end gap-2;
+}

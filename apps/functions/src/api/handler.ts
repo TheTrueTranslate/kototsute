@@ -8,7 +8,7 @@ import {
   OccurredAt,
   AssetRepository
 } from "@kototsute/asset";
-import { DomainError, isXrpAddress } from "@kototsute/shared";
+import { DomainError, assetCreateSchema, inviteCreateSchema } from "@kototsute/shared";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import crypto from "node:crypto";
@@ -21,6 +21,7 @@ export type ApiDeps = {
   repo: AssetRepository;
   now: () => Date;
   getUid: (req: any) => Promise<string>;
+  getAuthUser: (req: any) => Promise<{ uid: string; email?: string | null }>;
   getOwnerUidForRead: (uid: string) => Promise<string>;
 };
 
@@ -81,6 +82,8 @@ const formatDate = (value: any): string => {
   return new Date().toISOString();
 };
 
+const normalizeEmail = (value: string): string => value.trim().toLowerCase();
+
 const createChallenge = () => {
   return crypto.randomBytes(8).toString("hex");
 };
@@ -123,12 +126,16 @@ export const createApiHandler = (deps: ApiDeps) => {
       if (path === "/v1/assets" && method === "POST") {
         const uid = await deps.getUid(req);
         const { label, address } = req.body ?? {};
-
-        if (typeof label !== "string" || label.trim().length === 0) {
-          return json(res, 400, { ok: false, code: "VALIDATION_ERROR", message: "ラベルは必須です" });
-        }
-        if (typeof address !== "string" || !isXrpAddress(address)) {
-          return json(res, 400, { ok: false, code: "VALIDATION_ERROR", message: "XRPアドレスが不正です" });
+        const parsed = assetCreateSchema.safeParse({
+          label: typeof label === "string" ? label.trim() : label,
+          address
+        });
+        if (!parsed.success) {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "入力が不正です"
+          });
         }
 
         const usecase = new RegisterAsset(deps.repo);
@@ -136,8 +143,8 @@ export const createApiHandler = (deps: ApiDeps) => {
         const asset = await usecase.execute({
           ownerId: OwnerId.create(uid),
           type: "CRYPTO_WALLET",
-          identifier: AssetIdentifier.create(address),
-          label: label.trim(),
+          identifier: AssetIdentifier.create(parsed.data.address),
+          label: parsed.data.label,
           linkLevel: "L0",
           status: "MANUAL",
           dataSource: "SELF_DECLARED",
@@ -177,6 +184,167 @@ export const createApiHandler = (deps: ApiDeps) => {
             createdAt: asset.getCreatedAt().toDate().toISOString(),
             verificationStatus: statusMap.get(asset.getAssetId().toString()) ?? "UNVERIFIED"
           }))
+        });
+      }
+
+      if (path === "/v1/invites" && method === "POST") {
+        const authUser = await deps.getAuthUser(req);
+        const { email, relationLabel, relationOther, memo } = req.body ?? {};
+        const parsed = inviteCreateSchema.safeParse({
+          email,
+          relationLabel,
+          relationOther,
+          memo
+        });
+        if (!parsed.success) {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "入力が不正です"
+          });
+        }
+
+        const normalizedEmail = normalizeEmail(parsed.data.email);
+        const now = deps.now();
+        const db = getFirestore();
+        const existingSnapshot = await db
+          .collection("invites")
+          .where("ownerUid", "==", authUser.uid)
+          .where("email", "==", normalizedEmail)
+          .get();
+        const existingDoc = existingSnapshot.docs[0];
+        if (existingDoc) {
+          const existing = existingDoc.data();
+          if (existing?.status === "declined") {
+            await existingDoc.ref.set(
+              {
+                status: "pending",
+                relationLabel: parsed.data.relationLabel,
+                relationOther: parsed.data.relationOther?.trim() ?? null,
+                memo: parsed.data.memo?.trim() ?? null,
+                updatedAt: now,
+                declinedAt: null
+              },
+              { merge: true }
+            );
+            return json(res, 200, {
+              ok: true,
+              data: {
+                inviteId: existingDoc.id,
+                status: "pending"
+              }
+            });
+          }
+          return json(res, 409, {
+            ok: false,
+            code: "CONFLICT",
+            message: "このメールアドレスは既に招待済みです"
+          });
+        }
+
+        let isExistingUserAtInvite = false;
+        try {
+          await getAuth().getUserByEmail(normalizedEmail);
+          isExistingUserAtInvite = true;
+        } catch (error: any) {
+          if (error?.code !== "auth/user-not-found") {
+            throw error;
+          }
+        }
+
+        const inviteRef = db.collection("invites").doc();
+        await inviteRef.set({
+          ownerUid: authUser.uid,
+          email: normalizedEmail,
+          status: "pending",
+          relationLabel: parsed.data.relationLabel,
+          relationOther: parsed.data.relationOther?.trim() ?? null,
+          memo: parsed.data.memo?.trim() ?? null,
+          isExistingUserAtInvite,
+          acceptedByUid: null,
+          acceptedAt: null,
+          declinedAt: null,
+          createdAt: now,
+          updatedAt: now
+        });
+
+        return json(res, 200, {
+          ok: true,
+          data: {
+            inviteId: inviteRef.id
+          }
+        });
+      }
+
+      if (path === "/v1/invites" && method === "GET") {
+        const scope = String(req.query?.scope ?? "");
+        if (scope !== "owner" && scope !== "received") {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: "scopeの指定が不正です"
+          });
+        }
+
+        const authUser = await deps.getAuthUser(req);
+        if (scope === "received" && !authUser.email) {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: "メールアドレスが取得できません"
+          });
+        }
+
+        const db = getFirestore();
+        const query =
+          scope === "owner"
+            ? db.collection("invites").where("ownerUid", "==", authUser.uid)
+            : db.collection("invites").where("email", "==", normalizeEmail(authUser.email));
+
+        const snapshot = await query.get();
+        const ownerUids = Array.from(
+          new Set(snapshot.docs.map((doc) => doc.data()?.ownerUid).filter(Boolean))
+        ) as string[];
+        const ownerEmailMap = new Map<string, string | null>();
+        if (scope === "received" && ownerUids.length > 0) {
+          await Promise.all(
+            ownerUids.map(async (ownerUid) => {
+              try {
+                const user = await getAuth().getUser(ownerUid);
+                ownerEmailMap.set(ownerUid, user.email ?? null);
+              } catch (error: any) {
+                if (error?.code === "auth/user-not-found") {
+                  ownerEmailMap.set(ownerUid, null);
+                  return;
+                }
+                throw error;
+              }
+            })
+          );
+        }
+        return json(res, 200, {
+          ok: true,
+          data: snapshot.docs.map((doc) => {
+            const data = doc.data();
+            const acceptedAt = data.acceptedAt ? formatDate(data.acceptedAt) : null;
+            const declinedAt = data.declinedAt ? formatDate(data.declinedAt) : null;
+            return {
+              inviteId: doc.id,
+              ownerUid: data.ownerUid ?? "",
+              ownerEmail: ownerEmailMap.get(data.ownerUid) ?? null,
+              email: data.email ?? "",
+              status: data.status ?? "pending",
+              relationLabel: data.relationLabel ?? "",
+              relationOther: data.relationOther ?? null,
+              memo: data.memo ?? null,
+              isExistingUserAtInvite: data.isExistingUserAtInvite ?? false,
+              acceptedByUid: data.acceptedByUid ?? null,
+              createdAt: formatDate(data.createdAt),
+              updatedAt: formatDate(data.updatedAt),
+              acceptedAt,
+              declinedAt
+            };
+          })
         });
       }
 
@@ -356,6 +524,108 @@ export const createApiHandler = (deps: ApiDeps) => {
         }
       }
 
+      if (segments[0] === "v1" && segments[1] === "invites" && segments[2] && method === "POST") {
+        const inviteId = segments[2];
+        const action = segments[3];
+        if (action !== "accept" && action !== "decline") {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });
+        }
+
+        const authUser = await deps.getAuthUser(req);
+        if (!authUser.email) {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: "メールアドレスが取得できません"
+          });
+        }
+
+        const db = getFirestore();
+        const inviteRef = db.collection("invites").doc(inviteId);
+        const inviteSnap = await inviteRef.get();
+        if (!inviteSnap.exists) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Invite not found" });
+        }
+        const invite = inviteSnap.data() ?? {};
+        const authEmail = normalizeEmail(authUser.email);
+        if (invite.email !== authEmail) {
+          return json(res, 403, { ok: false, code: "FORBIDDEN", message: "権限がありません" });
+        }
+
+        const now = deps.now();
+        if (action === "accept") {
+          await inviteRef.set(
+            {
+              status: "accepted",
+              acceptedByUid: authUser.uid,
+              acceptedAt: now,
+              updatedAt: now
+            },
+            { merge: true }
+          );
+
+          const heirRef = db.collection("heirs").doc(authUser.uid);
+          const heirSnap = await heirRef.get();
+          const createdAt = heirSnap.exists ? heirSnap.data()?.createdAt ?? now : now;
+          await heirRef.set(
+            {
+              uid: authUser.uid,
+              ownerUid: invite.ownerUid,
+              email: invite.email,
+              relationLabel: invite.relationLabel ?? "",
+              relationOther: invite.relationOther ?? null,
+              memo: invite.memo ?? null,
+              createdAt,
+              updatedAt: now
+            },
+            { merge: true }
+          );
+
+          return json(res, 200, { ok: true });
+        }
+
+        await inviteRef.set(
+          {
+            status: "declined",
+            acceptedByUid: null,
+            acceptedAt: null,
+            declinedAt: now,
+            updatedAt: now
+          },
+          { merge: true }
+        );
+        return json(res, 200, { ok: true });
+      }
+
+      if (segments[0] === "v1" && segments[1] === "invites" && segments[2] && method === "DELETE") {
+        if (segments[3]) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });
+        }
+
+        const inviteId = segments[2];
+        const authUser = await deps.getAuthUser(req);
+        const db = getFirestore();
+        const inviteRef = db.collection("invites").doc(inviteId);
+        const inviteSnap = await inviteRef.get();
+        if (!inviteSnap.exists) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Invite not found" });
+        }
+        const invite = inviteSnap.data() ?? {};
+        if (invite.ownerUid !== authUser.uid) {
+          return json(res, 403, { ok: false, code: "FORBIDDEN", message: "権限がありません" });
+        }
+        if (invite.status === "accepted") {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: "受諾済みの招待は削除できません"
+          });
+        }
+
+        await inviteRef.delete();
+        return json(res, 200, { ok: true });
+      }
+
       return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });
     } catch (error: any) {
       if (error?.message === "UNAUTHORIZED") {
@@ -371,23 +641,24 @@ export const createApiHandler = (deps: ApiDeps) => {
 
 export const createDefaultDeps = (): ApiDeps => {
   const repo = new FirestoreAssetRepository();
+  const getAuthUserFromReq = async (req: any) => {
+    const authHeader = req.get?.("Authorization") ?? "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+    if (!match) {
+      throw unauthorizedError();
+    }
+    const decoded = await getAuth().verifyIdToken(match[1]);
+    return { uid: decoded.uid, email: decoded.email ?? null };
+  };
 
   return {
     repo,
     now: () => new Date(),
     getUid: async (req: any) => {
-      const authHeader = req.get?.("Authorization") ?? "";
-      const match = authHeader.match(/^Bearer (.+)$/);
-      if (!match) {
-        throw unauthorizedError();
-      }
-      const decoded = await getAuth().verifyIdToken(match[1]);
-      return decoded.uid;
+      const authUser = await getAuthUserFromReq(req);
+      return authUser.uid;
     },
-    getOwnerUidForRead: async (uid: string) => {
-      const doc = await getFirestore().collection("heirs").doc(uid).get();
-      if (!doc.exists) return uid;
-      return (doc.data()?.ownerUid as string) ?? uid;
-    }
+    getAuthUser: getAuthUserFromReq,
+    getOwnerUidForRead: async (uid: string) => uid
   };
 };

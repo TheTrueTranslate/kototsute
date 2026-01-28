@@ -16,6 +16,8 @@ const routeLabels: Record<string, string> = {
   "/": "ホーム",
   "/assets": "資産一覧",
   "/assets/new": "資産登録",
+  "/invites": "相続人",
+  "/invites/received": "招待",
   "/login": "ログイン",
   "/register": "新規登録",
   "/reset": "パスワードリセット",
