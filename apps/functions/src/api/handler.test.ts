@@ -306,6 +306,7 @@ describe("createApiHandler", () => {
       .get();
     expect(snapshot.docs).toHaveLength(1);
     const data = snapshot.docs[0]?.data();
+    expect(data?.ownerEmail).toBe("owner@example.com");
     expect(data?.email).toBe("heir@example.com");
     expect(data?.status).toBe("pending");
   });

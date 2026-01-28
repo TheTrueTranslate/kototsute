@@ -252,9 +252,11 @@ export const createApiHandler = (deps: ApiDeps) => {
           }
         }
 
+        const ownerEmail = authUser.email ? normalizeEmail(authUser.email) : null;
         const inviteRef = db.collection("invites").doc();
         await inviteRef.set({
           ownerUid: authUser.uid,
+          ownerEmail,
           email: normalizedEmail,
           status: "pending",
           relationLabel: parsed.data.relationLabel,
@@ -311,6 +313,7 @@ export const createApiHandler = (deps: ApiDeps) => {
             return {
               inviteId: doc.id,
               ownerUid: data.ownerUid ?? "",
+              ownerEmail: data.ownerEmail ?? null,
               email: data.email ?? "",
               status: data.status ?? "pending",
               relationLabel: data.relationLabel ?? "",
