@@ -3,11 +3,15 @@
 }
 
 .header {
-  @apply mb-6;
+  @apply mb-6 grid gap-4;
 }
 
 .headerRow {
   @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.headerActions {
+  @apply flex flex-wrap items-center gap-2;
 }
 
 .list {
@@ -15,31 +19,43 @@
 }
 
 .emptyState {
-  @apply mt-10 rounded-2xl border border-border/60 bg-surface px-6 py-8;
+  @apply mt-10 rounded-2xl border border-border bg-muted/40 px-6 py-8;
 }
 
 .emptyTitle {
-  @apply text-section text-ink;
+  @apply text-section text-foreground;
 }
 
 .emptyBody {
-  @apply mt-2 text-body text-muted;
+  @apply mt-2 text-body text-muted-foreground;
 }
 
 .row {
-  @apply flex flex-col gap-2 border-b border-border/60 pb-4;
+  @apply flex flex-col gap-2 border-b border-border pb-4;
+}
+
+.rowLink {
+  @apply rounded-xl border border-transparent p-4 transition hover:border-border hover:bg-muted/40;
 }
 
 .label {
-  @apply text-section text-ink;
+  @apply text-section text-foreground;
 }
 
 .address {
-  @apply text-body-sm font-mono text-muted break-all;
+  @apply text-body-sm font-mono text-muted-foreground break-all;
 }
 
 .meta {
-  @apply text-meta text-muted;
+  @apply text-meta text-muted-foreground;
+}
+
+.metaRow {
+  @apply flex flex-wrap items-center gap-2 text-right;
+}
+
+.statusBadge {
+  @apply rounded-full border border-border bg-muted/40 px-3 py-1 text-meta font-medium text-foreground;
 }
 
 .form {
@@ -51,11 +67,11 @@
 }
 
 .typeSummary {
-  @apply mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/60 bg-surface px-5 py-4;
+  @apply mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-muted/40 px-5 py-4;
 }
 
 .typeSummaryText {
-  @apply text-body text-ink;
+  @apply text-body text-foreground;
 }
 
 .typeGrid {
@@ -63,11 +79,11 @@
 }
 
 .typeCard {
-  @apply flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface px-5 py-4 text-left transition;
+  @apply flex flex-col gap-2 rounded-2xl border border-border bg-background px-5 py-4 text-left transition;
 }
 
 .typeCardActive {
-  @apply border-ink/40 shadow-[0_18px_30px_rgba(15,15,15,0.08)];
+  @apply border-foreground/30 shadow-[0_8px_18px_rgba(0,0,0,0.08)];
 }
 
 .typeCardDisabled {
@@ -75,13 +91,100 @@
 }
 
 .typeLabel {
-  @apply text-section text-ink;
+  @apply text-section text-foreground;
 }
 
 .typeMeta {
-  @apply text-body-sm text-muted;
+  @apply text-body-sm text-muted-foreground;
 }
 
 .typeBadge {
-  @apply text-meta font-medium text-muted;
+  @apply text-meta font-medium text-muted-foreground;
+}
+
+.detailGrid {
+  @apply mt-6 grid gap-6;
+}
+
+.detailCard {
+  @apply grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
+}
+
+.detailTitle {
+  @apply text-section text-foreground;
+}
+
+.detailRow {
+  @apply flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3 last:border-b-0 last:pb-0;
+}
+
+.detailLabel {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.detailValue {
+  @apply text-body text-foreground;
+}
+
+.detailValueMono {
+  @apply text-body-sm font-mono text-foreground break-all;
+}
+
+.detailMuted {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.logList {
+  @apply grid gap-2;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.logRow {
+  @apply flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2;
+}
+
+.logTime {
+  @apply text-meta text-muted-foreground;
+}
+
+.logStatus {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.logDetail {
+  @apply text-body-sm text-foreground;
+}
+
+.detailLink {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.verifyBox {
+  @apply mt-4 grid gap-4;
+}
+
+.verifyActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.verifyForm {
+  @apply grid gap-3;
+}
+
+.verifyInline {
+  @apply flex items-center gap-2;
+}
+
+.amountSwitch {
+  @apply inline-flex rounded-full border border-border bg-muted/40 p-1;
+}
+
+.amountOption {
+  @apply rounded-full px-3 py-1 text-meta text-muted-foreground transition hover:text-foreground;
+}
+
+.amountOptionActive {
+  @apply bg-background text-foreground shadow-sm;
 }

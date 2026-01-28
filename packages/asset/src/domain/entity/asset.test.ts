@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { Asset } from "./asset";
-import { AssetId } from "../value/asset-id";
-import { OwnerId } from "../value/owner-id";
-import { AssetIdentifier } from "../value/asset-identifier";
-import { OccurredAt } from "../value/occurred-at";
+import { Asset } from "./asset.js";
+import { AssetId } from "../value/asset-id.js";
+import { OwnerId } from "../value/owner-id.js";
+import { AssetIdentifier } from "../value/asset-identifier.js";
+import { OccurredAt } from "../value/occurred-at.js";
 
 const now = OccurredAt.create(new Date("2024-01-01T00:00:00.000Z"));
 

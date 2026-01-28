@@ -2,6 +2,7 @@ import {
   FirestoreAssetRepository,
   ListAssetsByOwner,
   RegisterAsset,
+  AssetId,
   AssetIdentifier,
   OwnerId,
   OccurredAt,
@@ -10,6 +11,11 @@ import {
 import { DomainError, isXrpAddress } from "@kototsute/shared";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
+import crypto from "node:crypto";
+
+type XrplStatus =
+  | { status: "ok"; balanceXrp: string; ledgerIndex?: number }
+  | { status: "error"; message: string };
 
 export type ApiDeps = {
   repo: AssetRepository;
@@ -18,17 +24,101 @@ export type ApiDeps = {
   getOwnerUidForRead: (uid: string) => Promise<string>;
 };
 
+const XRPL_URL = process.env.XRPL_URL ?? "https://s.altnet.rippletest.net:51234";
+const XRPL_VERIFY_ADDRESS =
+  process.env.XRPL_VERIFY_ADDRESS ?? "rp7W5EetJmFuACL7tT1RJNoLE4S92Pg1JS";
+
 const json = (res: any, status: number, body: any) => {
   res.status(status).json(body);
 };
 
 const unauthorizedError = () => new Error("UNAUTHORIZED");
 
+const formatXrp = (drops: string): string => {
+  const value = Number(drops) / 1_000_000;
+  if (!Number.isFinite(value)) return "0";
+  return value.toFixed(6).replace(/\\.0+$/, "").replace(/\\.(\\d*?)0+$/, ".$1");
+};
+
+const fetchXrplAccountInfo = async (address: string): Promise<XrplStatus> => {
+  try {
+    const res = await fetch(XRPL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "account_info",
+        params: [{ account: address, strict: true, ledger_index: "validated" }]
+      })
+    });
+
+    const payload = await res.json();
+    if (!res.ok) {
+      return { status: "error", message: payload?.error_message ?? "XRPL request failed" };
+    }
+    if (payload?.result?.error) {
+      return {
+        status: "error",
+        message: payload?.result?.error_message ?? payload?.result?.error ?? "XRPL error"
+      };
+    }
+    const balanceDrops = payload?.result?.account_data?.Balance;
+    const ledgerIndex = payload?.result?.ledger_index;
+    if (typeof balanceDrops !== "string") {
+      return { status: "error", message: "XRPL balance is unavailable" };
+    }
+    return { status: "ok", balanceXrp: formatXrp(balanceDrops), ledgerIndex };
+  } catch (error: any) {
+    return { status: "error", message: error?.message ?? "XRPL request failed" };
+  }
+};
+
+const formatDate = (value: any): string => {
+  if (!value) return new Date().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value.toDate === "function") return value.toDate().toISOString();
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  return new Date().toISOString();
+};
+
+const createChallenge = () => {
+  return crypto.randomBytes(8).toString("hex");
+};
+
+const decodeHex = (value?: string) => {
+  if (!value) return "";
+  try {
+    return Buffer.from(value, "hex").toString("utf8");
+  } catch {
+    return "";
+  }
+};
+
+const fetchXrplTx = async (txHash: string) => {
+  const res = await fetch(XRPL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      method: "tx",
+      params: [{ transaction: txHash, binary: false }]
+    })
+  });
+  const payload = await res.json();
+  if (!res.ok || payload?.result?.error) {
+    return {
+      ok: false,
+      message: payload?.result?.error_message ?? payload?.error_message ?? "XRPL tx not found"
+    };
+  }
+  return { ok: true, tx: payload?.result };
+};
+
 export const createApiHandler = (deps: ApiDeps) => {
   return async (req: any, res: any) => {
     try {
       const method = req.method ?? "";
       const path = String(req.path ?? req.url ?? "").split("?")[0];
+      const segments = path.split("/").filter(Boolean);
 
       if (path === "/v1/assets" && method === "POST") {
         const uid = await deps.getUid(req);
@@ -69,6 +159,14 @@ export const createApiHandler = (deps: ApiDeps) => {
         const ownerUid = await deps.getOwnerUidForRead(uid);
         const usecase = new ListAssetsByOwner(deps.repo);
         const assets = await usecase.execute(OwnerId.create(ownerUid));
+        const db = getFirestore();
+        const snapshot = await db.collection("assets").where("ownerId", "==", ownerUid).get();
+        const statusMap = new Map(
+          snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return [doc.id, data.verificationStatus ?? "UNVERIFIED"];
+          })
+        );
 
         return json(res, 200, {
           ok: true,
@@ -76,9 +174,186 @@ export const createApiHandler = (deps: ApiDeps) => {
             assetId: asset.getAssetId().toString(),
             label: asset.getLabel(),
             address: asset.getIdentifier().toString(),
-            createdAt: asset.getCreatedAt().toDate().toISOString()
+            createdAt: asset.getCreatedAt().toDate().toISOString(),
+            verificationStatus: statusMap.get(asset.getAssetId().toString()) ?? "UNVERIFIED"
           }))
         });
+      }
+
+      if (segments[0] === "v1" && segments[1] === "assets" && segments[2]) {
+        const assetId = segments[2];
+        const uid = await deps.getUid(req);
+        const ownerUid = await deps.getOwnerUidForRead(uid);
+
+        const asset = await deps.repo.findById(AssetId.create(assetId));
+        if (!asset) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Asset not found" });
+        }
+        if (asset.getOwnerId().toString() !== ownerUid) {
+          return json(res, 403, { ok: false, code: "FORBIDDEN", message: "権限がありません" });
+        }
+
+        if (method === "DELETE") {
+          await deps.repo.deleteById(AssetId.create(assetId));
+          return json(res, 200, { ok: true });
+        }
+
+        if (method === "GET") {
+          const includeXrpl =
+            String(req.query?.includeXrpl ?? req.query?.sync ?? "false") === "true" ||
+            String(req.query?.includeXrpl ?? req.query?.sync ?? "0") === "1";
+
+          let xrpl: XrplStatus | undefined;
+          if (includeXrpl && asset.getType() === "CRYPTO_WALLET") {
+            const address = asset.getIdentifier().toString();
+            xrpl = await fetchXrplAccountInfo(address);
+            const db = getFirestore();
+            const logRef = db
+              .collection("assets")
+              .doc(assetId)
+              .collection("syncLogs")
+              .doc();
+            await logRef.set({
+              status: xrpl.status,
+              balanceXrp: xrpl.status === "ok" ? xrpl.balanceXrp : null,
+              ledgerIndex: xrpl.status === "ok" ? xrpl.ledgerIndex ?? null : null,
+              message: xrpl.status === "error" ? xrpl.message : null,
+              createdAt: deps.now()
+            });
+          }
+
+          const db = getFirestore();
+          const logsSnapshot = await db
+            .collection("assets")
+            .doc(assetId)
+            .collection("syncLogs")
+            .orderBy("createdAt", "desc")
+            .limit(10)
+            .get();
+
+          const syncLogs = logsSnapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              status: data.status,
+              balanceXrp: data.balanceXrp ?? null,
+              ledgerIndex: data.ledgerIndex ?? null,
+              message: data.message ?? null,
+              createdAt: formatDate(data.createdAt)
+            };
+          });
+
+          const assetDoc = await db.collection("assets").doc(assetId).get();
+          const assetData = assetDoc.data() ?? {};
+
+          return json(res, 200, {
+            ok: true,
+            data: {
+              assetId: asset.getAssetId().toString(),
+              label: asset.getLabel(),
+              address: asset.getIdentifier().toString(),
+              type: asset.getType(),
+              status: asset.getStatus(),
+              dataSource: asset.getDataSource(),
+              linkLevel: asset.getLinkLevel(),
+              createdAt: asset.getCreatedAt().toDate().toISOString(),
+              verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
+              verificationChallenge: assetData.verificationChallenge ?? null,
+              verificationAddress: XRPL_VERIFY_ADDRESS,
+              xrpl: xrpl ?? null,
+              syncLogs
+            }
+          });
+        }
+
+        if (method === "POST" && segments[3] === "verify" && segments[4] === "challenge") {
+          const challenge = createChallenge();
+          const db = getFirestore();
+          await db.collection("assets").doc(assetId).set(
+            {
+              verificationStatus: "PENDING",
+              verificationChallenge: challenge,
+              verificationIssuedAt: deps.now()
+            },
+            { merge: true }
+          );
+          return json(res, 200, {
+            ok: true,
+            data: {
+              challenge,
+              address: XRPL_VERIFY_ADDRESS,
+              amountDrops: "1"
+            }
+          });
+        }
+
+        if (method === "POST" && segments[3] === "verify" && segments[4] === "confirm") {
+          const { txHash } = req.body ?? {};
+          if (typeof txHash !== "string" || txHash.trim().length === 0) {
+            return json(res, 400, { ok: false, code: "VALIDATION_ERROR", message: "txHashは必須です" });
+          }
+          const db = getFirestore();
+          const assetDoc = await db.collection("assets").doc(assetId).get();
+          const assetData = assetDoc.data() ?? {};
+          const challenge = assetData.verificationChallenge as string | undefined;
+          if (!challenge) {
+            return json(res, 400, { ok: false, code: "VERIFY_CHALLENGE_MISSING", message: "検証コードがありません" });
+          }
+
+          const result = await fetchXrplTx(txHash);
+          if (!result.ok) {
+            return json(res, 400, { ok: false, code: "XRPL_TX_NOT_FOUND", message: result.message });
+          }
+
+          const tx = result.tx;
+          const from = tx?.Account;
+          const to = tx?.Destination;
+          const amount = tx?.Amount;
+          const memos = Array.isArray(tx?.Memos) ? tx.Memos : [];
+          const memoTexts = memos
+            .map((memo: any) => decodeHex(memo?.Memo?.MemoData))
+            .filter((value: string) => value.length > 0);
+          const memoMatch = memoTexts.includes(challenge);
+
+          if (from !== asset.getIdentifier().toString()) {
+            return json(res, 400, {
+              ok: false,
+              code: "VERIFY_FROM_MISMATCH",
+              message: "送信元アドレスが一致しません"
+            });
+          }
+          if (to !== XRPL_VERIFY_ADDRESS) {
+            return json(res, 400, {
+              ok: false,
+              code: "VERIFY_DESTINATION_MISMATCH",
+              message: "送金先アドレスが一致しません"
+            });
+          }
+          if (String(amount) !== "1") {
+            return json(res, 400, {
+              ok: false,
+              code: "VERIFY_AMOUNT_MISMATCH",
+              message: "送金額が一致しません（1 drop）"
+            });
+          }
+          if (!memoMatch) {
+            return json(res, 400, {
+              ok: false,
+              code: "VERIFY_MEMO_MISMATCH",
+              message: "Memoに検証コードが含まれていません"
+            });
+          }
+
+          await db.collection("assets").doc(assetId).set(
+            {
+              verificationStatus: "VERIFIED",
+              verificationVerifiedAt: deps.now()
+            },
+            { merge: true }
+          );
+
+          return json(res, 200, { ok: true });
+        }
       }
 
       return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });

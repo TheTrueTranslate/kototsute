@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { listAssets, type AssetListItem } from "../api/assets";
 import styles from "../../styles/assetsPage.module.css";
-import { FormAlert, Button } from "@kototsute/ui";
+import FormAlert from "../../components/form-alert";
+import { Button } from "../../components/ui/button";
 import { Link } from "react-router-dom";
+import Breadcrumbs from "../../components/breadcrumbs";
+
+const statusLabels: Record<string, string> = {
+  UNVERIFIED: "未検証",
+  PENDING: "確認中",
+  VERIFIED: "確認済み"
+};
 
 export default function AssetsPage() {
   const [items, setItems] = useState<AssetListItem[]>([]);
@@ -25,10 +33,11 @@ export default function AssetsPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
+        <Breadcrumbs items={[{ label: "資産一覧" }]} />
         <div className={styles.headerRow}>
           <h1 className="text-title">資産一覧</h1>
-          <Button as={Link} to="/assets/new">
-            追加
+          <Button asChild>
+            <Link to="/assets/new">追加</Link>
           </Button>
         </div>
       </header>
@@ -41,13 +50,22 @@ export default function AssetsPage() {
       ) : (
         <div className={styles.list}>
           {items.map((item) => (
-            <div key={item.assetId} className={styles.row}>
-              <div>
-                <div className={styles.label}>{item.label}</div>
-                <div className={styles.address}>{item.address}</div>
+            <Link key={item.assetId} to={`/assets/${item.assetId}`} className={styles.rowLink}>
+              <div className={styles.row}>
+                <div>
+                  <div className={styles.label}>{item.label}</div>
+                  <div className={styles.address}>{item.address}</div>
+                </div>
+                <div className={styles.metaRow}>
+                  <span className={styles.statusBadge}>
+                    {statusLabels[item.verificationStatus] ?? "未検証"}
+                  </span>
+                  <span className={styles.meta}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
               </div>
-              <div className={styles.meta}>{new Date(item.createdAt).toLocaleDateString()}</div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

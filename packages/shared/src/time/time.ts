@@ -1,4 +1,4 @@
-import { DomainError } from "../error/domain-error";
+import { DomainError } from "../error/domain-error.js";
 
 export class Time {
   private constructor(private readonly value: Date) {}

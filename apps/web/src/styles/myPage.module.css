@@ -1,0 +1,39 @@
+.page {
+  @apply mx-auto w-full max-w-[720px] px-6 py-10;
+}
+
+.header {
+  @apply mb-8 grid gap-4;
+}
+
+.lead {
+  @apply text-body text-muted-foreground;
+}
+
+.section {
+  @apply mt-8 grid gap-3;
+}
+
+.sectionTitle {
+  @apply text-section text-foreground;
+}
+
+.card {
+  @apply grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
+}
+
+.row {
+  @apply flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3 last:border-b-0 last:pb-0;
+}
+
+.label {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.value {
+  @apply text-body text-foreground;
+}
+
+.valueMono {
+  @apply text-body-sm font-mono text-foreground break-all;
+}

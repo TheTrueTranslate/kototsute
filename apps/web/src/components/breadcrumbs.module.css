@@ -1,0 +1,26 @@
+.breadcrumbs {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.list {
+  @apply flex flex-wrap items-center gap-2;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  @apply text-muted-foreground;
+}
+
+.separator {
+  @apply text-muted-foreground/70;
+}
+
+.link {
+  @apply text-muted-foreground transition hover:text-foreground;
+}
+
+.current {
+  @apply text-foreground;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isXrpAddress } from "./xrp-address";
+import { isXrpAddress } from "./xrp-address.js";
 
 describe("isXrpAddress", () => {
   it("accepts valid XRP addresses", () => {

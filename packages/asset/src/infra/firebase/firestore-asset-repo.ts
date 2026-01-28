@@ -1,9 +1,9 @@
-import { Asset } from "../../domain/entity/asset";
-import { AssetId } from "../../domain/value/asset-id";
-import { AssetRepository } from "../../application/port/asset-repository";
+import { Asset } from "../../domain/entity/asset.js";
+import { AssetId } from "../../domain/value/asset-id.js";
+import { AssetRepository } from "../../application/port/asset-repository.js";
 import { getFirestore } from "firebase-admin/firestore";
-import { OwnerId } from "../../domain/value/owner-id";
-import { mapAssetFromFirestore } from "./asset-firestore-mapper";
+import { OwnerId } from "../../domain/value/owner-id.js";
+import { mapAssetFromFirestore } from "./asset-firestore-mapper.js";
 
 export class FirestoreAssetRepository implements AssetRepository {
   async generateId(): Promise<AssetId> {
@@ -31,5 +31,19 @@ export class FirestoreAssetRepository implements AssetRepository {
     const db = getFirestore();
     const snapshot = await db.collection("assets").where("ownerId", "==", ownerId.toString()).get();
     return snapshot.docs.map((doc) => mapAssetFromFirestore(doc.data(), doc.id));
+  }
+
+  async findById(assetId: AssetId): Promise<Asset | null> {
+    const db = getFirestore();
+    const doc = await db.collection("assets").doc(assetId.toString()).get();
+    if (!doc.exists) {
+      return null;
+    }
+    return mapAssetFromFirestore(doc.data() ?? {}, doc.id);
+  }
+
+  async deleteById(assetId: AssetId): Promise<void> {
+    const db = getFirestore();
+    await db.collection("assets").doc(assetId.toString()).delete();
   }
 }

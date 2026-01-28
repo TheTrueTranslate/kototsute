@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { ListAssetsByOwner } from "./list-assets-by-owner";
-import { AssetRepository } from "../port/asset-repository";
-import { Asset } from "../../domain/entity/asset";
-import { AssetId } from "../../domain/value/asset-id";
-import { OwnerId } from "../../domain/value/owner-id";
-import { AssetIdentifier } from "../../domain/value/asset-identifier";
-import { OccurredAt } from "../../domain/value/occurred-at";
+import { ListAssetsByOwner } from "./list-assets-by-owner.js";
+import { AssetRepository } from "../port/asset-repository.js";
+import { Asset } from "../../domain/entity/asset.js";
+import { AssetId } from "../../domain/value/asset-id.js";
+import { OwnerId } from "../../domain/value/owner-id.js";
+import { AssetIdentifier } from "../../domain/value/asset-identifier.js";
+import { OccurredAt } from "../../domain/value/occurred-at.js";
 
 class InMemoryRepo implements AssetRepository {
   async generateId() {
@@ -28,6 +28,12 @@ class InMemoryRepo implements AssetRepository {
       })
     ];
   }
+
+  async findById() {
+    return null;
+  }
+
+  async deleteById() {}
 }
 
 describe("ListAssetsByOwner", () => {

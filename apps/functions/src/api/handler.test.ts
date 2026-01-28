@@ -21,6 +21,14 @@ class InMemoryAssetRepository implements AssetRepository {
   async findByOwnerId(ownerId: OwnerId): Promise<Asset[]> {
     return this.assets.filter((asset) => asset.getOwnerId().toString() === ownerId.toString());
   }
+
+  async findById(assetId: AssetId): Promise<Asset | null> {
+    return this.assets.find((asset) => asset.getAssetId().toString() === assetId.toString()) ?? null;
+  }
+
+  async deleteById(assetId: AssetId): Promise<void> {
+    this.assets = this.assets.filter((asset) => asset.getAssetId().toString() !== assetId.toString());
+  }
 }
 
 type MockReq = {
