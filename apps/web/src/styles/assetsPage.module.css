@@ -15,7 +15,15 @@
 }
 
 .emptyState {
-  @apply mt-10 rounded-2xl border border-border/60 bg-surface px-6 py-8 text-body text-muted;
+  @apply mt-10 rounded-2xl border border-border/60 bg-surface px-6 py-8;
+}
+
+.emptyTitle {
+  @apply text-section text-ink;
+}
+
+.emptyBody {
+  @apply mt-2 text-body text-muted;
 }
 
 .row {

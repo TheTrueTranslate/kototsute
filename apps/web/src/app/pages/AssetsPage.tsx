@@ -34,7 +34,10 @@ export default function AssetsPage() {
       </header>
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {loading ? null : items.length === 0 ? (
-        <div className={styles.emptyState}>登録された資産はありません。</div>
+        <div className={styles.emptyState}>
+          <div className={styles.emptyTitle}>まだ資産が登録されていません</div>
+          <div className={styles.emptyBody}>右上の「追加」から最初の資産を登録できます。</div>
+        </div>
       ) : (
         <div className={styles.list}>
           {items.map((item) => (
