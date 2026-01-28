@@ -6,3 +6,4 @@ export * from "./xrpl/xrpl-anchor-port";
 export * from "./xrpl/xrpl-anchor-stub";
 export * from "./util/result";
 export * from "./util/guard";
+export * from "./validation/xrp-address";
