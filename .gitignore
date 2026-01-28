@@ -2,6 +2,7 @@ node_modules/
 dist/
 apps/web/dist/
 packages/**/dist/
+packages/**/node_modules/
 apps/functions/lib/
 apps/functions/node_modules/
 apps/web/node_modules/
