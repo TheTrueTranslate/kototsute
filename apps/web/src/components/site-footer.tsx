@@ -1,4 +1,3 @@
-import * as React from "react";
 import styles from "./site-footer.module.css";
 
 type FooterProps = {

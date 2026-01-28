@@ -1,4 +1,3 @@
-import * as React from "react";
 import { Link } from "react-router-dom";
 import styles from "./site-header.module.css";
 import { Menu } from "lucide-react";
