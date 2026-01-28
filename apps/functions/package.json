@@ -7,13 +7,17 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
     "watch": "tsc -w"
   },
   "dependencies": {
+    "@kototsute/asset": "workspace:*",
+    "@kototsute/shared": "workspace:*",
     "firebase-admin": "^11.11.1",
     "firebase-functions": "^4.4.1"
   },
   "devDependencies": {
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "vitest": "^2.0.5"
   }
 }
