@@ -9,4 +9,5 @@ export * from "./domain/value/asset-identifier";
 export * from "./domain/value/occurred-at";
 export * from "./application/port/asset-repository";
 export * from "./application/usecase/register-asset";
+export * from "./application/usecase/list-assets-by-owner";
 export * from "./infra/firebase/firestore-asset-repo";
