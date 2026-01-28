@@ -19,6 +19,11 @@ export type AssetCreateParams = {
   now: OccurredAt;
 };
 
+type AssetReconstructParams = Omit<AssetCreateParams, "now"> & {
+  createdAt: OccurredAt;
+  updatedAt: OccurredAt;
+};
+
 export class Asset {
   private constructor(
     private readonly assetId: AssetId,
@@ -45,6 +50,21 @@ export class Asset {
       params.dataSource,
       params.now,
       params.now
+    );
+  }
+
+  static reconstruct(params: AssetReconstructParams): Asset {
+    return new Asset(
+      params.assetId,
+      params.ownerId,
+      params.type,
+      params.identifier,
+      params.label,
+      params.linkLevel,
+      params.status,
+      params.dataSource,
+      params.createdAt,
+      params.updatedAt
     );
   }
 
