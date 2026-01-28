@@ -7,3 +7,4 @@ export * from "./xrpl/xrpl-anchor-stub.js";
 export * from "./util/result.js";
 export * from "./util/guard.js";
 export * from "./validation/xrp-address.js";
+export * from "./validation/invite-schema.js";
