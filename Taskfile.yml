@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   ROOT: "."
+  WEB_DIR: "apps/web"
   FUNCTIONS_DIR: "apps/functions"
   PROJECT_ID: "kototsute"
 
@@ -35,17 +36,17 @@ tasks:
   dev:app:
     desc: "Run Vite dev server"
     cmds:
-      - pnpm dev
+      - pnpm -C {{.WEB_DIR}} dev
 
   build:
     desc: "Build web app"
     cmds:
-      - pnpm build
+      - pnpm -C {{.WEB_DIR}} build
 
   preview:
     desc: "Preview production build"
     cmds:
-      - pnpm preview
+      - pnpm -C {{.WEB_DIR}} preview
 
   functions:build:
     desc: "Build Firebase Functions"
@@ -70,5 +71,5 @@ tasks:
   clean:
     desc: "Remove build outputs"
     cmds:
-      - rm -rf dist
+      - rm -rf {{.WEB_DIR}}/dist
       - rm -rf {{.FUNCTIONS_DIR}}/lib
