@@ -81,12 +81,12 @@ export default function InvitesReceivedPage() {
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "相続人招待", href: "/invites" },
-            { label: "受け取った招待" }
+            { label: "相続人", href: "/invites" },
+            { label: "招待" }
           ]}
         />
         <div className={styles.headerRow}>
-          <h1 className="text-title">受け取った招待</h1>
+          <h1 className="text-title">招待</h1>
           <Button type="button" variant="outline" onClick={loadInvites}>
             更新
           </Button>

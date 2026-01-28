@@ -7,6 +7,14 @@ import { createInvite, listInvitesByOwner, type InviteListItem } from "../api/in
 import FormAlert from "../../components/form-alert";
 import FormField from "../../components/form-field";
 import { Button } from "../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import Breadcrumbs from "../../components/breadcrumbs";
 import styles from "../../styles/invitesPage.module.css";
@@ -31,6 +39,9 @@ export default function InvitesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const {
     register,
@@ -75,20 +86,21 @@ export default function InvitesPage() {
   }, []);
 
   const onSubmit = handleSubmit(async (values) => {
-    setError(null);
-    setSuccess(null);
+    setFormError(null);
+    setFormSuccess(null);
     try {
       await createInvite(values);
-      setSuccess("招待を作成しました。");
+      setFormSuccess("招待を作成しました。");
       reset({
         email: "",
         relationLabel: values.relationLabel,
         relationOther: "",
         memo: ""
       });
+      setModalOpen(false);
       await loadInvites();
     } catch (err: any) {
-      setError(err?.message ?? "招待の作成に失敗しました");
+      setFormError(err?.message ?? "招待の作成に失敗しました");
     }
   });
 
@@ -120,55 +132,77 @@ export default function InvitesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <Breadcrumbs items={[{ label: "相続人招待" }]} />
+        <Breadcrumbs items={[{ label: "相続人" }]} />
         <div className={styles.headerRow}>
-          <h1 className="text-title">相続人招待</h1>
-          <Button type="button" variant="outline" onClick={loadInvites}>
-            更新
-          </Button>
+          <h1 className="text-title">相続人</h1>
+          <div className={styles.actions}>
+            <Button type="button" variant="outline" onClick={loadInvites}>
+              更新
+            </Button>
+            <Dialog
+              open={modalOpen}
+              onOpenChange={(next) => {
+                setModalOpen(next);
+                if (next) {
+                  setFormError(null);
+                  setFormSuccess(null);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button type="button">新規招待</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>相続人を招待</DialogTitle>
+                  <DialogDescription>
+                    メールアドレスと関係を入力して招待を作成します。
+                  </DialogDescription>
+                </DialogHeader>
+                <form className={styles.form} onSubmit={onSubmit}>
+                  {formError ? <FormAlert variant="error">{formError}</FormAlert> : null}
+                  {formSuccess ? <FormAlert variant="success">{formSuccess}</FormAlert> : null}
+                  <FormField label="メールアドレス" error={formState.errors.email?.message}>
+                    <Input type="email" autoComplete="email" {...register("email")} />
+                  </FormField>
+
+                  <div className={styles.fieldRow}>
+                    <FormField label="関係" error={formState.errors.relationLabel?.message}>
+                      <select className={styles.select} {...register("relationLabel")}>
+                        {relationOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    {relationLabel === "その他" ? (
+                      <FormField
+                        label="その他の関係"
+                        error={formState.errors.relationOther?.message}
+                      >
+                        <Input {...register("relationOther")} />
+                      </FormField>
+                    ) : null}
+                  </div>
+
+                  <FormField label="メモ" error={formState.errors.memo?.message}>
+                    <textarea className={styles.textarea} {...register("memo")} />
+                  </FormField>
+
+                  <div className={styles.actions}>
+                    <Button type="submit">招待する</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </header>
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
-
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>招待を作成</div>
-        <form className={styles.form} onSubmit={onSubmit}>
-          <FormField label="メールアドレス" error={formState.errors.email?.message}>
-            <Input type="email" autoComplete="email" {...register("email")} />
-          </FormField>
-
-          <div className={styles.fieldRow}>
-            <FormField label="関係" error={formState.errors.relationLabel?.message}>
-              <select className={styles.select} {...register("relationLabel")}>
-                {relationOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            {relationLabel === "その他" ? (
-              <FormField
-                label="その他の関係"
-                error={formState.errors.relationOther?.message}
-              >
-                <Input {...register("relationOther")} />
-              </FormField>
-            ) : null}
-          </div>
-
-          <FormField label="メモ" error={formState.errors.memo?.message}>
-            <textarea className={styles.textarea} {...register("memo")} />
-          </FormField>
-
-          <div className={styles.actions}>
-            <Button type="submit">招待する</Button>
-          </div>
-        </form>
-      </div>
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>招待一覧</div>

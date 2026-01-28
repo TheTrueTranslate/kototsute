@@ -25,12 +25,12 @@ const mainItems = [
     icon: Wallet
   },
   {
-    title: "相続人招待",
+    title: "相続人",
     url: "/invites",
     icon: UserPlus
   },
   {
-    title: "受け取った招待",
+    title: "招待",
     url: "/invites/received",
     icon: Mail
   }
