@@ -252,11 +252,9 @@ export const createApiHandler = (deps: ApiDeps) => {
           }
         }
 
-        const ownerEmail = authUser.email ? normalizeEmail(authUser.email) : null;
         const inviteRef = db.collection("invites").doc();
         await inviteRef.set({
           ownerUid: authUser.uid,
-          ownerEmail,
           email: normalizedEmail,
           status: "pending",
           relationLabel: parsed.data.relationLabel,
@@ -304,6 +302,19 @@ export const createApiHandler = (deps: ApiDeps) => {
             : db.collection("invites").where("email", "==", normalizeEmail(authUser.email));
 
         const snapshot = await query.get();
+        const ownerUids = Array.from(
+          new Set(snapshot.docs.map((doc) => doc.data()?.ownerUid).filter(Boolean))
+        ) as string[];
+        const ownerNameMap = new Map<string, string | null>();
+        if (scope === "received" && ownerUids.length > 0) {
+          const profileSnaps = await Promise.all(
+            ownerUids.map((ownerUid) => db.collection("profiles").doc(ownerUid).get())
+          );
+          profileSnaps.forEach((snap, index) => {
+            const data = snap.data() ?? {};
+            ownerNameMap.set(ownerUids[index], (data.displayName as string) ?? null);
+          });
+        }
         return json(res, 200, {
           ok: true,
           data: snapshot.docs.map((doc) => {
@@ -313,7 +324,7 @@ export const createApiHandler = (deps: ApiDeps) => {
             return {
               inviteId: doc.id,
               ownerUid: data.ownerUid ?? "",
-              ownerEmail: data.ownerEmail ?? null,
+              ownerDisplayName: ownerNameMap.get(data.ownerUid) ?? null,
               email: data.email ?? "",
               status: data.status ?? "pending",
               relationLabel: data.relationLabel ?? "",

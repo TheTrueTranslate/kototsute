@@ -111,7 +111,7 @@ export default function InvitesReceivedPage() {
                   <div>
                     <div className={styles.cardTitle}>{formatRelation(invite)}</div>
                     <div className={styles.cardMeta}>
-                      送信者: {invite.ownerEmail ?? "不明"}
+                      送信者: {invite.ownerDisplayName ?? "不明"}
                     </div>
                   </div>
                   <div className={styles.metaRow}>

@@ -306,7 +306,6 @@ describe("createApiHandler", () => {
       .get();
     expect(snapshot.docs).toHaveLength(1);
     const data = snapshot.docs[0]?.data();
-    expect(data?.ownerEmail).toBe("owner@example.com");
     expect(data?.email).toBe("heir@example.com");
     expect(data?.status).toBe("pending");
   });
@@ -339,6 +338,46 @@ describe("createApiHandler", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body?.data).toHaveLength(1);
     expect(res.body?.data?.[0]?.email).toBe("heir@example.com");
+  });
+
+  it("includes owner display name for received invites", async () => {
+    const repo = new InMemoryAssetRepository();
+    const ownerHandler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createReq: MockReq = {
+      method: "POST",
+      path: "/v1/invites",
+      body: { email: "heir@example.com", relationLabel: "長男" }
+    };
+    await ownerHandler(createReq as any, createRes() as any);
+
+    await getFirestore().collection("profiles").doc("owner_1").set({ displayName: "山田太郎" });
+
+    const heirHandler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "heir_1",
+      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const listReq: MockReq = {
+      method: "GET",
+      path: "/v1/invites",
+      query: { scope: "received" }
+    };
+    const res = createRes();
+    await heirHandler(listReq as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data).toHaveLength(1);
+    expect(res.body?.data?.[0]?.ownerDisplayName).toBe("山田太郎");
   });
 
   it("accepts invite and creates heir profile", async () => {
