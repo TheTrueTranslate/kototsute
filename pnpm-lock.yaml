@@ -10,12 +10,6 @@ importers:
 
   apps/functions:
     dependencies:
-      '@kototsute/asset':
-        specifier: workspace:*
-        version: link:../../packages/asset
-      '@kototsute/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       firebase-admin:
         specifier: ^11.11.1
         version: 11.11.1
@@ -66,6 +60,9 @@ importers:
       '@kototsute/shared':
         specifier: workspace:*
         version: link:../shared
+      firebase-admin:
+        specifier: ^11.11.1
+        version: 11.11.1
     devDependencies:
       typescript:
         specifier: ^5.5.2
