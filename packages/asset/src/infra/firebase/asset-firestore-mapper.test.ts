@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapAssetFromFirestore } from "./asset-firestore-mapper";
+import { mapAssetFromFirestore } from "./asset-firestore-mapper.js";
 
 describe("mapAssetFromFirestore", () => {
   it("maps firestore data to Asset", () => {

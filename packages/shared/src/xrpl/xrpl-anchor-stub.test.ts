@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { XrplAnchorStub } from "./xrpl-anchor-stub";
-import { Hash } from "../value/hash";
+import { XrplAnchorStub } from "./xrpl-anchor-stub.js";
+import { Hash } from "../value/hash.js";
 
 describe("XrplAnchorStub", () => {
   it("rejects anchorPlanHash", async () => {

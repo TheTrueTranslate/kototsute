@@ -1,11 +1,11 @@
-import { OccurredAt } from "../value/occurred-at";
-import { AssetId } from "../value/asset-id";
-import { AssetIdentifier } from "../value/asset-identifier";
-import { AssetStatus } from "../value/asset-status";
-import { AssetType } from "../value/asset-type";
-import { DataSource } from "../value/data-source";
-import { LinkLevel } from "../value/link-level";
-import { OwnerId } from "../value/owner-id";
+import { OccurredAt } from "../value/occurred-at.js";
+import { AssetId } from "../value/asset-id.js";
+import { AssetIdentifier } from "../value/asset-identifier.js";
+import { AssetStatus } from "../value/asset-status.js";
+import { AssetType } from "../value/asset-type.js";
+import { DataSource } from "../value/data-source.js";
+import { LinkLevel } from "../value/link-level.js";
+import { OwnerId } from "../value/owner-id.js";
 
 export type AssetCreateParams = {
   assetId: AssetId;

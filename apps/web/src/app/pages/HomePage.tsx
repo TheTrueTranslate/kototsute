@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { AuthLayout, Button } from "@kototsute/ui";
+import AuthLayout from "../../components/auth-layout";
+import { Button } from "../../components/ui/button";
 import styles from "../../styles/authPages.module.css";
 
 type PageProps = {
@@ -14,11 +15,11 @@ export default function HomePage({ className }: PageProps) {
       className={className}
       footer={
         <div className={styles.footerActions}>
-          <Button as={Link} variant="ghost" to="/login">
-            ログインへ戻る
+          <Button asChild variant="ghost">
+            <Link to="/login">ログインへ戻る</Link>
           </Button>
-          <Button as={Link} variant="outline" to="/register">
-            新規登録
+          <Button asChild variant="outline">
+            <Link to="/register">新規登録</Link>
           </Button>
         </div>
       }

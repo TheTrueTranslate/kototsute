@@ -5,7 +5,7 @@ const useEmulators =
   import.meta.env.DEV && String(import.meta.env.VITE_FIREBASE_USE_EMULATORS ?? "true") !== "false";
 
 const baseUrl = useEmulators
-  ? `http://localhost:5001/${projectId}/us-central1/api`
+  ? `http://127.0.0.1:5001/${projectId}/us-central1/api`
   : `https://us-central1-${projectId}.cloudfunctions.net/api`;
 
 export const apiFetch = async (path: string, options: RequestInit = {}) => {

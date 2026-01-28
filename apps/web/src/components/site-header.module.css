@@ -1,0 +1,50 @@
+.header {
+  @apply sticky top-0 z-50 w-full border-b border-border bg-background;
+  min-height: var(--site-header-height);
+}
+
+.inner {
+  @apply flex w-full items-center justify-between gap-6 px-6 py-4;
+}
+
+.leftGroup {
+  @apply flex items-center gap-3;
+}
+
+.menuButton {
+  @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground sm:hidden;
+}
+
+.menuIcon {
+  @apply h-5 w-5;
+}
+
+.branding {
+  @apply flex items-center gap-3;
+}
+
+.logo {
+  @apply h-10 w-10 object-contain;
+}
+
+.brandText {
+  @apply text-[0.875rem] font-semibold text-foreground;
+}
+
+.nav {
+  @apply flex items-center gap-4;
+}
+
+.navLink {
+  @apply text-[0.8125rem] font-medium text-muted-foreground transition hover:text-foreground;
+}
+
+@media (max-width: 640px) {
+  .inner {
+    @apply flex-col items-start gap-3;
+  }
+
+  .nav {
+    @apply w-full flex-wrap;
+  }
+}

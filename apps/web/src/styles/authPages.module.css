@@ -33,7 +33,7 @@
 }
 
 .placeholder {
-  @apply grid gap-3 text-sm text-muted;
+  @apply grid gap-3 text-sm text-muted-foreground;
 }
 
 .placeholder ul {

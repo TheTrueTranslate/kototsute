@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Hash } from "./hash";
-import { TxId } from "./tx-id";
-import { Time } from "../time/time";
+import { Hash } from "./hash.js";
+import { TxId } from "./tx-id.js";
+import { Time } from "../time/time.js";
 
 describe("Hash", () => {
   it("throws when empty", () => {

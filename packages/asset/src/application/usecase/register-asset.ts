@@ -1,12 +1,12 @@
-import { OccurredAt } from "../../domain/value/occurred-at";
-import { Asset } from "../../domain/entity/asset";
-import { AssetIdentifier } from "../../domain/value/asset-identifier";
-import { AssetStatus } from "../../domain/value/asset-status";
-import { AssetType } from "../../domain/value/asset-type";
-import { DataSource } from "../../domain/value/data-source";
-import { LinkLevel } from "../../domain/value/link-level";
-import { OwnerId } from "../../domain/value/owner-id";
-import { AssetRepository } from "../port/asset-repository";
+import { OccurredAt } from "../../domain/value/occurred-at.js";
+import { Asset } from "../../domain/entity/asset.js";
+import { AssetIdentifier } from "../../domain/value/asset-identifier.js";
+import { AssetStatus } from "../../domain/value/asset-status.js";
+import { AssetType } from "../../domain/value/asset-type.js";
+import { DataSource } from "../../domain/value/data-source.js";
+import { LinkLevel } from "../../domain/value/link-level.js";
+import { OwnerId } from "../../domain/value/owner-id.js";
+import { AssetRepository } from "../port/asset-repository.js";
 
 export type RegisterAssetInput = {
   ownerId: OwnerId;

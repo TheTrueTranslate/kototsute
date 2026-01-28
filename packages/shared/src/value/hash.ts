@@ -1,4 +1,4 @@
-import { DomainError } from "../error/domain-error";
+import { DomainError } from "../error/domain-error.js";
 
 const HEX_RE = /^[0-9a-fA-F]+$/;
 

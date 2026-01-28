@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@kototsute/ui": resolve(__dirname, "../../packages/ui/src")
+      "@": resolve(__dirname, "./src")
     }
   },
   server: {

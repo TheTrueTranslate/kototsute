@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { AuthLayout, Button, FormAlert, FormField, Input } from "@kototsute/ui";
+import AuthLayout from "../../components/auth-layout";
+import FormAlert from "../../components/form-alert";
+import FormField from "../../components/form-field";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { auth } from "../../lib/firebase";
 import { getAuthErrorMessage } from "../auth/authError";
 import { registerSchema, type RegisterForm } from "../auth/validators";
@@ -51,11 +55,11 @@ export default function RegisterPage({ className }: PageProps) {
       className={className}
       footer={
         <div className={styles.footerActions}>
-          <Button as={Link} variant="ghost" to="/login">
-            ログインへ
+          <Button asChild variant="ghost">
+            <Link to="/login">ログインへ</Link>
           </Button>
-          <Button as={Link} variant="outline" to="/reset">
-            パスワード再設定
+          <Button asChild variant="outline">
+            <Link to="/reset">パスワード再設定</Link>
           </Button>
         </div>
       }

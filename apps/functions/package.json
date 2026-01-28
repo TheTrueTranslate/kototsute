@@ -13,10 +13,14 @@
   "dependencies": {
     "@kototsute/asset": "workspace:*",
     "@kototsute/shared": "workspace:*",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
     "firebase-admin": "^11.11.1",
     "firebase-functions": "^4.4.1"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/node": "^25.0.10",
     "typescript": "^5.5.2",
     "vitest": "^2.0.5"
   }

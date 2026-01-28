@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { RegisterAsset } from "./register-asset";
-import { AssetRepository } from "../port/asset-repository";
-import { AssetId } from "../../domain/value/asset-id";
-import { OwnerId } from "../../domain/value/owner-id";
-import { AssetIdentifier } from "../../domain/value/asset-identifier";
-import { OccurredAt } from "../../domain/value/occurred-at";
+import { RegisterAsset } from "./register-asset.js";
+import { AssetRepository } from "../port/asset-repository.js";
+import { AssetId } from "../../domain/value/asset-id.js";
+import { OwnerId } from "../../domain/value/owner-id.js";
+import { AssetIdentifier } from "../../domain/value/asset-identifier.js";
+import { OccurredAt } from "../../domain/value/occurred-at.js";
 
 class InMemoryRepo implements AssetRepository {
   public saved: { ownerId: string; type: string; identifier: string; label: string } | null = null;
@@ -25,6 +25,12 @@ class InMemoryRepo implements AssetRepository {
   async findByOwnerId(): Promise<any[]> {
     return [];
   }
+
+  async findById(): Promise<any | null> {
+    return null;
+  }
+
+  async deleteById(): Promise<void> {}
 }
 
 describe("RegisterAsset", () => {

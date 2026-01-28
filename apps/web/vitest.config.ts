@@ -4,9 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@": resolve(__dirname, "./src"),
       "@kototsute/shared": resolve(__dirname, "../../packages/shared/src"),
-      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src"),
-      "@kototsute/ui": resolve(__dirname, "../../packages/ui/src")
+      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src")
     }
   },
   test: {

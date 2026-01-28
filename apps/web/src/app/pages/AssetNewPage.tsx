@@ -4,8 +4,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createAsset } from "../api/assets";
 import { isXrpAddress } from "@kototsute/shared";
-import { Button, FormAlert, FormField, Input } from "@kototsute/ui";
+import FormAlert from "../../components/form-alert";
+import FormField from "../../components/form-field";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import styles from "../../styles/assetsPage.module.css";
+import { useNavigate } from "react-router-dom";
+import Breadcrumbs from "../../components/breadcrumbs";
 
 const schema = z.object({
   label: z.string().min(1, "ラベルは必須です"),
@@ -55,6 +60,8 @@ export default function AssetNewPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<AssetTypeOption["id"]>("xrp-wallet");
+  const [step, setStep] = useState<"type" | "form">("type");
+  const navigate = useNavigate();
   const { register, handleSubmit, formState, reset } = useForm<FormValues>({
     resolver: zodResolver(schema)
   });
@@ -64,8 +71,8 @@ export default function AssetNewPage() {
     setSuccess(null);
     try {
       await createAsset(values);
-      setSuccess("登録しました");
       reset();
+      navigate("/");
     } catch (err: any) {
       setError(err?.message ?? "登録に失敗しました");
     }
@@ -74,47 +81,80 @@ export default function AssetNewPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
+        <Breadcrumbs
+          items={[
+            { label: "資産一覧", href: "/" },
+            { label: "資産登録" }
+          ]}
+        />
         <h1 className="text-title">資産登録</h1>
       </header>
-      <div>
-        <div className="text-section">資産タイプ</div>
-        <div className={styles.typeGrid}>
-          {assetTypes.map((type) => {
-            const isActive = type.id === selectedType;
-            return (
-              <button
-                key={type.id}
-                type="button"
-                className={[
-                  styles.typeCard,
-                  isActive ? styles.typeCardActive : null,
-                  !type.available ? styles.typeCardDisabled : null
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => {
-                  if (type.available) {
-                    setSelectedType(type.id);
-                  }
-                }}
-                disabled={!type.available}
-              >
-                <span className={styles.typeLabel}>{type.label}</span>
-                <span className={styles.typeMeta}>{type.description}</span>
-                {!type.available ? <span className={styles.typeBadge}>準備中</span> : null}
-              </button>
-            );
-          })}
+      {step === "type" ? (
+        <div>
+          <div className="text-section">資産タイプ</div>
+          <div className={styles.typeGrid}>
+            {assetTypes.map((type) => {
+              const isActive = type.id === selectedType;
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  className={[
+                    styles.typeCard,
+                    isActive ? styles.typeCardActive : null,
+                    !type.available ? styles.typeCardDisabled : null
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => {
+                    if (type.available) {
+                      setSelectedType(type.id);
+                    }
+                  }}
+                  disabled={!type.available}
+                >
+                  <span className={styles.typeLabel}>{type.label}</span>
+                  <span className={styles.typeMeta}>{type.description}</span>
+                  {!type.available ? <span className={styles.typeBadge}>準備中</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className={styles.stepActions}>
+            <Button type="button" onClick={() => setStep("form")}>
+              次へ
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <div className="text-section">資産タイプ</div>
+          <div className={styles.typeSummary}>
+            <div className={styles.typeSummaryText}>
+              {assetTypes.find((type) => type.id === selectedType)?.label ?? "未選択"}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setStep("type");
+                setError(null);
+                setSuccess(null);
+              }}
+            >
+              変更する
+            </Button>
+          </div>
+        </div>
+      )}
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
-      {selectedType === "xrp-wallet" ? (
+      {step === "form" && selectedType === "xrp-wallet" ? (
         <form className={styles.form} onSubmit={onSubmit}>
-          <FormField label="ラベル" errorMessage={formState.errors.label?.message}>
+          <FormField label="ラベル" error={formState.errors.label?.message}>
             <Input {...register("label")} placeholder="例: 自分のウォレット" />
           </FormField>
-          <FormField label="XRPアドレス" errorMessage={formState.errors.address?.message}>
+          <FormField label="XRPアドレス" error={formState.errors.address?.message}>
             <Input {...register("address")} placeholder="r..." />
           </FormField>
           <Button type="submit">登録する</Button>
