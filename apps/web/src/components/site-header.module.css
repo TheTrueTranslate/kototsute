@@ -7,6 +7,18 @@
   @apply flex w-full items-center justify-between gap-6 px-6 py-4;
 }
 
+.leftGroup {
+  @apply flex items-center gap-3;
+}
+
+.menuButton {
+  @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground sm:hidden;
+}
+
+.menuIcon {
+  @apply h-5 w-5;
+}
+
 .branding {
   @apply flex items-center gap-3;
 }

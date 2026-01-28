@@ -7,6 +7,7 @@ import { useIsMobile } from "../../hooks/use-mobile"
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
 import { Input } from "./input"
+import { Sheet, SheetContent } from "./sheet"
 import { Separator } from "./separator"
 import { Skeleton } from "./skeleton"
 import {
@@ -19,7 +20,7 @@ import {
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+const SIDEBAR_WIDTH_MOBILE = "min(90vw, 24rem)"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -164,7 +165,7 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state } = useSidebar()
+    const { isMobile, state, open, setOpen } = useSidebar()
 
     if (collapsible === "none") {
       return (
@@ -178,6 +179,24 @@ const Sidebar = React.forwardRef<
         >
           {children}
         </div>
+      )
+    }
+
+    if (isMobile) {
+      return (
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent
+            side={side}
+            className={cn(
+              "w-[90vw] max-w-[24rem] bg-sidebar p-0 text-sidebar-foreground",
+              className
+            )}
+          >
+            <div data-sidebar="sidebar" className="flex h-full w-full flex-col bg-sidebar">
+              {children}
+            </div>
+          </SheetContent>
+        </Sheet>
       )
     }
 

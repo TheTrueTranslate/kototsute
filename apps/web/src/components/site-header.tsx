@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 import styles from "./site-header.module.css";
+import { Menu } from "lucide-react";
 
 export type HeaderNavItem = {
   label: string;
@@ -13,6 +14,8 @@ type HeaderProps = {
   brand?: string;
   navItems?: HeaderNavItem[];
   showNav?: boolean;
+  showMenuButton?: boolean;
+  onMenuClick?: () => void;
   className?: string;
 };
 
@@ -22,6 +25,8 @@ export default function SiteHeader({
   brand = "Kototsute",
   navItems = [],
   showNav = false,
+  showMenuButton = false,
+  onMenuClick,
   className
 }: HeaderProps) {
   const classes = [styles.header, className].filter(Boolean).join(" ");
@@ -29,10 +34,22 @@ export default function SiteHeader({
   return (
     <header className={classes}>
       <div className={styles.inner}>
-        <Link className={styles.branding} to="/">
-          <img className={styles.logo} src={logoSrc} alt={logoAlt} />
-          <span className={styles.brandText}>{brand}</span>
-        </Link>
+        <div className={styles.leftGroup}>
+          {showMenuButton ? (
+            <button
+              type="button"
+              className={styles.menuButton}
+              onClick={onMenuClick}
+              aria-label="メニューを開く"
+            >
+              <Menu className={styles.menuIcon} />
+            </button>
+          ) : null}
+          <Link className={styles.branding} to="/">
+            <img className={styles.logo} src={logoSrc} alt={logoAlt} />
+            <span className={styles.brandText}>{brand}</span>
+          </Link>
+        </div>
         {showNav ? (
           <nav className={styles.nav} aria-label="メインメニュー">
             {navItems.map((item) => (

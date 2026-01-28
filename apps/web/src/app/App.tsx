@@ -13,6 +13,8 @@ import SiteHeader from "../components/site-header";
 import SiteFooter from "../components/site-footer";
 import { AuthProvider, useAuth } from "./auth/auth-provider";
 import RequireAuth from "./auth/require-auth";
+import { useEffect, useState } from "react";
+import { useIsMobile } from "../hooks/use-mobile";
 
 export default function App() {
   return (
@@ -25,11 +27,23 @@ export default function App() {
 function AppShell() {
   const { user } = useAuth();
   const isAuthenticated = Boolean(user);
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   return (
     <div className="app">
-      {isAuthenticated ? <SiteHeader showNav={false} /> : null}
-      <SidebarProvider defaultOpen className="flex-1 min-h-0">
+      {isAuthenticated ? (
+        <SiteHeader
+          showNav={false}
+          showMenuButton={isMobile}
+          onMenuClick={() => setSidebarOpen((prev) => !prev)}
+        />
+      ) : null}
+      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="flex-1 min-h-0">
         {isAuthenticated ? <AppSidebar /> : null}
         <SidebarInset className="app-main">
           <Routes>
