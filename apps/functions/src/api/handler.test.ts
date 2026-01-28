@@ -80,6 +80,7 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body?.ok).toBe(false);
+    expect(res.body?.code).toBe("VALIDATION_ERROR");
   });
 
   it("creates asset when input is valid", async () => {

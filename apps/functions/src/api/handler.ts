@@ -8,7 +8,7 @@ import {
   OccurredAt,
   AssetRepository
 } from "@kototsute/asset";
-import { DomainError, isXrpAddress } from "@kototsute/shared";
+import { DomainError, assetCreateSchema } from "@kototsute/shared";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import crypto from "node:crypto";
@@ -123,12 +123,16 @@ export const createApiHandler = (deps: ApiDeps) => {
       if (path === "/v1/assets" && method === "POST") {
         const uid = await deps.getUid(req);
         const { label, address } = req.body ?? {};
-
-        if (typeof label !== "string" || label.trim().length === 0) {
-          return json(res, 400, { ok: false, code: "VALIDATION_ERROR", message: "ラベルは必須です" });
-        }
-        if (typeof address !== "string" || !isXrpAddress(address)) {
-          return json(res, 400, { ok: false, code: "VALIDATION_ERROR", message: "XRPアドレスが不正です" });
+        const parsed = assetCreateSchema.safeParse({
+          label: typeof label === "string" ? label.trim() : label,
+          address
+        });
+        if (!parsed.success) {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "入力が不正です"
+          });
         }
 
         const usecase = new RegisterAsset(deps.repo);
@@ -136,8 +140,8 @@ export const createApiHandler = (deps: ApiDeps) => {
         const asset = await usecase.execute({
           ownerId: OwnerId.create(uid),
           type: "CRYPTO_WALLET",
-          identifier: AssetIdentifier.create(address),
-          label: label.trim(),
+          identifier: AssetIdentifier.create(parsed.data.address),
+          label: parsed.data.label,
           linkLevel: "L0",
           status: "MANUAL",
           dataSource: "SELF_DECLARED",
