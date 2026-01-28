@@ -42,6 +42,8 @@ export default function InvitesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InviteListItem | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const {
     register,
@@ -121,14 +123,15 @@ export default function InvitesPage() {
     }
   };
 
-  const handleDelete = async (inviteId: string) => {
-    const ok = window.confirm("この招待を削除しますか？");
-    if (!ok) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     setError(null);
     setSuccess(null);
     try {
-      await deleteInvite(inviteId);
+      await deleteInvite(deleteTarget.inviteId);
       setSuccess("招待を削除しました。");
+      setDeleteOpen(false);
+      setDeleteTarget(null);
       await loadInvites();
     } catch (err: any) {
       setError(err?.message ?? "招待の削除に失敗しました");
@@ -265,7 +268,10 @@ export default function InvitesPage() {
                       <Button
                         type="button"
                         variant="destructive"
-                        onClick={() => handleDelete(invite.inviteId)}
+                        onClick={() => {
+                          setDeleteTarget(invite);
+                          setDeleteOpen(true);
+                        }}
                       >
                         削除
                       </Button>
@@ -275,7 +281,10 @@ export default function InvitesPage() {
                       <Button
                         type="button"
                         variant="destructive"
-                        onClick={() => handleDelete(invite.inviteId)}
+                        onClick={() => {
+                          setDeleteTarget(invite);
+                          setDeleteOpen(true);
+                        }}
                       >
                         削除
                       </Button>
@@ -287,6 +296,41 @@ export default function InvitesPage() {
           </div>
         )}
       </div>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(next) => {
+          setDeleteOpen(next);
+          if (!next) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className={styles.confirmDialog}>
+          <div className={styles.confirmAccent} aria-hidden />
+          <div className={styles.confirmBody}>
+            <DialogHeader className={styles.confirmHeader}>
+              <DialogTitle className={styles.confirmTitle}>招待を削除しますか？</DialogTitle>
+              <DialogDescription className={styles.confirmDescription}>
+                この操作は取り消せません
+              </DialogDescription>
+            </DialogHeader>
+            {deleteTarget ? (
+              <div className={styles.confirmMeta}>
+                <div className={styles.confirmEmail}>{deleteTarget.email}</div>
+                <div className={styles.confirmRelation}>{formatRelation(deleteTarget)}</div>
+              </div>
+            ) : null}
+            <div className={styles.confirmActions}>
+              <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
+                キャンセル
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleDeleteConfirm}>
+                削除
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
