@@ -96,55 +96,55 @@ export default function InvitesReceivedPage() {
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
 
-      <div className={styles.section}>
+      <div className={styles.listHeader}>
         <div className={styles.sectionTitle}>招待一覧</div>
-        {loading ? null : sortedInvites.length === 0 ? (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ招待が届いていません</div>
-            <div className={styles.emptyBody}>招待が届くとここに表示されます。</div>
-          </div>
-        ) : (
-          <div className={styles.list}>
-            {sortedInvites.map((invite) => (
-              <div key={invite.inviteId} className={styles.row}>
+      </div>
+      {loading ? null : sortedInvites.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyTitle}>まだ招待が届いていません</div>
+          <div className={styles.emptyBody}>招待が届くとここに表示されます。</div>
+        </div>
+      ) : (
+        <div className={styles.list}>
+          {sortedInvites.map((invite) => (
+            <div key={invite.inviteId} className={styles.row}>
                 <div className={styles.rowMain}>
                   <div className={styles.rowTitle}>{formatRelation(invite)}</div>
                   <div className={styles.rowSub}>
-                    送信者: {invite.ownerDisplayName ?? "不明"}
+                  送信者: {invite.ownerEmail ?? "不明"}
                   </div>
                   {invite.memo ? <div className={styles.rowMetaText}>{invite.memo}</div> : null}
                 </div>
-                <div className={styles.rowSide}>
-                  <div className={styles.metaRow}>
-                    <span className={styles.statusBadge}>
-                      {statusLabels[invite.status] ?? "招待中"}
-                    </span>
-                    <span className={styles.meta}>
-                      {new Date(invite.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className={styles.actions}>
-                    {invite.status === "pending" ? (
-                      <>
-                        <Button type="button" onClick={() => handleAccept(invite.inviteId)}>
-                          受諾する
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleDecline(invite.inviteId)}
-                        >
-                          辞退する
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
+              <div className={styles.rowSide}>
+                <div className={styles.metaRow}>
+                  <span className={styles.statusBadge}>
+                    {statusLabels[invite.status] ?? "招待中"}
+                  </span>
+                  <span className={styles.meta}>
+                    {new Date(invite.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className={styles.actions}>
+                  {invite.status === "pending" ? (
+                    <>
+                      <Button type="button" onClick={() => handleAccept(invite.inviteId)}>
+                        受諾する
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleDecline(invite.inviteId)}
+                      >
+                        辞退する
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

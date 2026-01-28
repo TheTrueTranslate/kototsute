@@ -305,15 +305,22 @@ export const createApiHandler = (deps: ApiDeps) => {
         const ownerUids = Array.from(
           new Set(snapshot.docs.map((doc) => doc.data()?.ownerUid).filter(Boolean))
         ) as string[];
-        const ownerNameMap = new Map<string, string | null>();
+        const ownerEmailMap = new Map<string, string | null>();
         if (scope === "received" && ownerUids.length > 0) {
-          const profileSnaps = await Promise.all(
-            ownerUids.map((ownerUid) => db.collection("profiles").doc(ownerUid).get())
+          await Promise.all(
+            ownerUids.map(async (ownerUid) => {
+              try {
+                const user = await getAuth().getUser(ownerUid);
+                ownerEmailMap.set(ownerUid, user.email ?? null);
+              } catch (error: any) {
+                if (error?.code === "auth/user-not-found") {
+                  ownerEmailMap.set(ownerUid, null);
+                  return;
+                }
+                throw error;
+              }
+            })
           );
-          profileSnaps.forEach((snap, index) => {
-            const data = snap.data() ?? {};
-            ownerNameMap.set(ownerUids[index], (data.displayName as string) ?? null);
-          });
         }
         return json(res, 200, {
           ok: true,
@@ -324,7 +331,7 @@ export const createApiHandler = (deps: ApiDeps) => {
             return {
               inviteId: doc.id,
               ownerUid: data.ownerUid ?? "",
-              ownerDisplayName: ownerNameMap.get(data.ownerUid) ?? null,
+              ownerEmail: ownerEmailMap.get(data.ownerUid) ?? null,
               email: data.email ?? "",
               status: data.status ?? "pending",
               relationLabel: data.relationLabel ?? "",

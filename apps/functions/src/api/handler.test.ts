@@ -9,7 +9,8 @@ import { OccurredAt } from "@kototsute/asset";
 import { getFirestore } from "firebase-admin/firestore";
 
 const authState = {
-  existingEmails: new Set<string>()
+  existingEmails: new Set<string>(),
+  users: new Map<string, { email?: string | null }>()
 };
 
 type StoredDoc = Record<string, any>;
@@ -129,6 +130,15 @@ vi.mock("firebase-admin/auth", () => ({
         throw error;
       }
       return { uid: `uid_${email}` };
+    },
+    getUser: async (uid: string) => {
+      const user = authState.users.get(uid);
+      if (!user) {
+        const error: any = new Error("not found");
+        error.code = "auth/user-not-found";
+        throw error;
+      }
+      return { uid, email: user.email ?? null };
     }
   })
 }));
@@ -190,6 +200,7 @@ describe("createApiHandler", () => {
   beforeEach(() => {
     resetStore();
     authState.existingEmails.clear();
+    authState.users.clear();
   });
 
   it("returns 400 when label is missing", async () => {
@@ -340,7 +351,7 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.[0]?.email).toBe("heir@example.com");
   });
 
-  it("includes owner display name for received invites", async () => {
+  it("includes owner email for received invites", async () => {
     const repo = new InMemoryAssetRepository();
     const ownerHandler = createApiHandler({
       repo,
@@ -357,7 +368,7 @@ describe("createApiHandler", () => {
     };
     await ownerHandler(createReq as any, createRes() as any);
 
-    await getFirestore().collection("profiles").doc("owner_1").set({ displayName: "山田太郎" });
+    authState.users.set("owner_1", { email: "owner@example.com" });
 
     const heirHandler = createApiHandler({
       repo,
@@ -377,7 +388,7 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body?.data).toHaveLength(1);
-    expect(res.body?.data?.[0]?.ownerDisplayName).toBe("山田太郎");
+    expect(res.body?.data?.[0]?.ownerEmail).toBe("owner@example.com");
   });
 
   it("accepts invite and creates heir profile", async () => {

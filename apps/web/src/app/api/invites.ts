@@ -5,7 +5,7 @@ export type InviteStatus = "pending" | "accepted" | "declined";
 export type InviteListItem = {
   inviteId: string;
   ownerUid: string;
-  ownerDisplayName: string | null;
+  ownerEmail: string | null;
   email: string;
   status: InviteStatus;
   relationLabel: string;

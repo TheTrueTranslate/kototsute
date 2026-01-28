@@ -221,75 +221,75 @@ export default function InvitesPage() {
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
 
-      <div className={styles.section}>
+      <div className={styles.listHeader}>
         <div className={styles.sectionTitle}>招待一覧</div>
-        {loading ? null : sortedInvites.length === 0 ? (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ招待がありません</div>
-            <div className={styles.emptyBody}>上のフォームから相続人を招待できます。</div>
-          </div>
-        ) : (
-          <div className={styles.list}>
-            {sortedInvites.map((invite) => (
-              <div key={invite.inviteId} className={styles.row}>
-                <div className={styles.rowMain}>
-                  <div className={styles.rowTitle}>{invite.email}</div>
-                  <div className={styles.rowSub}>{formatRelation(invite)}</div>
-                  {invite.memo ? <div className={styles.rowMetaText}>{invite.memo}</div> : null}
-                  <div className={styles.rowMetaRow}>
-                    {invite.acceptedAt ? (
-                      <span>受諾: {new Date(invite.acceptedAt).toLocaleDateString()}</span>
-                    ) : null}
-                    {invite.declinedAt ? (
-                      <span>辞退: {new Date(invite.declinedAt).toLocaleDateString()}</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className={styles.rowSide}>
-                  <div className={styles.metaRow}>
-                    <span className={styles.statusBadge}>
-                      {statusLabels[invite.status] ?? "招待中"}
-                    </span>
-                    <span className={styles.meta}>
-                      {new Date(invite.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {invite.status === "declined" ? (
-                    <div className={styles.actions}>
-                      <Button type="button" variant="outline" onClick={() => handleResend(invite)}>
-                        再招待する
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => {
-                          setDeleteTarget(invite);
-                          setDeleteOpen(true);
-                        }}
-                      >
-                        削除
-                      </Button>
-                    </div>
-                  ) : invite.status === "pending" ? (
-                    <div className={styles.actions}>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => {
-                          setDeleteTarget(invite);
-                          setDeleteOpen(true);
-                        }}
-                      >
-                        削除
-                      </Button>
-                    </div>
+      </div>
+      {loading ? null : sortedInvites.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyTitle}>まだ招待がありません</div>
+          <div className={styles.emptyBody}>上のフォームから相続人を招待できます。</div>
+        </div>
+      ) : (
+        <div className={styles.list}>
+          {sortedInvites.map((invite) => (
+            <div key={invite.inviteId} className={styles.row}>
+              <div className={styles.rowMain}>
+                <div className={styles.rowTitle}>{invite.email}</div>
+                <div className={styles.rowSub}>{formatRelation(invite)}</div>
+                {invite.memo ? <div className={styles.rowMetaText}>{invite.memo}</div> : null}
+                <div className={styles.rowMetaRow}>
+                  {invite.acceptedAt ? (
+                    <span>受諾: {new Date(invite.acceptedAt).toLocaleDateString()}</span>
+                  ) : null}
+                  {invite.declinedAt ? (
+                    <span>辞退: {new Date(invite.declinedAt).toLocaleDateString()}</span>
                   ) : null}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <div className={styles.rowSide}>
+                <div className={styles.metaRow}>
+                  <span className={styles.statusBadge}>
+                    {statusLabels[invite.status] ?? "招待中"}
+                  </span>
+                  <span className={styles.meta}>
+                    {new Date(invite.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {invite.status === "declined" ? (
+                  <div className={styles.actions}>
+                    <Button type="button" variant="outline" onClick={() => handleResend(invite)}>
+                      再招待する
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => {
+                        setDeleteTarget(invite);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      削除
+                    </Button>
+                  </div>
+                ) : invite.status === "pending" ? (
+                  <div className={styles.actions}>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => {
+                        setDeleteTarget(invite);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      削除
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <Dialog
         open={deleteOpen}
         onOpenChange={(next) => {

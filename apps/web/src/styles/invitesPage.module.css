@@ -18,6 +18,10 @@
   @apply text-section text-foreground;
 }
 
+.listHeader {
+  @apply mt-6;
+}
+
 .form {
   @apply grid gap-5;
 }
