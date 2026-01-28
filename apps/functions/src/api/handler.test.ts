@@ -54,6 +54,11 @@ class MockDocRef {
     };
   }
 
+  async delete() {
+    const collection = getCollectionStore(this.collectionName);
+    collection.delete(this.id);
+  }
+
   collection(name: string) {
     return new MockCollectionRef(`${this.collectionName}/${this.id}/${name}`);
   }
@@ -417,5 +422,84 @@ describe("createApiHandler", () => {
 
     const inviteSnap = await getFirestore().collection("invites").doc(inviteId).get();
     expect(inviteSnap.data()?.status).toBe("declined");
+  });
+
+  it("deletes pending invite", async () => {
+    const repo = new InMemoryAssetRepository();
+    const handler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createReq: MockReq = {
+      method: "POST",
+      path: "/v1/invites",
+      body: { email: "heir@example.com", relationLabel: "長男" }
+    };
+    const createResBody = createRes();
+    await handler(createReq as any, createResBody as any);
+    const inviteId = createResBody.body?.data?.inviteId;
+
+    const deleteReq: MockReq = {
+      method: "DELETE",
+      path: `/v1/invites/${inviteId}`
+    };
+    const deleteRes = createRes();
+    await handler(deleteReq as any, deleteRes as any);
+
+    expect(deleteRes.statusCode).toBe(200);
+
+    const snapshot = await getFirestore()
+      .collection("invites")
+      .where("ownerUid", "==", "owner_1")
+      .get();
+    expect(snapshot.docs).toHaveLength(0);
+  });
+
+  it("rejects deleting accepted invite", async () => {
+    const repo = new InMemoryAssetRepository();
+    const ownerHandler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createReq: MockReq = {
+      method: "POST",
+      path: "/v1/invites",
+      body: { email: "heir@example.com", relationLabel: "長男" }
+    };
+    const createResBody = createRes();
+    await ownerHandler(createReq as any, createResBody as any);
+    const inviteId = createResBody.body?.data?.inviteId;
+
+    const heirHandler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getUid: async () => "heir_1",
+      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const acceptReq: MockReq = {
+      method: "POST",
+      path: `/v1/invites/${inviteId}/accept`
+    };
+    await heirHandler(acceptReq as any, createRes() as any);
+
+    const deleteReq: MockReq = {
+      method: "DELETE",
+      path: `/v1/invites/${inviteId}`
+    };
+    const deleteRes = createRes();
+    await ownerHandler(deleteReq as any, deleteRes as any);
+
+    expect(deleteRes.statusCode).toBe(400);
+    expect(deleteRes.body?.code).toBe("VALIDATION_ERROR");
   });
 });

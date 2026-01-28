@@ -576,6 +576,35 @@ export const createApiHandler = (deps: ApiDeps) => {
         return json(res, 200, { ok: true });
       }
 
+      if (segments[0] === "v1" && segments[1] === "invites" && segments[2] && method === "DELETE") {
+        if (segments[3]) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });
+        }
+
+        const inviteId = segments[2];
+        const authUser = await deps.getAuthUser(req);
+        const db = getFirestore();
+        const inviteRef = db.collection("invites").doc(inviteId);
+        const inviteSnap = await inviteRef.get();
+        if (!inviteSnap.exists) {
+          return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Invite not found" });
+        }
+        const invite = inviteSnap.data() ?? {};
+        if (invite.ownerUid !== authUser.uid) {
+          return json(res, 403, { ok: false, code: "FORBIDDEN", message: "権限がありません" });
+        }
+        if (invite.status === "accepted") {
+          return json(res, 400, {
+            ok: false,
+            code: "VALIDATION_ERROR",
+            message: "受諾済みの招待は削除できません"
+          });
+        }
+
+        await inviteRef.delete();
+        return json(res, 200, { ok: true });
+      }
+
       return json(res, 404, { ok: false, code: "NOT_FOUND", message: "Not found" });
     } catch (error: any) {
       if (error?.message === "UNAUTHORIZED") {

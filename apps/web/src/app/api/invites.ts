@@ -50,3 +50,7 @@ export const acceptInvite = async (inviteId: string) => {
 export const declineInvite = async (inviteId: string) => {
   await apiFetch(`/v1/invites/${inviteId}/decline`, { method: "POST" });
 };
+
+export const deleteInvite = async (inviteId: string) => {
+  await apiFetch(`/v1/invites/${inviteId}`, { method: "DELETE" });
+};

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { inviteCreateSchema, relationOptions } from "@kototsute/shared";
-import { createInvite, listInvitesByOwner, type InviteListItem } from "../api/invites";
+import { createInvite, deleteInvite, listInvitesByOwner, type InviteListItem } from "../api/invites";
 import FormAlert from "../../components/form-alert";
 import FormField from "../../components/form-field";
 import { Button } from "../../components/ui/button";
@@ -118,6 +118,20 @@ export default function InvitesPage() {
       await loadInvites();
     } catch (err: any) {
       setError(err?.message ?? "再招待に失敗しました");
+    }
+  };
+
+  const handleDelete = async (inviteId: string) => {
+    const ok = window.confirm("この招待を削除しますか？");
+    if (!ok) return;
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteInvite(inviteId);
+      setSuccess("招待を削除しました。");
+      await loadInvites();
+    } catch (err: any) {
+      setError(err?.message ?? "招待の削除に失敗しました");
     }
   };
 
@@ -247,6 +261,23 @@ export default function InvitesPage() {
                     <div className={styles.actions}>
                       <Button type="button" variant="outline" onClick={() => handleResend(invite)}>
                         再招待する
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => handleDelete(invite.inviteId)}
+                      >
+                        削除
+                      </Button>
+                    </div>
+                  ) : invite.status === "pending" ? (
+                    <div className={styles.actions}>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => handleDelete(invite.inviteId)}
+                      >
+                        削除
                       </Button>
                     </div>
                   ) : null}
