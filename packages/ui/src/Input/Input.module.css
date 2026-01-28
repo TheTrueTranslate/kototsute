@@ -1,0 +1,8 @@
+.input {
+  @apply w-full rounded-xl border border-border/90 bg-surface-alt px-3.5 py-3 text-sm font-medium text-ink
+    transition duration-200 ease-out;
+}
+
+.input:focus {
+  @apply border-accent/60 bg-white shadow-[0_0_0_3px_rgba(177,106,58,0.12)] outline-none;
+}

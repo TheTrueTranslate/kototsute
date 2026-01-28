@@ -1,0 +1,15 @@
+.alert {
+  @apply rounded-xl border px-3.5 py-3 text-xs font-medium;
+}
+
+.alertSuccess {
+  @apply border-success/20 bg-success/10 text-success;
+}
+
+.alertError {
+  @apply border-danger/20 bg-danger/10 text-danger;
+}
+
+.alertInfo {
+  @apply border-accent/20 bg-accent/10 text-accent-dark;
+}

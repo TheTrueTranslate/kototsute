@@ -5,7 +5,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@kototsute/shared": resolve(__dirname, "../../packages/shared/src"),
-      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src")
+      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src"),
+      "@kototsute/ui": resolve(__dirname, "../../packages/ui/src")
     }
   },
   test: {

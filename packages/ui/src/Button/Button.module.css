@@ -1,0 +1,22 @@
+.button {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition
+    duration-200 ease-out;
+}
+
+.button:disabled {
+  @apply cursor-progress opacity-60;
+}
+
+.buttonPrimary {
+  @apply bg-accent text-[#fffaf5] shadow-[0_12px_24px_rgba(177,106,58,0.25)] hover:-translate-y-0.5
+    hover:bg-[#c27642];
+}
+
+.buttonOutline {
+  @apply border border-accent/40 bg-transparent text-accent-dark hover:-translate-y-0.5
+    hover:bg-[rgba(177,106,58,0.08)];
+}
+
+.buttonGhost {
+  @apply bg-[rgba(31,27,22,0.06)] text-ink hover:-translate-y-0.5 hover:bg-[rgba(31,27,22,0.1)];
+}

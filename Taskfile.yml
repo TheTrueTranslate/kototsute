@@ -5,6 +5,7 @@ vars:
   WEB_DIR: "apps/web"
   FUNCTIONS_DIR: "apps/functions"
   PROJECT_ID: "kototsute"
+  EMULATOR_DATA_DIR: "tmp/emulators"
 
 includes: {}
 
@@ -36,7 +37,7 @@ tasks:
   dev:app:
     desc: "Run Vite dev server"
     cmds:
-      - pnpm -C {{.WEB_DIR}} dev
+      - pnpm -C {{.WEB_DIR}} dev -- --open
 
   build:
     desc: "Build web app"
@@ -61,12 +62,14 @@ tasks:
   firebase:emulate:
     desc: "Start emulators (core)"
     cmds:
-      - firebase emulators:start --project {{.PROJECT_ID}} --only functions,auth,firestore,storage
+      - mkdir -p {{.EMULATOR_DATA_DIR}}
+      - firebase emulators:start --project {{.PROJECT_ID}} --only functions,auth,firestore,storage --import {{.EMULATOR_DATA_DIR}} --export-on-exit {{.EMULATOR_DATA_DIR}}
 
   firebase:emulators:
     desc: "Start Firebase emulators (all)"
     cmds:
-      - firebase emulators:start --project {{.PROJECT_ID}}
+      - mkdir -p {{.EMULATOR_DATA_DIR}}
+      - firebase emulators:start --project {{.PROJECT_ID}} --import {{.EMULATOR_DATA_DIR}} --export-on-exit {{.EMULATOR_DATA_DIR}}
 
   clean:
     desc: "Remove build outputs"

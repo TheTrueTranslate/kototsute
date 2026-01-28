@@ -1,0 +1,19 @@
+.field {
+  @apply grid gap-2;
+}
+
+.labelRow {
+  @apply flex items-baseline justify-between gap-3;
+}
+
+.label {
+  @apply text-xs font-medium text-ink;
+}
+
+.hint {
+  @apply text-[11px] font-medium text-muted;
+}
+
+.error {
+  @apply m-0 text-[11px] font-medium text-danger;
+}
