@@ -98,7 +98,6 @@ export default function InvitesReceivedPage() {
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>招待一覧</div>
-        <p className={styles.ownerNote}>被相続人の表示は今後追加予定です。</p>
         {loading ? null : sortedInvites.length === 0 ? (
           <div className={styles.emptyState}>
             <div className={styles.emptyTitle}>まだ招待が届いていません</div>
