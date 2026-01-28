@@ -12,8 +12,7 @@ import { auth } from "../lib/firebase";
 
 export default function App() {
   const navItems: HeaderNavItem[] = [
-    { label: "資産一覧", href: "/assets" },
-    { label: "資産登録", href: "/assets/new" }
+    { label: "資産", href: "/assets" }
   ];
 
   const [showNav, setShowNav] = useState(false);

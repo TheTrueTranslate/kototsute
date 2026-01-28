@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { listAssets, type AssetListItem } from "../api/assets";
 import styles from "../../styles/assetsPage.module.css";
-import { FormAlert } from "@kototsute/ui";
+import { FormAlert, Button } from "@kototsute/ui";
+import { Link } from "react-router-dom";
 
 export default function AssetsPage() {
   const [items, setItems] = useState<AssetListItem[]>([]);
@@ -16,7 +17,12 @@ export default function AssetsPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className="text-title">資産一覧</h1>
+        <div className={styles.headerRow}>
+          <h1 className="text-title">資産一覧</h1>
+          <Button as={Link} to="/assets/new">
+            追加
+          </Button>
+        </div>
       </header>
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       <div className={styles.list}>

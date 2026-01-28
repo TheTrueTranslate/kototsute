@@ -6,6 +6,10 @@
   @apply mb-6;
 }
 
+.headerRow {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
 .list {
   @apply mt-6 flex flex-col gap-4;
 }
@@ -28,4 +32,32 @@
 
 .form {
   @apply mt-6 flex flex-col gap-5;
+}
+
+.typeGrid {
+  @apply mt-4 grid gap-4 sm:grid-cols-2;
+}
+
+.typeCard {
+  @apply flex flex-col gap-2 rounded-2xl border border-border/60 bg-surface px-5 py-4 text-left transition;
+}
+
+.typeCardActive {
+  @apply border-ink/40 shadow-[0_18px_30px_rgba(15,15,15,0.08)];
+}
+
+.typeCardDisabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.typeLabel {
+  @apply text-section text-ink;
+}
+
+.typeMeta {
+  @apply text-body-sm text-muted;
+}
+
+.typeBadge {
+  @apply text-meta font-medium text-muted;
 }
