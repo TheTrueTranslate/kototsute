@@ -306,7 +306,6 @@ export default function InvitesPage() {
         }}
       >
         <DialogContent className={styles.confirmDialog}>
-          <div className={styles.confirmAccent} aria-hidden />
           <div className={styles.confirmBody}>
             <DialogHeader className={styles.confirmHeader}>
               <DialogTitle className={styles.confirmTitle}>招待を削除しますか？</DialogTitle>

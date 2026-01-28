@@ -90,10 +90,6 @@
   @apply border border-border/80 bg-background p-0 shadow-[0_24px_60px_rgba(15,23,42,0.18)];
 }
 
-.confirmAccent {
-  @apply h-2 w-full bg-[linear-gradient(90deg,rgba(239,68,68,0.9),rgba(249,115,22,0.9))];
-}
-
 .confirmBody {
   @apply grid gap-4 px-6 py-5;
 }
