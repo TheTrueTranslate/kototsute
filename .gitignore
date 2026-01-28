@@ -1,7 +1,7 @@
 node_modules/
 dist/
-functions/lib/
-functions/node_modules/
+apps/functions/lib/
+apps/functions/node_modules/
 .firebase/
 *.log
 .DS_Store

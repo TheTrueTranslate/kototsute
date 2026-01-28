@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   ROOT: "."
-  FUNCTIONS_DIR: "functions"
+  FUNCTIONS_DIR: "apps/functions"
   PROJECT_ID: "kototsute"
 
 includes: {}
