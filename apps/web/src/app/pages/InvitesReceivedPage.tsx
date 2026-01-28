@@ -96,9 +96,6 @@ export default function InvitesReceivedPage() {
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
 
-      <div className={styles.listHeader}>
-        <div className={styles.sectionTitle}>招待一覧</div>
-      </div>
       {loading ? null : sortedInvites.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyTitle}>まだ招待が届いていません</div>
