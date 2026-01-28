@@ -638,10 +638,6 @@ export const createDefaultDeps = (): ApiDeps => {
       return authUser.uid;
     },
     getAuthUser: getAuthUserFromReq,
-    getOwnerUidForRead: async (uid: string) => {
-      const doc = await getFirestore().collection("heirs").doc(uid).get();
-      if (!doc.exists) return uid;
-      return (doc.data()?.ownerUid as string) ?? uid;
-    }
+    getOwnerUidForRead: async (uid: string) => uid
   };
 };

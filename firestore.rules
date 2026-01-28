@@ -2,19 +2,13 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isHeirForOwner(ownerId) {
-      return exists(/databases/$(database)/documents/heirs/$(request.auth.uid))
-        && get(/databases/$(database)/documents/heirs/$(request.auth.uid)).data.ownerUid == ownerId;
-    }
-
     match /assets/{assetId} {
-      allow read: if request.auth != null
-        && (request.auth.uid == resource.data.ownerId || isHeirForOwner(resource.data.ownerId));
+      allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;
       allow write: if false;
     }
 
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
