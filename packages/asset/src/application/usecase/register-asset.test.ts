@@ -21,6 +21,10 @@ class InMemoryRepo implements AssetRepository {
       label: asset.getLabel()
     };
   }
+
+  async findByOwnerId(): Promise<any[]> {
+    return [];
+  }
 }
 
 describe("RegisterAsset", () => {
