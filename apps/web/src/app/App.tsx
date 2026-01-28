@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { useState } from "react";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -8,19 +7,13 @@ import ResetPage from "./pages/ResetPage";
 import AssetsPage from "./pages/AssetsPage";
 import AssetNewPage from "./pages/AssetNewPage";
 import { Footer, Header, type HeaderNavItem } from "@kototsute/ui";
-import { auth } from "../lib/firebase";
 
 export default function App() {
   const navItems: HeaderNavItem[] = [
     { label: "資産", href: "/assets" }
   ];
 
-  const [showNav, setShowNav] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => setShowNav(Boolean(user)));
-    return () => unsubscribe();
-  }, []);
+  const [showNav] = useState(true);
 
   return (
     <div className="app">
