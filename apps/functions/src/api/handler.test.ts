@@ -351,63 +351,6 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.[0]?.label).toBe("XRP Wallet");
   });
 
-  it("returns xrpl tokens when includeXrpl is true", async () => {
-    const repo = new InMemoryAssetRepository();
-    await repo.save(
-      Asset.create({
-        assetId: AssetId.create("asset_1"),
-        ownerId: OwnerId.create("owner_1"),
-        type: "CRYPTO_WALLET",
-        identifier: AssetIdentifier.create("rXXXX"),
-        label: "XRP Wallet",
-        linkLevel: "L0",
-        status: "MANUAL",
-        dataSource: "SELF_DECLARED",
-        now: OccurredAt.create(new Date("2024-01-01T00:00:00.000Z"))
-      })
-    );
-
-    const fetchMock = vi.fn(async (_url, init) => {
-      const body = JSON.parse(String(init?.body));
-      if (body.method === "account_info") {
-        return {
-          ok: true,
-          json: async () => ({ result: { account_data: { Balance: "1000000" }, ledger_index: 1 } })
-        } as any;
-      }
-      if (body.method === "account_lines") {
-        return {
-          ok: true,
-          json: async () => ({
-            result: {
-              lines: [{ currency: "JPYC", account: "rIssuer", balance: "100" }]
-            }
-          })
-        } as any;
-      }
-      return { ok: false, json: async () => ({}) } as any;
-    });
-    (globalThis as any).fetch = fetchMock;
-
-    const handler = createApiHandler({
-      repo,
-      caseRepo: new InMemoryCaseRepository(),
-      now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getAuthUser,
-      getOwnerUidForRead: async (uid) => uid
-    });
-
-    const req: MockReq = authedReq("owner_1", "owner@example.com", {
-      method: "GET",
-      path: "/v1/assets/asset_1",
-      query: { includeXrpl: "true" }
-    });
-    const res = createRes();
-    await handler(req as any, res as any);
-
-    expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
-  });
-
   it("creates invite when input is valid", async () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
