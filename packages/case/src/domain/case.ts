@@ -10,15 +10,15 @@ export class Case {
   ) {}
 
   static create(id: CaseId, now: OccurredAt): Case {
-    return new Case(id, "CREATED", now);
+    return new Case(id, "DRAFT", now);
   }
 
-  acknowledge(now: OccurredAt): Case {
-    return new Case(this.id, "ACKNOWLEDGED", now);
+  moveToWaiting(now: OccurredAt): Case {
+    return new Case(this.id, "WAITING", now);
   }
 
-  needMoreDocs(now: OccurredAt): Case {
-    return new Case(this.id, "NEED_MORE_DOCS", now);
+  moveToInProgress(now: OccurredAt): Case {
+    return new Case(this.id, "IN_PROGRESS", now);
   }
 
   complete(now: OccurredAt): Case {

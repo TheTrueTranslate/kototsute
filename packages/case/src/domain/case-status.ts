@@ -1,1 +1,1 @@
-export type CaseStatus = "CREATED" | "ACKNOWLEDGED" | "NEED_MORE_DOCS" | "COMPLETED";
+export type CaseStatus = "DRAFT" | "WAITING" | "IN_PROGRESS" | "COMPLETED";
