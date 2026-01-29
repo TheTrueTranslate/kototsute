@@ -35,6 +35,35 @@ const formatDate = (value: string) => {
   }
 };
 
+type RelationOption = (typeof relationOptions)[number];
+
+type AssetRowProps = {
+  caseId?: string;
+  asset: AssetListItem;
+};
+
+export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
+  const content = (
+    <div className={styles.row}>
+      <div className={styles.rowMain}>
+        <div className={styles.rowTitle}>{asset.label}</div>
+        <div className={styles.rowMeta}>{asset.address}</div>
+      </div>
+      <div className={styles.rowSide}>{formatDate(asset.createdAt)}</div>
+    </div>
+  );
+
+  if (!caseId) {
+    return content;
+  }
+
+  return (
+    <Link to={`/cases/${caseId}/assets/${asset.assetId}`} className={styles.rowLink}>
+      {content}
+    </Link>
+  );
+};
+
 type TabKey = "assets" | "plans" | "heirs" | "documents";
 
 const tabItems: { key: TabKey; label: string }[] = [
@@ -53,7 +82,7 @@ export default function CaseDetailPage() {
   const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
   const [heirs, setHeirs] = useState<CaseHeir[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRelation, setInviteRelation] = useState(relationOptions[0]);
+  const [inviteRelation, setInviteRelation] = useState<RelationOption>(relationOptions[0]);
   const [inviteRelationOther, setInviteRelationOther] = useState("");
   const [inviteMemo, setInviteMemo] = useState("");
   const [inviting, setInviting] = useState(false);
@@ -189,13 +218,7 @@ export default function CaseDetailPage() {
           ) : (
             <div className={styles.list}>
               {assets.map((asset) => (
-                <div key={asset.assetId} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <div className={styles.rowTitle}>{asset.label}</div>
-                    <div className={styles.rowMeta}>{asset.address}</div>
-                  </div>
-                  <div className={styles.rowSide}>{formatDate(asset.createdAt)}</div>
-                </div>
+                <AssetRow key={asset.assetId} caseId={caseId} asset={asset} />
               ))}
             </div>
           )}
@@ -285,7 +308,7 @@ export default function CaseDetailPage() {
                 <select
                   className={styles.select}
                   value={inviteRelation}
-                  onChange={(event) => setInviteRelation(event.target.value)}
+                  onChange={(event) => setInviteRelation(event.target.value as RelationOption)}
                 >
                   {relationOptions.map((option) => (
                     <option key={option} value={option}>

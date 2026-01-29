@@ -24,7 +24,15 @@ vi.mock("../api/cases", () => ({
 }));
 
 vi.mock("../api/assets", () => ({
-  listAssets: async () => []
+  listAssets: async () => [
+    {
+      assetId: "asset-1",
+      label: "XRP Wallet",
+      address: "rXXXX",
+      createdAt: "2024-01-01",
+      verificationStatus: "UNVERIFIED"
+    }
+  ]
 }));
 
 vi.mock("../api/plans", () => ({
@@ -58,5 +66,27 @@ describe("CaseDetailPage", () => {
     const html = await render();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
+  });
+
+  it("links to asset detail page", async () => {
+    const { AssetRow } = await import("./CaseDetailPage");
+    const html = renderToString(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(AssetRow, {
+          caseId: "case-1",
+          asset: {
+            assetId: "asset-1",
+            label: "XRP Wallet",
+            address: "rXXXX",
+            createdAt: "2024-01-01",
+            verificationStatus: "UNVERIFIED"
+          }
+        })
+      )
+    );
+    expect(html).toContain("/cases/case-1/assets/asset-1");
+    expect(html).toContain("XRP Wallet");
   });
 });

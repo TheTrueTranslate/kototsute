@@ -109,6 +109,46 @@ class MockQuery {
   }
 }
 
+class MockCollectionGroupQuery {
+  constructor(
+    private readonly collectionId: string,
+    private readonly filters: Array<{ field: string; value: any }>
+  ) {}
+
+  where(field: string, _op: string, value: any) {
+    return new MockCollectionGroupQuery(this.collectionId, [...this.filters, { field, value }]);
+  }
+
+  orderBy(_field: string, _direction?: "asc" | "desc") {
+    return this;
+  }
+
+  limit(_count: number) {
+    return this;
+  }
+
+  async get() {
+    const docs: Array<{ id: string; data: () => StoredDoc; ref: MockDocRef }> = [];
+    for (const [collectionName, collection] of store.entries()) {
+      if (
+        collectionName === this.collectionId ||
+        collectionName.endsWith(`/${this.collectionId}`)
+      ) {
+        for (const [id, data] of collection.entries()) {
+          if (this.filters.every((filter) => data[filter.field] === filter.value)) {
+            docs.push({
+              id,
+              data: () => data,
+              ref: new MockDocRef(collectionName, id)
+            });
+          }
+        }
+      }
+    }
+    return { docs };
+  }
+}
+
 class MockCollectionRef {
   constructor(private readonly collectionName: string) {}
 
@@ -142,7 +182,8 @@ class MockCollectionRef {
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => ({
-    collection: (name: string) => new MockCollectionRef(name)
+    collection: (name: string) => new MockCollectionRef(name),
+    collectionGroup: (name: string) => new MockCollectionGroupQuery(name, [])
   })
 }));
 

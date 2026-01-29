@@ -27,11 +27,8 @@ export type AssetDetail = {
   assetId: string;
   label: string;
   address: string;
-  type: string;
-  status: string;
-  dataSource: string;
-  linkLevel: string;
   createdAt: string;
+  updatedAt: string;
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
   verificationChallenge: string | null;
   verificationAddress: string;
