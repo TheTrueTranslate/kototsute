@@ -4,13 +4,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createAsset } from "../api/assets";
 import { assetCreateSchema } from "@kototsute/shared";
-import FormAlert from "../../components/form-alert";
-import FormField from "../../components/form-field";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
+import FormAlert from "../../features/shared/components/form-alert";
+import FormField from "../../features/shared/components/form-field";
+import { Button } from "../../features/shared/components/ui/button";
+import { Input } from "../../features/shared/components/ui/input";
 import styles from "../../styles/assetsPage.module.css";
 import { useNavigate } from "react-router-dom";
-import Breadcrumbs from "../../components/breadcrumbs";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 
 type FormValues = z.infer<typeof assetCreateSchema>;
 

@@ -4,9 +4,9 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { inviteCreateSchema, relationOptions } from "@kototsute/shared";
 import { createInvite, deleteInvite, listInvitesByOwner, type InviteListItem } from "../api/invites";
-import FormAlert from "../../components/form-alert";
-import FormField from "../../components/form-field";
-import { Button } from "../../components/ui/button";
+import FormAlert from "../../features/shared/components/form-alert";
+import FormField from "../../features/shared/components/form-field";
+import { Button } from "../../features/shared/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger
-} from "../../components/ui/dialog";
-import { Input } from "../../components/ui/input";
-import Breadcrumbs from "../../components/breadcrumbs";
+} from "../../features/shared/components/ui/dialog";
+import { Input } from "../../features/shared/components/ui/input";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import styles from "../../styles/invitesPage.module.css";
 
 const statusLabels: Record<string, string> = {

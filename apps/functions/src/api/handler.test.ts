@@ -79,6 +79,14 @@ class MockQuery {
     return new MockQuery(this.collectionName, [...this.filters, { field, value }]);
   }
 
+  orderBy(_field: string, _direction?: "asc" | "desc") {
+    return this;
+  }
+
+  limit(_count: number) {
+    return this;
+  }
+
   async get() {
     const collection = getCollectionStore(this.collectionName);
     const docs = Array.from(collection.entries())
@@ -102,6 +110,14 @@ class MockCollectionRef {
 
   where(field: string, op: string, value: any) {
     return new MockQuery(this.collectionName, [{ field, value }]);
+  }
+
+  orderBy(field: string, direction?: "asc" | "desc") {
+    return new MockQuery(this.collectionName, []).orderBy(field, direction);
+  }
+
+  limit(count: number) {
+    return new MockQuery(this.collectionName, []).limit(count);
   }
 
   async get() {
@@ -288,6 +304,59 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.[0]?.label).toBe("XRP Wallet");
   });
 
+  it("returns xrpl tokens when includeXrpl is true", async () => {
+    const repo = new InMemoryAssetRepository();
+    await repo.save(
+      Asset.create({
+        assetId: AssetId.create("asset_1"),
+        ownerId: OwnerId.create("owner_1"),
+        type: "CRYPTO_WALLET",
+        identifier: AssetIdentifier.create("rXXXX"),
+        label: "XRP Wallet",
+        linkLevel: "L0",
+        status: "MANUAL",
+        dataSource: "SELF_DECLARED",
+        now: OccurredAt.create(new Date("2024-01-01T00:00:00.000Z"))
+      })
+    );
+
+    const fetchMock = vi.fn(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({ result: { account_data: { Balance: "1000000" }, ledger_index: 1 } })
+        } as any;
+      }
+      if (body.method === "account_lines") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              lines: [{ currency: "JPYC", account: "rIssuer", balance: "100" }]
+            }
+          })
+        } as any;
+      }
+      return { ok: false, json: async () => ({}) } as any;
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const req: MockReq = { method: "GET", path: "/v1/assets/asset_1", query: { includeXrpl: "true" } };
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
+  });
+
   it("creates invite when input is valid", async () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
@@ -349,6 +418,152 @@ describe("createApiHandler", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body?.data).toHaveLength(1);
     expect(res.body?.data?.[0]?.email).toBe("heir@example.com");
+  });
+
+  it("creates and lists plans", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createReq: MockReq = { method: "POST", path: "/v1/plans", body: { title: "2026年版" } };
+    const resCreate = createRes();
+    await handler(createReq as any, resCreate as any);
+    expect(resCreate.body?.data?.title).toBe("2026年版");
+
+    const listReq: MockReq = { method: "GET", path: "/v1/plans" };
+    const listRes = createRes();
+    await handler(listReq as any, listRes as any);
+    expect(listRes.body?.data?.length).toBe(1);
+  });
+
+  it("adds heir from accepted invite and shares plan", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    await db.collection("invites").doc("invite_1").set({
+      ownerUid: "owner_1",
+      status: "accepted",
+      acceptedByUid: "heir_1",
+      email: "heir@example.com",
+      relationLabel: "長男"
+    });
+
+    const createReq: MockReq = { method: "POST", path: "/v1/plans", body: { title: "2026年版" } };
+    const resCreate = createRes();
+    await handler(createReq as any, resCreate as any);
+    const planId = resCreate.body?.data?.planId;
+
+    const addReq: MockReq = { method: "POST", path: `/v1/plans/${planId}/heirs`, body: { heirUid: "heir_1" } };
+    const resAdd = createRes();
+    await handler(addReq as any, resAdd as any);
+
+    const shareReq: MockReq = { method: "POST", path: `/v1/plans/${planId}/share` };
+    const resShare = createRes();
+    await handler(shareReq as any, resShare as any);
+
+    const planSnap = await db.collection("plans").doc(planId).get();
+    expect(planSnap.data()?.status).toBe("SHARED");
+    expect(planSnap.data()?.heirUids).toContain("heir_1");
+  });
+
+  it("updates allocations and auto-adds unallocated for percent", async () => {
+    const repo = new InMemoryAssetRepository();
+    await repo.save(
+      Asset.create({
+        assetId: AssetId.create("asset_1"),
+        ownerId: OwnerId.create("owner_1"),
+        type: "CRYPTO_WALLET",
+        identifier: AssetIdentifier.create("rXXXX"),
+        label: "XRP Wallet",
+        linkLevel: "L0",
+        status: "MANUAL",
+        dataSource: "SELF_DECLARED",
+        now: OccurredAt.create(new Date("2024-01-01T00:00:00.000Z"))
+      })
+    );
+
+    const handler = createApiHandler({
+      repo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const planRes = createRes();
+    await handler({ method: "POST", path: "/v1/plans", body: { title: "2026年版" } } as any, planRes as any);
+    const planId = planRes.body?.data?.planId;
+
+    const addAssetRes = createRes();
+    await handler(
+      { method: "POST", path: `/v1/plans/${planId}/assets`, body: { assetId: "asset_1", unitType: "PERCENT" } } as any,
+      addAssetRes as any
+    );
+    const planAssetId = addAssetRes.body?.data?.planAssetId;
+
+    const allocRes = createRes();
+    await handler(
+      {
+        method: "POST",
+        path: `/v1/plans/${planId}/assets/${planAssetId}/allocations`,
+        body: { unitType: "PERCENT", allocations: [{ heirUid: "heir_1", value: 60 }] }
+      } as any,
+      allocRes as any
+    );
+
+    const db = getFirestore();
+    const snap = await db.collection(`plans/${planId}/assets`).doc(planAssetId).get();
+    const allocations = snap.data()?.allocations ?? [];
+    expect(allocations.some((a: any) => a.isUnallocated)).toBe(true);
+  });
+
+  it("creates notification on invite and can mark read", async () => {
+    authState.existingEmails.add("heir@example.com");
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "owner_1",
+      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await ownerHandler(
+      { method: "POST", path: "/v1/invites", body: { email: "heir@example.com", relationLabel: "長男" } } as any,
+      createRes() as any
+    );
+
+    const heirHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getUid: async () => "uid_heir@example.com",
+      getAuthUser: async () => ({ uid: "uid_heir@example.com", email: "heir@example.com" }),
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const listRes = createRes();
+    await heirHandler({ method: "GET", path: "/v1/notifications" } as any, listRes as any);
+    expect(listRes.body?.data?.length).toBe(1);
+
+    const notificationId = listRes.body?.data?.[0]?.notificationId;
+    const readRes = createRes();
+    await heirHandler(
+      { method: "POST", path: `/v1/notifications/${notificationId}/read` } as any,
+      readRes as any
+    );
+
+    const listRes2 = createRes();
+    await heirHandler({ method: "GET", path: "/v1/notifications" } as any, listRes2 as any);
+    expect(listRes2.body?.data?.[0]?.isRead).toBe(true);
   });
 
   it("includes owner email for received invites", async () => {

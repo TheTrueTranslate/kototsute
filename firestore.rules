@@ -2,6 +2,40 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /plans/{planId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.ownerUid ||
+         (resource.data.status == "SHARED" &&
+          request.auth.uid in resource.data.heirUids));
+      allow write: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+
+      match /assets/{planAssetId} {
+        allow read: if request.auth != null && (
+          request.auth.uid == get(/databases/$(database)/documents/plans/$(planId)).data.ownerUid ||
+          (
+            get(/databases/$(database)/documents/plans/$(planId)).data.status == "SHARED" &&
+            request.auth.uid in get(/databases/$(database)/documents/plans/$(planId)).data.heirUids
+          )
+        );
+        allow write: if request.auth != null &&
+          request.auth.uid == get(/databases/$(database)/documents/plans/$(planId)).data.ownerUid;
+      }
+
+      match /history/{historyId} {
+        allow read: if request.auth != null &&
+          request.auth.uid == get(/databases/$(database)/documents/plans/$(planId)).data.ownerUid;
+        allow write: if request.auth != null &&
+          request.auth.uid == get(/databases/$(database)/documents/plans/$(planId)).data.ownerUid;
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null &&
+        request.auth.uid == resource.data.receiverUid;
+      allow write: if request.auth != null &&
+        request.auth.uid == request.resource.data.receiverUid;
+    }
+
     match /assets/{assetId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;
       allow write: if false;

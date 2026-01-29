@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import AuthLayout from "../../components/auth-layout";
-import { Button } from "../../components/ui/button";
+import AuthLayout from "../../features/shared/components/auth-layout";
+import { Button } from "../../features/shared/components/ui/button";
 import styles from "../../styles/authPages.module.css";
 
 type PageProps = {

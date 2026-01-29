@@ -1,4 +1,4 @@
-import { useAuth } from "../auth/auth-provider";
+import { useAuth } from "../../features/auth/auth-provider";
 import styles from "../../styles/myPage.module.css";
 
 export default function MyPage() {

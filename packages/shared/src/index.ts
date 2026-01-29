@@ -9,3 +9,4 @@ export * from "./util/guard.js";
 export * from "./validation/xrp-address.js";
 export * from "./validation/invite-schema.js";
 export * from "./validation/asset-schema.js";
+export * from "./validation/plan-schema.js";

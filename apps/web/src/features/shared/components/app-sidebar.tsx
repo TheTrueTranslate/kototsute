@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   SidebarTrigger
 } from "./ui/sidebar";
-import { CircleUser, House, Mail, UserPlus, Wallet } from "lucide-react";
+import { Bell, CircleUser, FileText, House, Mail, UserPlus, Wallet } from "lucide-react";
 
 const mainItems = [
   {
@@ -25,6 +25,11 @@ const mainItems = [
     icon: Wallet
   },
   {
+    title: "指図",
+    url: "/plans",
+    icon: FileText
+  },
+  {
     title: "相続人",
     url: "/invites",
     icon: UserPlus
@@ -33,6 +38,11 @@ const mainItems = [
     title: "招待",
     url: "/invites/received",
     icon: Mail
+  },
+  {
+    title: "通知",
+    url: "/notifications",
+    icon: Bell
   }
 ];
 

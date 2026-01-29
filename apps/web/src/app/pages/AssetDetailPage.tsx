@@ -1,12 +1,12 @@
 import { useEffect, useId, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { confirmVerify, deleteAsset, getAsset, requestVerifyChallenge, type AssetDetail } from "../api/assets";
-import FormAlert from "../../components/form-alert";
-import { Button } from "../../components/ui/button";
-import Breadcrumbs from "../../components/breadcrumbs";
+import FormAlert from "../../features/shared/components/form-alert";
+import { Button } from "../../features/shared/components/ui/button";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import styles from "../../styles/assetsPage.module.css";
-import { Input } from "../../components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
+import { Input } from "../../features/shared/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../features/shared/components/ui/dialog";
 import { Copy } from "lucide-react";
 
 const VERIFY_AMOUNT_DROPS = "1";

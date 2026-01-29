@@ -1,0 +1,15 @@
+.tabs {
+  @apply flex flex-wrap items-center gap-6 border-b border-border;
+}
+
+.tabButton {
+  @apply -mb-px border-b-2 border-transparent bg-transparent pb-3 text-body-sm text-muted-foreground transition hover:border-foreground/40 hover:text-foreground;
+}
+
+.tabButtonActive {
+  @apply border-foreground text-foreground;
+}
+
+.tabButton:disabled {
+  @apply cursor-not-allowed opacity-60;
+}

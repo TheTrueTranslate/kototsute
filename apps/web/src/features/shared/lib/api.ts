@@ -27,6 +27,11 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
 
   const json = await res.json();
   if (!res.ok) {
+    if (res.status === 401 || json?.code === "UNAUTHORIZED") {
+      await auth.signOut();
+      window.location.assign("/login");
+      throw new Error("UNAUTHORIZED");
+    }
     const error = new Error(json?.message ?? "API error") as Error & {
       status?: number;
       data?: any;

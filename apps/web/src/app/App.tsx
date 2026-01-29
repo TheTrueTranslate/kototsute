@@ -8,13 +8,17 @@ import AssetNewPage from "./pages/AssetNewPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
 import InvitesPage from "./pages/InvitesPage";
 import InvitesReceivedPage from "./pages/InvitesReceivedPage";
+import PlansPage from "./pages/PlansPage";
+import PlanNewPage from "./pages/PlanNewPage";
+import PlanDetailPage from "./pages/PlanDetailPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import MyPage from "./pages/MyPage";
-import AppSidebar from "../components/app-sidebar";
-import { SidebarProvider, SidebarInset } from "../components/ui/sidebar";
-import SiteHeader from "../components/site-header";
-import SiteFooter from "../components/site-footer";
-import { AuthProvider, useAuth } from "./auth/auth-provider";
-import RequireAuth from "./auth/require-auth";
+import AppSidebar from "../features/shared/components/app-sidebar";
+import { SidebarProvider, SidebarInset } from "../features/shared/components/ui/sidebar";
+import SiteHeader from "../features/shared/components/site-header";
+import SiteFooter from "../features/shared/components/site-footer";
+import { AuthProvider, useAuth } from "../features/auth/auth-provider";
+import RequireAuth from "../features/auth/require-auth";
 import { useEffect, useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 
@@ -101,6 +105,38 @@ function AppShell() {
               element={
                 <RequireAuth>
                   <InvitesReceivedPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/plans"
+              element={
+                <RequireAuth>
+                  <PlansPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/plans/new"
+              element={
+                <RequireAuth>
+                  <PlanNewPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/plans/:planId"
+              element={
+                <RequireAuth>
+                  <PlanDetailPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <RequireAuth>
+                  <NotificationsPage />
                 </RequireAuth>
               }
             />
