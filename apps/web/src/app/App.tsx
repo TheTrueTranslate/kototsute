@@ -7,6 +7,7 @@ import CasesPage from "./pages/CasesPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
 import AssetNewPage from "./pages/AssetNewPage";
 import PlanNewPage from "./pages/PlanNewPage";
+import CasePlanDetailPage from "./pages/CasePlanDetailPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import MyPage from "./pages/MyPage";
 import AppSidebar from "../features/shared/components/app-sidebar";
@@ -85,6 +86,14 @@ function AppShell() {
               element={
                 <RequireAuth>
                   <PlanNewPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/cases/:caseId/plans/:planId"
+              element={
+                <RequireAuth>
+                  <CasePlanDetailPage />
                 </RequireAuth>
               }
             />

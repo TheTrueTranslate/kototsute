@@ -192,17 +192,23 @@ export default function CaseDetailPage() {
           ) : (
             <div className={styles.list}>
               {plans.map((plan) => (
-                <div key={plan.planId} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <div className={styles.rowTitle}>{plan.title}</div>
-                    <div className={styles.rowMeta}>更新: {formatDate(plan.updatedAt)}</div>
+                <Link
+                  key={plan.planId}
+                  to={`/cases/${caseId}/plans/${plan.planId}`}
+                  className={styles.rowLink}
+                >
+                  <div className={styles.row}>
+                    <div className={styles.rowMain}>
+                      <div className={styles.rowTitle}>{plan.title}</div>
+                      <div className={styles.rowMeta}>更新: {formatDate(plan.updatedAt)}</div>
+                    </div>
+                    <div className={styles.rowSide}>
+                      <span className={styles.statusBadge}>
+                        {plan.status === "SHARED" ? "共有中" : plan.status}
+                      </span>
+                    </div>
                   </div>
-                  <div className={styles.rowSide}>
-                    <span className={styles.statusBadge}>
-                      {plan.status === "SHARED" ? "共有中" : plan.status}
-                    </span>
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
