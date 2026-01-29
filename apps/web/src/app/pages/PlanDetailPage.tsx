@@ -5,6 +5,8 @@ import FormAlert from "../../features/shared/components/form-alert";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
 import { Info } from "lucide-react";
+import { listAssets, type AssetListItem } from "../api/assets";
+import { listInvitesByOwner, type InviteListItem } from "../api/invites";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +17,8 @@ import {
 } from "../../features/shared/components/ui/dialog";
 import { Input } from "../../features/shared/components/ui/input";
 import {
+  addPlanAsset,
+  addPlanHeir,
   deletePlanAsset,
   getPlan,
   listPlanAssets,
@@ -29,6 +33,7 @@ import {
   type PlanHistoryEntry,
   type PlanToken
 } from "../api/plans";
+import { filterAvailableAssets, filterAvailableHeirs } from "./planDetail.helpers";
 import styles from "../../styles/plansPage.module.css";
 
 const statusLabels: Record<string, string> = {
@@ -50,6 +55,9 @@ const buildTokenLabel = (token: PlanToken) => {
 };
 
 const buildUnallocatedLabel = () => "未配分";
+
+const formatInviteRelation = (invite: InviteListItem) =>
+  invite.relationOther ? `${invite.relationLabel}（${invite.relationOther}）` : invite.relationLabel;
 
 type PlanTab = "overview" | "assets" | "heirs" | "history";
 
@@ -140,6 +148,17 @@ export default function PlanDetailPage() {
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [planAssets, setPlanAssets] = useState<PlanAsset[]>([]);
   const [historyEntries, setHistoryEntries] = useState<PlanHistoryEntry[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<AssetListItem[]>([]);
+  const [availableHeirs, setAvailableHeirs] = useState<InviteListItem[]>([]);
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
+  const [isAddHeirOpen, setIsAddHeirOpen] = useState(false);
+  const [assetDraftId, setAssetDraftId] = useState("");
+  const [assetUnitDraft, setAssetUnitDraft] = useState<"PERCENT" | "AMOUNT">("PERCENT");
+  const [heirDraftUid, setHeirDraftUid] = useState("");
+  const [isLoadingAddAsset, setIsLoadingAddAsset] = useState(false);
+  const [isLoadingAddHeir, setIsLoadingAddHeir] = useState(false);
+  const [isLoadingAssetOptions, setIsLoadingAssetOptions] = useState(false);
+  const [isLoadingHeirOptions, setIsLoadingHeirOptions] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [pendingHeirDelete, setPendingHeirDelete] = useState<{
     uid: string;
@@ -200,6 +219,76 @@ export default function PlanDetailPage() {
       setStatusDraft(plan.status);
     }
   }, [plan?.status]);
+
+  useEffect(() => {
+    if (!isAddHeirOpen) return;
+    setIsLoadingHeirOptions(true);
+    listInvitesByOwner()
+      .then((invites) => {
+        setAvailableHeirs(filterAvailableHeirs(invites, plan?.heirs ?? []));
+      })
+      .catch((err: any) => {
+        setError(err?.message ?? "相続人の取得に失敗しました");
+      })
+      .finally(() => {
+        setIsLoadingHeirOptions(false);
+      });
+  }, [isAddHeirOpen, plan?.heirs]);
+
+  useEffect(() => {
+    if (!isAddAssetOpen) return;
+    setIsLoadingAssetOptions(true);
+    listAssets()
+      .then((assets) => {
+        setAvailableAssets(filterAvailableAssets(assets, planAssets));
+      })
+      .catch((err: any) => {
+        setError(err?.message ?? "資産の取得に失敗しました");
+      })
+      .finally(() => {
+        setIsLoadingAssetOptions(false);
+      });
+  }, [isAddAssetOpen, planAssets]);
+
+  const handleAddHeir = async () => {
+    if (!planId) return;
+    if (!heirDraftUid) {
+      setError("追加する相続人を選択してください");
+      return;
+    }
+    setIsLoadingAddHeir(true);
+    setError(null);
+    try {
+      await addPlanHeir(planId, heirDraftUid);
+      await loadDetail();
+      setIsAddHeirOpen(false);
+      setHeirDraftUid("");
+    } catch (err: any) {
+      setError(err?.message ?? "相続人の追加に失敗しました");
+    } finally {
+      setIsLoadingAddHeir(false);
+    }
+  };
+
+  const handleAddAsset = async () => {
+    if (!planId) return;
+    if (!assetDraftId) {
+      setError("追加する資産を選択してください");
+      return;
+    }
+    setIsLoadingAddAsset(true);
+    setError(null);
+    try {
+      await addPlanAsset(planId, { assetId: assetDraftId, unitType: assetUnitDraft });
+      await loadDetail();
+      setIsAddAssetOpen(false);
+      setAssetDraftId("");
+    } catch (err: any) {
+      setError(err?.message ?? "資産の追加に失敗しました");
+    } finally {
+      setIsLoadingAddAsset(false);
+    }
+  };
 
   const handleAllocationSave = async (planAsset: PlanAsset) => {
     if (!planId) return;
@@ -464,7 +553,7 @@ export default function PlanDetailPage() {
                 <button
                   type="button"
                   className={styles.calloutLink}
-                  onClick={() => navigate("/invites")}
+                  onClick={() => setIsAddHeirOpen(true)}
                   disabled={isInactive}
                 >
                   相続人の追加はこちら
@@ -482,9 +571,8 @@ export default function PlanDetailPage() {
                     <div className={styles.rowSide}>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="outlineDestructive"
                         size="sm"
-                        className={styles.deleteButton}
                         disabled={isInactive}
                         onClick={() =>
                           handleRemoveHeir(
@@ -517,7 +605,7 @@ export default function PlanDetailPage() {
                 <Button type="button" variant="outline" onClick={() => setPendingHeirDelete(null)}>
                   キャンセル
                 </Button>
-                <Button type="button" variant="destructive" onClick={handleConfirmRemoveHeir}>
+                <Button type="button" variant="outlineDestructive" onClick={handleConfirmRemoveHeir}>
                   削除する
                 </Button>
               </DialogFooter>
@@ -539,7 +627,7 @@ export default function PlanDetailPage() {
                 <button
                   type="button"
                   className={styles.calloutLink}
-                  onClick={() => navigate("/assets")}
+                  onClick={() => setIsAddAssetOpen(true)}
                   disabled={isInactive}
                 >
                   資産の追加はこちら
@@ -560,7 +648,7 @@ export default function PlanDetailPage() {
                         </div>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outlineDestructive"
                           size="sm"
                           disabled={isInactive}
                           onClick={() => handleDeletePlanAsset(planAsset)}
@@ -652,7 +740,7 @@ export default function PlanDetailPage() {
                               {!allocation.isUnallocated ? (
                                 <Button
                                   type="button"
-                                  variant="ghost"
+                                  variant="outlineDestructive"
                                   size="sm"
                                   disabled={isInactive}
                                   onClick={() => handleRemoveAllocation(planAsset, index)}
@@ -741,7 +829,7 @@ export default function PlanDetailPage() {
                 <Button type="button" variant="outline" onClick={() => setPendingAssetDelete(null)}>
                   キャンセル
                 </Button>
-                <Button type="button" variant="destructive" onClick={handleConfirmDeletePlanAsset}>
+                <Button type="button" variant="outlineDestructive" onClick={handleConfirmDeletePlanAsset}>
                   削除する
                 </Button>
               </DialogFooter>
@@ -749,6 +837,147 @@ export default function PlanDetailPage() {
           </Dialog>
         </div>
       ) : null}
+
+      <Dialog
+        open={isAddHeirOpen}
+        onOpenChange={(open) => {
+          setIsAddHeirOpen(open);
+          if (!open) {
+            setHeirDraftUid("");
+            return;
+          }
+          setHeirDraftUid("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>相続人を追加</DialogTitle>
+            <DialogDescription>指図に追加する相続人を選択してください。</DialogDescription>
+          </DialogHeader>
+          {isLoadingHeirOptions ? (
+            <div className={styles.helper}>相続人を読み込み中です。</div>
+          ) : availableHeirs.length === 0 ? (
+            <div className={styles.helper}>
+              追加できる相続人がいません。相続人画面で招待・受諾された相続人を追加できます。
+            </div>
+          ) : (
+            <div className={styles.form}>
+              <label className={styles.infoLabel} htmlFor="plan-heir-select">
+                相続人
+              </label>
+              <select
+                id="plan-heir-select"
+                className={styles.select}
+                value={heirDraftUid}
+                onChange={(event) => setHeirDraftUid(event.target.value)}
+                disabled={isInactive}
+              >
+                <option value="">相続人を選択</option>
+                {availableHeirs.map((invite) => (
+                  <option key={invite.inviteId} value={invite.acceptedByUid ?? ""}>
+                    {formatInviteRelation(invite)} / {invite.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsAddHeirOpen(false)}>
+              キャンセル
+            </Button>
+            <Button
+              type="button"
+              onClick={handleAddHeir}
+              disabled={
+                isInactive ||
+                isLoadingAddHeir ||
+                isLoadingHeirOptions ||
+                availableHeirs.length === 0
+              }
+            >
+              追加する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isAddAssetOpen}
+        onOpenChange={(open) => {
+          setIsAddAssetOpen(open);
+          if (!open) {
+            setAssetDraftId("");
+            setAssetUnitDraft("PERCENT");
+            return;
+          }
+          setAssetDraftId("");
+          setAssetUnitDraft("PERCENT");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>資産を追加</DialogTitle>
+            <DialogDescription>指図に追加する資産と単位を選択してください。</DialogDescription>
+          </DialogHeader>
+          {isLoadingAssetOptions ? (
+            <div className={styles.helper}>資産を読み込み中です。</div>
+          ) : availableAssets.length === 0 ? (
+            <div className={styles.helper}>
+              追加できる資産がありません。資産一覧から資産を登録してください。
+            </div>
+          ) : (
+            <div className={styles.form}>
+              <label className={styles.infoLabel} htmlFor="plan-asset-select">
+                資産
+              </label>
+              <select
+                id="plan-asset-select"
+                className={styles.select}
+                value={assetDraftId}
+                onChange={(event) => setAssetDraftId(event.target.value)}
+                disabled={isInactive}
+              >
+                <option value="">資産を選択</option>
+                {availableAssets.map((asset) => (
+                  <option key={asset.assetId} value={asset.assetId}>
+                    {asset.label}
+                  </option>
+                ))}
+              </select>
+              <label className={styles.infoLabel} htmlFor="plan-asset-unit">
+                単位
+              </label>
+              <select
+                id="plan-asset-unit"
+                className={styles.select}
+                value={assetUnitDraft}
+                onChange={(event) => setAssetUnitDraft(event.target.value as "PERCENT" | "AMOUNT")}
+                disabled={isInactive}
+              >
+                <option value="PERCENT">割合</option>
+                <option value="AMOUNT">数量</option>
+              </select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsAddAssetOpen(false)}>
+              キャンセル
+            </Button>
+            <Button
+              type="button"
+              onClick={handleAddAsset}
+              disabled={
+                isInactive ||
+                isLoadingAddAsset ||
+                isLoadingAssetOptions ||
+                availableAssets.length === 0
+              }
+            >
+              追加する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {activeTab === "history" ? (
         <div className={styles.tabPanel}>

@@ -16,6 +16,7 @@
     "@kototsute/shared": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
+    "hono": "^4.6.0",
     "firebase-admin": "^11.11.1",
     "firebase-functions": "^4.4.1"
   },

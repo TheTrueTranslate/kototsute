@@ -12,6 +12,7 @@ const authState = {
   existingEmails: new Set<string>(),
   users: new Map<string, { email?: string | null }>()
 };
+const authTokens = new Map<string, { uid: string; email?: string | null }>();
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -21,6 +22,12 @@ let docCounter = 1;
 const resetStore = () => {
   store.clear();
   docCounter = 1;
+};
+
+const registerAuth = (uid: string, email?: string | null) => {
+  const token = `token_${uid}`;
+  authTokens.set(token, { uid, email });
+  return `Bearer ${token}`;
 };
 
 const getCollectionStore = (name: string) => {
@@ -186,8 +193,12 @@ class InMemoryAssetRepository implements AssetRepository {
 type MockReq = {
   method: string;
   path: string;
+  url?: string;
+  protocol?: string;
+  hostname?: string;
   body?: any;
   query?: any;
+  headers?: Record<string, string>;
 };
 
 type MockRes = {
@@ -212,28 +223,61 @@ const createRes = (): MockRes => {
   };
 };
 
+const authedReq = (
+  uid: string,
+  email: string | null,
+  req: Omit<MockReq, "headers">
+): MockReq => ({
+  ...req,
+  url: (() => {
+    const params = new URLSearchParams();
+    Object.entries(req.query ?? {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+    const qs = params.toString();
+    return qs ? `${req.path}?${qs}` : req.path;
+  })(),
+  protocol: req.protocol ?? "https",
+  hostname: req.hostname ?? "example.test",
+  headers: { Authorization: registerAuth(uid, email) }
+});
+
 describe("createApiHandler", () => {
   beforeEach(() => {
     resetStore();
     authState.existingEmails.clear();
     authState.users.clear();
+    authTokens.clear();
   });
+
+  const getAuthUser = async (authHeader: string | null | undefined) => {
+    const match = String(authHeader ?? "").match(/^Bearer (.+)$/);
+    if (!match) {
+      throw new Error("UNAUTHORIZED");
+    }
+    const auth = authTokens.get(match[1]);
+    if (!auth) {
+      throw new Error("UNAUTHORIZED");
+    }
+    return auth;
+  };
 
   it("returns 400 when label is missing", async () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const req: MockReq = {
+    const req: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/assets",
       body: { address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
-    };
+    });
     const res = createRes();
 
     await handler(req as any, res as any);
@@ -248,16 +292,15 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const req: MockReq = {
+    const req: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/assets",
       body: { label: "自分のウォレット", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
-    };
+    });
     const res = createRes();
 
     await handler(req as any, res as any);
@@ -286,15 +329,14 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const req: MockReq = {
+    const req: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "GET",
       path: "/v1/assets"
-    };
+    });
     const res = createRes();
 
     await handler(req as any, res as any);
@@ -345,12 +387,15 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const req: MockReq = { method: "GET", path: "/v1/assets/asset_1", query: { includeXrpl: "true" } };
+    const req: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "GET",
+      path: "/v1/assets/asset_1",
+      query: { includeXrpl: "true" }
+    });
     const res = createRes();
     await handler(req as any, res as any);
 
@@ -362,16 +407,15 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const req: MockReq = {
+    const req: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     const res = createRes();
 
     await handler(req as any, res as any);
@@ -395,23 +439,22 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     await handler(createReq as any, createRes() as any);
 
-    const listReq: MockReq = {
+    const listReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "GET",
       path: "/v1/invites",
       query: { scope: "owner" }
-    };
+    });
     const res = createRes();
     await handler(listReq as any, res as any);
 
@@ -424,17 +467,23 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = { method: "POST", path: "/v1/plans", body: { title: "2026年版" } };
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "POST",
+      path: "/v1/plans",
+      body: { title: "2026年版" }
+    });
     const resCreate = createRes();
     await handler(createReq as any, resCreate as any);
     expect(resCreate.body?.data?.title).toBe("2026年版");
 
-    const listReq: MockReq = { method: "GET", path: "/v1/plans" };
+    const listReq: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "GET",
+      path: "/v1/plans"
+    });
     const listRes = createRes();
     await handler(listReq as any, listRes as any);
     expect(listRes.body?.data?.length).toBe(1);
@@ -444,8 +493,7 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
@@ -458,16 +506,27 @@ describe("createApiHandler", () => {
       relationLabel: "長男"
     });
 
-    const createReq: MockReq = { method: "POST", path: "/v1/plans", body: { title: "2026年版" } };
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "POST",
+      path: "/v1/plans",
+      body: { title: "2026年版" }
+    });
     const resCreate = createRes();
     await handler(createReq as any, resCreate as any);
     const planId = resCreate.body?.data?.planId;
 
-    const addReq: MockReq = { method: "POST", path: `/v1/plans/${planId}/heirs`, body: { heirUid: "heir_1" } };
+    const addReq: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "POST",
+      path: `/v1/plans/${planId}/heirs`,
+      body: { heirUid: "heir_1" }
+    });
     const resAdd = createRes();
     await handler(addReq as any, resAdd as any);
 
-    const shareReq: MockReq = { method: "POST", path: `/v1/plans/${planId}/share` };
+    const shareReq: MockReq = authedReq("owner_1", "owner@example.com", {
+      method: "POST",
+      path: `/v1/plans/${planId}/share`
+    });
     const resShare = createRes();
     await handler(shareReq as any, resShare as any);
 
@@ -495,29 +554,39 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
     const planRes = createRes();
-    await handler({ method: "POST", path: "/v1/plans", body: { title: "2026年版" } } as any, planRes as any);
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/plans",
+        body: { title: "2026年版" }
+      }) as any,
+      planRes as any
+    );
     const planId = planRes.body?.data?.planId;
 
     const addAssetRes = createRes();
     await handler(
-      { method: "POST", path: `/v1/plans/${planId}/assets`, body: { assetId: "asset_1", unitType: "PERCENT" } } as any,
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/plans/${planId}/assets`,
+        body: { assetId: "asset_1", unitType: "PERCENT" }
+      }) as any,
       addAssetRes as any
     );
     const planAssetId = addAssetRes.body?.data?.planAssetId;
 
     const allocRes = createRes();
     await handler(
-      {
+      authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/plans/${planId}/assets/${planAssetId}/allocations`,
         body: { unitType: "PERCENT", allocations: [{ heirUid: "heir_1", value: 60 }] }
-      } as any,
+      }) as any,
       allocRes as any
     );
 
@@ -532,37 +601,54 @@ describe("createApiHandler", () => {
     const ownerHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
     await ownerHandler(
-      { method: "POST", path: "/v1/invites", body: { email: "heir@example.com", relationLabel: "長男" } } as any,
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/invites",
+        body: { email: "heir@example.com", relationLabel: "長男" }
+      }) as any,
       createRes() as any
     );
 
     const heirHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "uid_heir@example.com",
-      getAuthUser: async () => ({ uid: "uid_heir@example.com", email: "heir@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
     const listRes = createRes();
-    await heirHandler({ method: "GET", path: "/v1/notifications" } as any, listRes as any);
+    await heirHandler(
+      authedReq("uid_heir@example.com", "heir@example.com", {
+        method: "GET",
+        path: "/v1/notifications"
+      }) as any,
+      listRes as any
+    );
     expect(listRes.body?.data?.length).toBe(1);
 
     const notificationId = listRes.body?.data?.[0]?.notificationId;
     const readRes = createRes();
     await heirHandler(
-      { method: "POST", path: `/v1/notifications/${notificationId}/read` } as any,
+      authedReq("uid_heir@example.com", "heir@example.com", {
+        method: "POST",
+        path: `/v1/notifications/${notificationId}/read`
+      }) as any,
       readRes as any
     );
 
     const listRes2 = createRes();
-    await heirHandler({ method: "GET", path: "/v1/notifications" } as any, listRes2 as any);
+    await heirHandler(
+      authedReq("uid_heir@example.com", "heir@example.com", {
+        method: "GET",
+        path: "/v1/notifications"
+      }) as any,
+      listRes2 as any
+    );
     expect(listRes2.body?.data?.[0]?.isRead).toBe(true);
   });
 
@@ -571,16 +657,15 @@ describe("createApiHandler", () => {
     const ownerHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     await ownerHandler(createReq as any, createRes() as any);
 
     authState.users.set("owner_1", { email: "owner@example.com" });
@@ -588,16 +673,15 @@ describe("createApiHandler", () => {
     const heirHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "heir_1",
-      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const listReq: MockReq = {
+    const listReq: MockReq = authedReq("heir_1", "heir@example.com", {
       method: "GET",
       path: "/v1/invites",
       query: { scope: "received" }
-    };
+    });
     const res = createRes();
     await heirHandler(listReq as any, res as any);
 
@@ -611,16 +695,15 @@ describe("createApiHandler", () => {
     const ownerHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     const createResBody = createRes();
     await ownerHandler(createReq as any, createResBody as any);
     const inviteId = createResBody.body?.data?.inviteId;
@@ -628,15 +711,14 @@ describe("createApiHandler", () => {
     const heirHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-02T00:00:00.000Z"),
-      getUid: async () => "heir_1",
-      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const acceptReq: MockReq = {
+    const acceptReq: MockReq = authedReq("heir_1", "heir@example.com", {
       method: "POST",
       path: `/v1/invites/${inviteId}/accept`
-    };
+    });
     const acceptRes = createRes();
     await heirHandler(acceptReq as any, acceptRes as any);
 
@@ -655,16 +737,15 @@ describe("createApiHandler", () => {
     const ownerHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     const createResBody = createRes();
     await ownerHandler(createReq as any, createResBody as any);
     const inviteId = createResBody.body?.data?.inviteId;
@@ -672,15 +753,14 @@ describe("createApiHandler", () => {
     const heirHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-02T00:00:00.000Z"),
-      getUid: async () => "heir_1",
-      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const declineReq: MockReq = {
+    const declineReq: MockReq = authedReq("heir_1", "heir@example.com", {
       method: "POST",
       path: `/v1/invites/${inviteId}/decline`
-    };
+    });
     const declineRes = createRes();
     await heirHandler(declineReq as any, declineRes as any);
 
@@ -695,24 +775,23 @@ describe("createApiHandler", () => {
     const handler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     const createResBody = createRes();
     await handler(createReq as any, createResBody as any);
     const inviteId = createResBody.body?.data?.inviteId;
 
-    const deleteReq: MockReq = {
+    const deleteReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "DELETE",
       path: `/v1/invites/${inviteId}`
-    };
+    });
     const deleteRes = createRes();
     await handler(deleteReq as any, deleteRes as any);
 
@@ -730,16 +809,15 @@ describe("createApiHandler", () => {
     const ownerHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getUid: async () => "owner_1",
-      getAuthUser: async () => ({ uid: "owner_1", email: "owner@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const createReq: MockReq = {
+    const createReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "POST",
       path: "/v1/invites",
       body: { email: "heir@example.com", relationLabel: "長男" }
-    };
+    });
     const createResBody = createRes();
     await ownerHandler(createReq as any, createResBody as any);
     const inviteId = createResBody.body?.data?.inviteId;
@@ -747,21 +825,20 @@ describe("createApiHandler", () => {
     const heirHandler = createApiHandler({
       repo,
       now: () => new Date("2024-01-02T00:00:00.000Z"),
-      getUid: async () => "heir_1",
-      getAuthUser: async () => ({ uid: "heir_1", email: "heir@example.com" }),
+      getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
 
-    const acceptReq: MockReq = {
+    const acceptReq: MockReq = authedReq("heir_1", "heir@example.com", {
       method: "POST",
       path: `/v1/invites/${inviteId}/accept`
-    };
+    });
     await heirHandler(acceptReq as any, createRes() as any);
 
-    const deleteReq: MockReq = {
+    const deleteReq: MockReq = authedReq("owner_1", "owner@example.com", {
       method: "DELETE",
       path: `/v1/invites/${inviteId}`
-    };
+    });
     const deleteRes = createRes();
     await ownerHandler(deleteReq as any, deleteRes as any);
 
