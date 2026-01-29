@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { displayNameSchema } from "@kototsute/shared";
 
 const emailSchema = z
   .string()
@@ -12,6 +13,7 @@ const passwordSchema = z
 
 export const registerSchema = z
   .object({
+    displayName: displayNameSchema,
     email: emailSchema,
     password: passwordSchema,
     confirmPassword: z.string()
