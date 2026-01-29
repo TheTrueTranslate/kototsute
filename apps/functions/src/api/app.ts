@@ -4,6 +4,11 @@ import { HTTPException } from "hono/http-exception";
 import * as logger from "firebase-functions/logger";
 import { DomainError } from "@kototsute/shared";
 import type { ApiBindings, ApiDeps } from "./types";
+import { createAuthMiddleware } from "./middlewares/auth";
+import { assetsRoutes } from "./routes/assets";
+import { invitesRoutes } from "./routes/invites";
+import { plansRoutes } from "./routes/plans";
+import { notificationsRoutes } from "./routes/notifications";
 import { jsonError } from "./utils/response";
 
 export const createApp = (deps: ApiDeps) => {
@@ -22,6 +27,28 @@ export const createApp = (deps: ApiDeps) => {
       allowedHeaders: ["Content-Type", "Authorization"]
     })
   );
+
+  const authMiddleware = createAuthMiddleware();
+
+  const assets = new Hono<ApiBindings>();
+  assets.use("*", authMiddleware);
+  assets.route("/", assetsRoutes());
+  app.route("/assets", assets);
+
+  const invites = new Hono<ApiBindings>();
+  invites.use("*", authMiddleware);
+  invites.route("/", invitesRoutes());
+  app.route("/invites", invites);
+
+  const plans = new Hono<ApiBindings>();
+  plans.use("*", authMiddleware);
+  plans.route("/", plansRoutes());
+  app.route("/plans", plans);
+
+  const notifications = new Hono<ApiBindings>();
+  notifications.use("*", authMiddleware);
+  notifications.route("/", notificationsRoutes());
+  app.route("/notifications", notifications);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
