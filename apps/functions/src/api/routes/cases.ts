@@ -5,11 +5,22 @@ import {
   assetCreateSchema,
   displayNameSchema,
   inviteCreateSchema,
+  planAllocationSchema,
   planCreateSchema
 } from "@kototsute/shared";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
 import { normalizeEmail } from "../utils/email.js";
+import { formatDate } from "../utils/date.js";
+import { appendPlanHistory, normalizePlanAllocations } from "../utils/plan.js";
+import {
+  XRPL_VERIFY_ADDRESS,
+  createChallenge,
+  decodeHex,
+  fetchXrplAccountInfo,
+  fetchXrplAccountLines,
+  fetchXrplTx
+} from "../utils/xrpl.js";
 
 export const casesRoutes = () => {
   const app = new Hono<ApiBindings>();
@@ -150,11 +161,12 @@ export const casesRoutes = () => {
         const receiverUid = await resolveInviteReceiver();
         if (receiverUid) {
           const notificationRef = db.collection("notifications").doc();
+          const ownerName = caseSnap.data()?.ownerDisplayName ?? "招待者";
           await notificationRef.set({
             receiverUid,
             type: "CASE_INVITE_SENT",
             title: "ケース招待が届きました",
-            body: "ケースへの招待を受け取りました。",
+            body: `${ownerName}さんから招待が届きました。`,
             related: { kind: "case-invite", id: existingDoc.id, caseId },
             isRead: false,
             createdAt: now
@@ -185,11 +197,12 @@ export const casesRoutes = () => {
 
     if (receiverUid) {
       const notificationRef = db.collection("notifications").doc();
+      const ownerName = caseSnap.data()?.ownerDisplayName ?? "招待者";
       await notificationRef.set({
         receiverUid,
         type: "CASE_INVITE_SENT",
         title: "ケース招待が届きました",
-        body: "ケースへの招待を受け取りました。",
+        body: `${ownerName}さんから招待が届きました。`,
         related: { kind: "case-invite", id: inviteRef.id, caseId },
         isRead: false,
         createdAt: now
@@ -361,6 +374,7 @@ export const casesRoutes = () => {
       ownerUid: auth.uid,
       label: parsed.data.label,
       address: parsed.data.address,
+      verificationStatus: "UNVERIFIED",
       createdAt: now,
       updatedAt: now
     });
@@ -381,8 +395,98 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
     const snapshot = await db.collection(`cases/${caseId}/assets`).get();
-    const data = snapshot.docs.map((doc) => ({ assetId: doc.id, ...doc.data() }));
+    const data = snapshot.docs.map((doc) => {
+      const asset = doc.data() ?? {};
+      return {
+        assetId: doc.id,
+        ...asset,
+        createdAt: formatDate(asset.createdAt),
+        updatedAt: formatDate(asset.updatedAt)
+      };
+    });
     return jsonOk(c, data);
+  });
+
+  app.get(":caseId/assets/:assetId", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+    const assetData = assetSnap.data() ?? {};
+
+    const includeXrpl =
+      String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "false") === "true" ||
+      String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "0") === "1";
+
+    let xrpl;
+    const address = typeof assetData.address === "string" ? assetData.address : "";
+    if (includeXrpl) {
+      if (!address) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "アドレスが取得できません");
+      }
+      xrpl = await fetchXrplAccountInfo(address);
+      if (xrpl.status === "ok") {
+        const lines = await fetchXrplAccountLines(address);
+        if (lines.status === "ok") {
+          xrpl = { ...xrpl, tokens: lines.tokens };
+        } else {
+          xrpl = { status: "error", message: lines.message };
+        }
+      }
+      const logRef = assetRef.collection("syncLogs").doc();
+      await logRef.set({
+        status: xrpl.status,
+        balanceXrp: xrpl.status === "ok" ? xrpl.balanceXrp : null,
+        ledgerIndex: xrpl.status === "ok" ? xrpl.ledgerIndex ?? null : null,
+        message: xrpl.status === "error" ? xrpl.message : null,
+        createdAt: deps.now()
+      });
+    }
+
+    const logsSnapshot = await assetRef
+      .collection("syncLogs")
+      .orderBy("createdAt", "desc")
+      .limit(10)
+      .get();
+    const syncLogs = logsSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        status: data.status,
+        balanceXrp: data.balanceXrp ?? null,
+        ledgerIndex: data.ledgerIndex ?? null,
+        message: data.message ?? null,
+        createdAt: formatDate(data.createdAt)
+      };
+    });
+
+    return jsonOk(c, {
+      assetId: assetSnap.id,
+      label: assetData.label ?? "",
+      address,
+      createdAt: formatDate(assetData.createdAt),
+      updatedAt: formatDate(assetData.updatedAt),
+      verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
+      verificationChallenge: assetData.verificationChallenge ?? null,
+      verificationAddress: XRPL_VERIFY_ADDRESS,
+      xrpl: xrpl ?? null,
+      syncLogs
+    });
   });
 
   app.delete(":caseId/assets/:assetId", async (c) => {
@@ -398,7 +502,149 @@ export const casesRoutes = () => {
     if (caseSnap.data()?.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
+
+    const plansSnap = await db.collection(`cases/${caseId}/plans`).get();
+    const relatedPlans: Array<{ planId: string; title: string | null }> = [];
+    for (const planDoc of plansSnap.docs) {
+      const planId = planDoc.id;
+      const planData = planDoc.data() ?? {};
+      const assetsSnap = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
+      const hasRelated = assetsSnap.docs.some(
+        (doc) => String(doc.data()?.assetId ?? "") === assetId
+      );
+      if (hasRelated) {
+        relatedPlans.push({
+          planId,
+          title: typeof planData.title === "string" ? planData.title : null
+        });
+      }
+    }
+    if (relatedPlans.length > 0) {
+      return c.json(
+        {
+          ok: false,
+          code: "ASSET_IN_USE",
+          message: "指図に紐づいているため削除できません",
+          data: { relatedPlans }
+        },
+        409
+      );
+    }
+
     await db.collection(`cases/${caseId}/assets`).doc(assetId).delete();
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/assets/:assetId/verify/challenge", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    const challenge = createChallenge();
+    await assetRef.set(
+      {
+        verificationStatus: "PENDING",
+        verificationChallenge: challenge,
+        verificationIssuedAt: deps.now()
+      },
+      { merge: true }
+    );
+    return jsonOk(c, {
+      challenge,
+      address: XRPL_VERIFY_ADDRESS,
+      amountDrops: "1"
+    });
+  });
+
+  app.post(":caseId/assets/:assetId/verify/confirm", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const body = await c.req.json().catch(() => ({}));
+    const txHash = body?.txHash;
+    if (typeof txHash !== "string" || txHash.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+    const assetData = assetSnap.data() ?? {};
+    const challenge = assetData.verificationChallenge as string | undefined;
+    if (!challenge) {
+      return jsonError(c, 400, "VERIFY_CHALLENGE_MISSING", "検証コードがありません");
+    }
+
+    const address = typeof assetData.address === "string" ? assetData.address : "";
+    if (!address) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "アドレスが取得できません");
+    }
+
+    const result = await fetchXrplTx(txHash);
+    if (!result.ok) {
+      return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
+    }
+
+    const tx = result.tx as any;
+    const from = tx?.Account;
+    const to = tx?.Destination;
+    const amount = tx?.Amount;
+    const memos = Array.isArray(tx?.Memos) ? tx.Memos : [];
+    const memoTexts = memos
+      .map((memo: any) => decodeHex(memo?.Memo?.MemoData))
+      .filter((value: string) => value.length > 0);
+    const memoMatch = memoTexts.includes(challenge);
+
+    if (from !== address) {
+      return jsonError(c, 400, "VERIFY_FROM_MISMATCH", "送信元アドレスが一致しません");
+    }
+    if (to !== XRPL_VERIFY_ADDRESS) {
+      return jsonError(c, 400, "VERIFY_DESTINATION_MISMATCH", "送金先アドレスが一致しません");
+    }
+    if (String(amount) !== "1") {
+      return jsonError(c, 400, "VERIFY_AMOUNT_MISMATCH", "送金額が一致しません（1 drop）");
+    }
+    if (!memoMatch) {
+      return jsonError(c, 400, "VERIFY_MEMO_MISMATCH", "Memoに検証コードが含まれていません");
+    }
+
+    await assetRef.set(
+      {
+        verificationStatus: "VERIFIED",
+        verificationVerifiedAt: deps.now()
+      },
+      { merge: true }
+    );
+
     return jsonOk(c);
   });
 
@@ -430,8 +676,23 @@ export const casesRoutes = () => {
       title: parsed.data.title,
       status: "DRAFT",
       sharedAt: null,
+      heirUids: [],
+      heirs: [],
       createdAt: now,
       updatedAt: now
+    });
+
+    await appendPlanHistory(planRef, {
+      type: "PLAN_CREATED",
+      title: "指図を作成しました",
+      detail: parsed.data.title ? `タイトル: ${parsed.data.title}` : null,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        title: parsed.data.title,
+        status: "DRAFT"
+      }
     });
 
     return jsonOk(c, { planId: planRef.id, title: parsed.data.title });
@@ -485,11 +746,294 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
+    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
     if (!isOwner && planSnap.data()?.status !== "SHARED") {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    return jsonOk(c, { planId: planSnap.id, ...planSnap.data() });
+    const plan = planSnap.data() ?? {};
+    return jsonOk(c, {
+      planId: planSnap.id,
+      ...plan,
+      heirUids: Array.isArray(plan.heirUids) ? plan.heirUids : [],
+      heirs: Array.isArray(plan.heirs) ? plan.heirs : []
+    });
+  });
+
+  app.get(":caseId/plans/:planId/history", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const isOwner = caseData.ownerUid === auth.uid;
+    if (!isOwner && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const snapshot = await planRef.collection("history").orderBy("createdAt", "desc").get();
+    const data = snapshot.docs.map((doc) => {
+      const history = doc.data() ?? {};
+      return {
+        historyId: history.historyId ?? doc.id,
+        type: history.type ?? "",
+        title: history.title ?? "",
+        detail: history.detail ?? null,
+        actorUid: history.actorUid ?? null,
+        actorEmail: history.actorEmail ?? null,
+        createdAt: formatDate(history.createdAt),
+        meta: history.meta ?? null
+      };
+    });
+    return jsonOk(c, data);
+  });
+
+  app.post(":caseId/plans/:planId/title", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = planCreateSchema.safeParse({
+      title: typeof body?.title === "string" ? body.title.trim() : body?.title
+    });
+    if (!parsed.success) {
+      return jsonError(c, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "入力が不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    const currentTitle = planSnap.data()?.title ?? "";
+
+    const now = c.get("deps").now();
+    await planRef.set(
+      {
+        title: parsed.data.title,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+    await appendPlanHistory(planRef, {
+      type: "PLAN_TITLE_UPDATED",
+      title: "指図タイトルを更新しました",
+      detail: parsed.data.title ? `タイトル: ${parsed.data.title}` : null,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        prevTitle: currentTitle,
+        nextTitle: parsed.data.title
+      }
+    });
+
+    return jsonOk(c, { title: parsed.data.title });
+  });
+
+  app.post(":caseId/plans/:planId/heirs", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const body = await c.req.json().catch(() => ({}));
+    const heirUid = body?.heirUid;
+    if (typeof heirUid !== "string" || heirUid.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "heirUidは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    const plan = planSnap.data() ?? {};
+    if ((plan.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
+
+    const inviteSnap = await db
+      .collection(`cases/${caseId}/invites`)
+      .where("status", "==", "accepted")
+      .where("acceptedByUid", "==", heirUid)
+      .get();
+    if (inviteSnap.docs.length === 0) {
+      return jsonError(c, 404, "NOT_FOUND", "Invite not found");
+    }
+    const invite = inviteSnap.docs[0]?.data() ?? {};
+
+    const now = c.get("deps").now();
+    const currentHeirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+    const currentHeirs = Array.isArray(plan.heirs) ? plan.heirs : [];
+    const isNewHeir = !currentHeirUids.includes(heirUid);
+    const nextHeirUids = currentHeirUids.includes(heirUid)
+      ? currentHeirUids
+      : [...currentHeirUids, heirUid];
+    const nextHeirs = currentHeirs.some((heir: any) => heir.uid === heirUid)
+      ? currentHeirs
+      : [
+          ...currentHeirs,
+          {
+            uid: heirUid,
+            email: invite.email ?? "",
+            relationLabel: invite.relationLabel ?? "",
+            relationOther: invite.relationOther ?? null
+          }
+        ];
+
+    await planRef.set(
+      {
+        heirUids: nextHeirUids,
+        heirs: nextHeirs,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    if (isNewHeir) {
+      const relationLabel = invite.relationLabel || "相続人";
+      const detailParts = [relationLabel, invite.email].filter(Boolean);
+      await appendPlanHistory(planRef, {
+        type: "PLAN_HEIR_ADDED",
+        title: "相続人を追加しました",
+        detail: detailParts.join(" / "),
+        actorUid: auth.uid,
+        actorEmail: auth.email ?? null,
+        createdAt: now,
+        meta: {
+          heirUid,
+          relationLabel: invite.relationLabel ?? "",
+          relationOther: invite.relationOther ?? null,
+          email: invite.email ?? ""
+        }
+      });
+    }
+
+    return jsonOk(c);
+  });
+
+  app.delete(":caseId/plans/:planId/heirs/:heirUid", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const heirUid = c.req.param("heirUid");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    const plan = planSnap.data() ?? {};
+    if ((plan.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
+
+    const currentHeirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+    const currentHeirs = Array.isArray(plan.heirs) ? plan.heirs : [];
+    const removedHeir = currentHeirs.find((heir: any) => heir.uid === heirUid);
+    if (!currentHeirUids.includes(heirUid)) {
+      return jsonError(c, 404, "NOT_FOUND", "Heir not found");
+    }
+
+    const now = c.get("deps").now();
+    await planRef.set(
+      {
+        heirUids: currentHeirUids.filter((uid: string) => uid !== heirUid),
+        heirs: currentHeirs.filter((heir: any) => heir.uid !== heirUid),
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    const assetsSnap = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
+    await Promise.all(
+      assetsSnap.docs.map(async (assetDoc) => {
+        const planAsset = assetDoc.data() ?? {};
+        const unitType = planAsset.unitType === "AMOUNT" ? "AMOUNT" : "PERCENT";
+        const allocations = Array.isArray(planAsset.allocations) ? planAsset.allocations : [];
+        const filtered = allocations.filter((allocation: any) => allocation.heirUid !== heirUid);
+        const nextAllocations = normalizePlanAllocations(
+          unitType,
+          filtered.map((allocation: any) => ({
+            heirUid: allocation.heirUid ?? null,
+            value: Number(allocation.value ?? 0),
+            isUnallocated: Boolean(allocation.isUnallocated)
+          }))
+        );
+        await assetDoc.ref.set(
+          {
+            allocations: nextAllocations,
+            updatedAt: now
+          },
+          { merge: true }
+        );
+      })
+    );
+
+    const relationLabel = typeof removedHeir?.relationLabel === "string" ? removedHeir.relationLabel : "相続人";
+    const relationOther = removedHeir?.relationOther ?? null;
+    const detailParts = [relationLabel, removedHeir?.email].filter(Boolean);
+    await appendPlanHistory(planRef, {
+      type: "PLAN_HEIR_REMOVED",
+      title: "相続人を削除しました",
+      detail: detailParts.join(" / "),
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        heirUid,
+        relationLabel,
+        relationOther,
+        email: removedHeir?.email ?? ""
+      }
+    });
+
+    return jsonOk(c);
   });
 
   app.get(":caseId/plans/:planId/assets", async (c) => {
@@ -558,6 +1102,7 @@ export const casesRoutes = () => {
     const planId = c.req.param("planId");
     const body = await c.req.json().catch(() => ({}));
     const assetId = String(body?.assetId ?? "");
+    const unitType = body?.unitType === "AMOUNT" ? "AMOUNT" : "PERCENT";
     if (!assetId) {
       return jsonError(c, 400, "VALIDATION_ERROR", "資産を選択してください");
     }
@@ -577,23 +1122,179 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
+    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
 
     const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
     const assetSnap = await assetRef.get();
     if (!assetSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Asset not found");
     }
+    const asset = assetSnap.data() ?? {};
 
     const now = c.get("deps").now();
     const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc();
     await planAssetRef.set({
       planAssetId: planAssetRef.id,
       assetId,
+      unitType,
+      allocations: [],
       createdAt: now,
       updatedAt: now
     });
+    await planRef.set({ updatedAt: now }, { merge: true });
+    const assetLabel = typeof asset.label === "string" ? asset.label : "資産";
+    await appendPlanHistory(planRef, {
+      type: "PLAN_ASSET_ADDED",
+      title: "資産を追加しました",
+      detail: assetLabel,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        planAssetId: planAssetRef.id,
+        assetId,
+        assetLabel,
+        unitType
+      }
+    });
 
     return jsonOk(c, { planAssetId: planAssetRef.id });
+  });
+
+  app.post(":caseId/plans/:planId/assets/:planAssetId/allocations", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const planAssetId = c.req.param("planAssetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = planAllocationSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return jsonError(c, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "入力が不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
+
+    const { unitType, allocations } = parsed.data;
+    const cleaned = allocations.map((allocation) => ({
+      heirUid: allocation.heirUid,
+      value: allocation.value,
+      isUnallocated: allocation.isUnallocated ?? false
+    }));
+
+    const nextAllocations = normalizePlanAllocations(unitType, cleaned);
+
+    const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId);
+    await planAssetRef.set(
+      {
+        unitType,
+        allocations: nextAllocations,
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+    await planRef.set({ updatedAt: c.get("deps").now() }, { merge: true });
+    const planAssetSnap = await planAssetRef.get();
+    const planAsset = planAssetSnap.data() ?? {};
+    const assetId = String(planAsset.assetId ?? "");
+    const assetSnap = assetId
+      ? await db.collection(`cases/${caseId}/assets`).doc(assetId).get()
+      : null;
+    const assetLabel = assetSnap?.data()?.label ?? "資産";
+    const assignedTotal = cleaned.reduce((total, allocation) => total + allocation.value, 0);
+    const unallocatedEntry = nextAllocations.find((allocation) => allocation.isUnallocated);
+    const unallocatedValue = unallocatedEntry?.value ?? null;
+    await appendPlanHistory(planRef, {
+      type: "PLAN_ALLOCATION_UPDATED",
+      title: "配分を更新しました",
+      detail: assetLabel,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: c.get("deps").now(),
+      meta: {
+        planAssetId,
+        unitType,
+        allocationCount: cleaned.length,
+        assignedTotal,
+        unallocated: unallocatedValue,
+        total:
+          unitType === "PERCENT"
+            ? Number((assignedTotal + (unallocatedValue ?? 0)).toFixed(6))
+            : assignedTotal
+      }
+    });
+    return jsonOk(c);
+  });
+
+  app.delete(":caseId/plans/:planId/assets/:planAssetId", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const planAssetId = c.req.param("planAssetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId);
+    const planAssetSnap = await planAssetRef.get();
+    if (!planAssetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan asset not found");
+    }
+    const planAsset = planAssetSnap.data() ?? {};
+
+    await planAssetRef.delete();
+    const now = c.get("deps").now();
+    await planRef.set({ updatedAt: now }, { merge: true });
+    const assetId = String(planAsset.assetId ?? "");
+    const assetSnap = assetId
+      ? await db.collection(`cases/${caseId}/assets`).doc(assetId).get()
+      : null;
+    const assetLabel = assetSnap?.data()?.label ?? "資産";
+    await appendPlanHistory(planRef, {
+      type: "PLAN_ASSET_REMOVED",
+      title: "資産を削除しました",
+      detail: assetLabel,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        planAssetId,
+        assetId,
+        assetLabel,
+        unitType: planAsset.unitType ?? null
+      }
+    });
+    return jsonOk(c);
   });
 
   app.post(":caseId/plans/:planId/share", async (c) => {
@@ -647,8 +1348,65 @@ export const casesRoutes = () => {
       },
       { merge: true }
     );
+    await appendPlanHistory(planRef, {
+      type: "PLAN_SHARED",
+      title: "指図を共有しました",
+      detail: planSnap.data()?.title ? `タイトル: ${planSnap.data()?.title}` : null,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        prevStatus: planSnap.data()?.status ?? "DRAFT",
+        nextStatus: "SHARED"
+      }
+    });
 
     return jsonOk(c, { status: "SHARED" });
+  });
+
+  app.post(":caseId/plans/:planId/unshare", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    const now = c.get("deps").now();
+    await planRef.set(
+      {
+        status: "DRAFT",
+        sharedAt: null,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+    await appendPlanHistory(planRef, {
+      type: "PLAN_UNSHARED",
+      title: "共有を解除しました",
+      detail: planSnap.data()?.title ? `タイトル: ${planSnap.data()?.title}` : null,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now,
+      meta: {
+        prevStatus: planSnap.data()?.status ?? "DRAFT",
+        nextStatus: "DRAFT"
+      }
+    });
+
+    return jsonOk(c, { status: "DRAFT" });
   });
 
   return app;

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
+import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
@@ -27,25 +28,63 @@ const statusLabels: Record<string, string> = {
   COMPLETED: "相続完了"
 };
 
-const formatDate = (value: string) => {
-  try {
-    return new Date(value).toLocaleDateString();
-  } catch {
-    return "-";
-  }
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString();
 };
 
-type TabKey = "assets" | "plans" | "heirs" | "documents";
+const planStatusLabels: Record<string, string> = {
+  DRAFT: "下書き",
+  SHARED: "共有中",
+  INACTIVE: "無効"
+};
+
+type RelationOption = (typeof relationOptions)[number];
+
+type AssetRowProps = {
+  caseId?: string;
+  asset: AssetListItem;
+};
+
+export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
+  const content = (
+    <div className={styles.row}>
+      <div className={styles.rowMain}>
+        <div className={styles.rowTitle}>{asset.label}</div>
+        <div className={styles.rowMeta}>{asset.address}</div>
+      </div>
+      <div className={styles.rowSide}>{formatDate(asset.createdAt)}</div>
+    </div>
+  );
+
+  if (!caseId) {
+    return content;
+  }
+
+  return (
+    <Link to={`/cases/${caseId}/assets/${asset.assetId}`} className={styles.rowLink}>
+      {content}
+    </Link>
+  );
+};
+
+type TabKey = "assets" | "plans" | "heirs";
 
 const tabItems: { key: TabKey; label: string }[] = [
   { key: "assets", label: "資産" },
   { key: "plans", label: "指図" },
-  { key: "heirs", label: "相続人" },
-  { key: "documents", label: "書類/証跡" }
+  { key: "heirs", label: "相続人" }
 ];
+
+const isTabKey = (value: string | null): value is TabKey =>
+  Boolean(value && tabItems.some((item) => item.key === value));
 
 export default function CaseDetailPage() {
   const { caseId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryTab = searchParams.get("tab");
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<CaseSummary | null>(null);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
@@ -53,11 +92,11 @@ export default function CaseDetailPage() {
   const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
   const [heirs, setHeirs] = useState<CaseHeir[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRelation, setInviteRelation] = useState(relationOptions[0]);
+  const [inviteRelation, setInviteRelation] = useState<RelationOption>(relationOptions[0]);
   const [inviteRelationOther, setInviteRelationOther] = useState("");
   const [inviteMemo, setInviteMemo] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [tab, setTab] = useState<TabKey>("assets");
+  const [tab, setTab] = useState<TabKey>(() => (isTabKey(queryTab) ? queryTab : "assets"));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
@@ -107,6 +146,22 @@ export default function CaseDetailPage() {
     };
     load();
   }, [caseId, user?.uid]);
+
+  useEffect(() => {
+    if (isTabKey(queryTab) && queryTab !== tab) {
+      setTab(queryTab);
+    } else if (queryTab && !isTabKey(queryTab)) {
+      setTab("assets");
+    }
+  }, [queryTab, tab]);
+
+  const handleTabChange = (value: string) => {
+    const nextTab = value as TabKey;
+    setTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", nextTab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleInviteSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -162,7 +217,7 @@ export default function CaseDetailPage() {
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
 
-      <Tabs items={tabItems} value={tab} onChange={(value) => setTab(value as TabKey)} />
+      <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
       {tab === "assets" ? (
         <div className={styles.panel}>
@@ -189,13 +244,7 @@ export default function CaseDetailPage() {
           ) : (
             <div className={styles.list}>
               {assets.map((asset) => (
-                <div key={asset.assetId} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <div className={styles.rowTitle}>{asset.label}</div>
-                    <div className={styles.rowMeta}>{asset.address}</div>
-                  </div>
-                  <div className={styles.rowSide}>{formatDate(asset.createdAt)}</div>
-                </div>
+                <AssetRow key={asset.assetId} caseId={caseId} asset={asset} />
               ))}
             </div>
           )}
@@ -243,7 +292,7 @@ export default function CaseDetailPage() {
                     </div>
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
-                        {plan.status === "SHARED" ? "共有中" : plan.status}
+                        {planStatusLabels[plan.status] ?? plan.status}
                       </span>
                     </div>
                   </div>
@@ -251,18 +300,6 @@ export default function CaseDetailPage() {
               ))}
             </div>
           )}
-        </div>
-      ) : null}
-
-      {tab === "documents" ? (
-        <div className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>書類/証跡</h2>
-          </div>
-          <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ書類がありません</div>
-            <div className={styles.emptyBody}>死亡診断書などの提出がここに表示されます。</div>
-          </div>
         </div>
       ) : null}
 
@@ -285,7 +322,7 @@ export default function CaseDetailPage() {
                 <select
                   className={styles.select}
                   value={inviteRelation}
-                  onChange={(event) => setInviteRelation(event.target.value)}
+                  onChange={(event) => setInviteRelation(event.target.value as RelationOption)}
                 >
                   {relationOptions.map((option) => (
                     <option key={option} value={option}>
@@ -304,7 +341,7 @@ export default function CaseDetailPage() {
                 </FormField>
               ) : null}
               <FormField label="メモ（任意）">
-                <Input
+                <Textarea
                   value={inviteMemo}
                   onChange={(event) => setInviteMemo(event.target.value)}
                   placeholder="例: 生前からの連絡先"
@@ -339,10 +376,10 @@ export default function CaseDetailPage() {
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
                         {invite.status === "pending"
-                          ? "未対応"
+                          ? "招待中"
                           : invite.status === "accepted"
-                            ? "承認済み"
-                            : "辞退済み"}
+                            ? "参加中"
+                            : "辞退"}
                       </span>
                     </div>
                   </div>

@@ -18,6 +18,7 @@ export type PlanHeir = {
 };
 
 export type PlanDetail = PlanListItem & {
+  ownerUid?: string | null;
   heirUids: string[];
   heirs: PlanHeir[];
 };
@@ -72,6 +73,13 @@ export const listPlans = async (caseId: string) => {
 export const getPlan = async (caseId: string, planId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}`, { method: "GET" });
   return result.data as PlanDetail;
+};
+
+export const updatePlanTitle = async (caseId: string, planId: string, title: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/title`, {
+    method: "POST",
+    body: JSON.stringify({ title })
+  });
 };
 
 export const listPlanHistory = async (caseId: string, planId: string) => {
@@ -132,6 +140,10 @@ export const updatePlanAllocations = async (
 
 export const sharePlan = async (caseId: string, planId: string) => {
   await apiFetch(`/v1/cases/${caseId}/plans/${planId}/share`, { method: "POST" });
+};
+
+export const unsharePlan = async (caseId: string, planId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/unshare`, { method: "POST" });
 };
 
 export const inactivatePlan = async (caseId: string, planId: string) => {

@@ -6,7 +6,9 @@ import ResetPage from "./pages/ResetPage";
 import CasesPage from "./pages/CasesPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
 import AssetNewPage from "./pages/AssetNewPage";
+import AssetDetailPage from "./pages/AssetDetailPage";
 import PlanNewPage from "./pages/PlanNewPage";
+import PlanEditPage from "./pages/PlanEditPage";
 import CasePlanDetailPage from "./pages/CasePlanDetailPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import MyPage from "./pages/MyPage";
@@ -95,10 +97,26 @@ function AppShell() {
           }
         />
         <Route
+          path="/cases/:caseId/assets/:assetId"
+          element={
+            <RequireAuth>
+              <AssetDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/cases/:caseId/plans/new"
           element={
             <RequireAuth>
               <PlanNewPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/cases/:caseId/plans/:planId/edit"
+          element={
+            <RequireAuth>
+              <PlanEditPage />
             </RequireAuth>
           }
         />

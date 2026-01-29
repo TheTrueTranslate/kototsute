@@ -3,6 +3,15 @@ import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Button } from "../../features/shared/components/ui/button";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../features/shared/components/ui/dialog";
+import {
   acceptInvite,
   declineInvite,
   listInvitesReceivedAll,
@@ -14,6 +23,7 @@ export default function InvitesPage() {
   const [invites, setInvites] = useState<InviteListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<InviteListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -54,8 +64,15 @@ export default function InvitesPage() {
     }
   };
 
+  const handleDecline = async () => {
+    if (!declineTarget) return;
+    await handleInviteAction(declineTarget, "decline");
+    setDeclineTarget(null);
+  };
+
   return (
-    <section className={styles.page}>
+    <>
+      <section className={styles.page}>
       <header className={styles.header}>
         <Breadcrumbs items={[{ label: "招待" }]} />
         <div className={styles.headerRow}>
@@ -76,29 +93,17 @@ export default function InvitesPage() {
             <div key={invite.inviteId} className={styles.row}>
               <div className={styles.rowMain}>
                 <div className={styles.rowTitle}>
-                  {invite.caseOwnerDisplayName ?? invite.ownerDisplayName ?? "ケース招待"}
-                </div>
-                <div className={styles.rowMeta}>
-                  関係:{" "}
-                  {invite.relationLabel === "その他"
-                    ? invite.relationOther ?? "その他"
-                    : invite.relationLabel}
+                  「{invite.caseOwnerDisplayName ?? invite.ownerDisplayName ?? "招待者"}」さんから
+                  招待がきています。
                 </div>
               </div>
               <div className={styles.rowSide}>
-                <span className={styles.statusBadge}>
-                  {invite.status === "pending"
-                    ? "未対応"
-                    : invite.status === "accepted"
-                      ? "承認済み"
-                      : "辞退済み"}
-                </span>
                 {invite.status === "pending" ? (
                   <div className={styles.rowActions}>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleInviteAction(invite, "decline")}
+                      onClick={() => setDeclineTarget(invite)}
                       disabled={processingInviteId === invite.inviteId}
                     >
                       辞退
@@ -111,12 +116,42 @@ export default function InvitesPage() {
                       承認
                     </Button>
                   </div>
-                ) : null}
+                ) : (
+                  <span className={styles.statusBadge}>
+                    {invite.status === "accepted" ? "参加中" : "辞退"}
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
-    </section>
+      </section>
+      <Dialog
+        open={Boolean(declineTarget)}
+        onOpenChange={(open) => (open ? null : setDeclineTarget(null))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>招待を辞退しますか？</DialogTitle>
+            <DialogDescription>
+              「
+              {declineTarget?.caseOwnerDisplayName ?? declineTarget?.ownerDisplayName ?? "招待者"}
+              」さんからの招待を辞退します。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                キャンセル
+              </Button>
+            </DialogClose>
+            <Button type="button" variant="destructive" onClick={handleDecline}>
+              辞退する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

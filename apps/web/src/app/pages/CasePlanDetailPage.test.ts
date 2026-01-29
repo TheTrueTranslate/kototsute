@@ -8,14 +8,20 @@ vi.mock("../api/plans", () => ({
     planId: "plan-1",
     title: "共有プラン",
     status: "SHARED",
+    ownerUid: "owner",
     sharedAt: "2024-01-01",
     updatedAt: "2024-01-02"
   }),
-  listPlanAssets: async () => []
+  listPlanAssets: async () => [],
+  listPlanHistory: async () => []
 }));
 
 vi.mock("../api/invites", () => ({
   listCaseHeirs: async () => []
+}));
+
+vi.mock("../../features/auth/auth-provider", () => ({
+  useAuth: () => ({ user: { uid: "owner" }, loading: false })
 }));
 
 const render = async () => {
