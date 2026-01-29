@@ -38,10 +38,10 @@
   @apply text-body-sm font-mono text-foreground break-all;
 }
 
-.form {
-  @apply grid gap-4;
+.editRow {
+  @apply flex flex-1 flex-wrap items-center gap-3;
 }
 
-.actions {
-  @apply flex items-center justify-end;
+.editField {
+  @apply flex-1;
 }
