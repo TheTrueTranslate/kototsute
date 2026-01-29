@@ -13,6 +13,9 @@ importers:
       '@kototsute/asset':
         specifier: workspace:*
         version: link:../../packages/asset
+      '@kototsute/case':
+        specifier: workspace:*
+        version: link:../../packages/case
       '@kototsute/shared':
         specifier: workspace:*
         version: link:../../packages/shared

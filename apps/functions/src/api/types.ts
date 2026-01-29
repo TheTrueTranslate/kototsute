@@ -6,6 +6,7 @@ export type ApiResponse<T> = OkResponse<T> | ErrorResponse;
 
 export type ApiDeps = {
   repo: import("@kototsute/asset").AssetRepository;
+  caseRepo: import("@kototsute/case").CaseRepository;
   now: () => Date;
   getAuthUser: (authHeader: string | null | undefined) => Promise<AuthState>;
   getOwnerUidForRead: (uid: string) => Promise<string>;
