@@ -1034,4 +1034,96 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.length).toBe(1);
     expect(listRes.body?.data?.[0]?.label).toBe("XRP Wallet");
   });
+
+  it("prevents sharing when assets overlap with shared plans", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const assetRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetRes as any
+    );
+    const assetId = assetRes.body?.data?.assetId;
+
+    const planARes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "A" }
+      }) as any,
+      planARes as any
+    );
+    const planAId = planARes.body?.data?.planId;
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planAId}/assets`,
+        body: { assetId }
+      }) as any,
+      createRes() as any
+    );
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planAId}/share`
+      }) as any,
+      createRes() as any
+    );
+
+    const planBRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "B" }
+      }) as any,
+      planBRes as any
+    );
+    const planBId = planBRes.body?.data?.planId;
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planBId}/assets`,
+        body: { assetId }
+      }) as any,
+      createRes() as any
+    );
+
+    const shareBRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planBId}/share`
+      }) as any,
+      shareBRes as any
+    );
+
+    expect(shareBRes.statusCode).toBe(400);
+  });
 });

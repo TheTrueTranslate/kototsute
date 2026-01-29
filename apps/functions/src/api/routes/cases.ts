@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
-import { assetCreateSchema, displayNameSchema, inviteCreateSchema } from "@kototsute/shared";
+import {
+  assetCreateSchema,
+  displayNameSchema,
+  inviteCreateSchema,
+  planCreateSchema
+} from "@kototsute/shared";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
 import { normalizeEmail } from "../utils/email.js";
@@ -296,6 +301,140 @@ export const casesRoutes = () => {
     }
     await db.collection(`cases/${caseId}/assets`).doc(assetId).delete();
     return jsonOk(c);
+  });
+
+  app.post(":caseId/plans", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = planCreateSchema.safeParse({ title: body?.title });
+    if (!parsed.success) {
+      return jsonError(c, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "入力が不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const now = c.get("deps").now();
+    const planRef = db.collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: auth.uid,
+      title: parsed.data.title,
+      status: "DRAFT",
+      sharedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, { planId: planRef.id, title: parsed.data.title });
+  });
+
+  app.post(":caseId/plans/:planId/assets", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const body = await c.req.json().catch(() => ({}));
+    const assetId = String(body?.assetId ?? "");
+    if (!assetId) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "資産を選択してください");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    const now = c.get("deps").now();
+    const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc();
+    await planAssetRef.set({
+      planAssetId: planAssetRef.id,
+      assetId,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, { planAssetId: planAssetRef.id });
+  });
+
+  app.post(":caseId/plans/:planId/share", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    const currentAssets = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
+    const currentAssetIds = new Set(
+      currentAssets.docs.map((doc) => String(doc.data()?.assetId ?? ""))
+    );
+
+    const sharedPlans = await db
+      .collection(`cases/${caseId}/plans`)
+      .where("status", "==", "SHARED")
+      .get();
+    for (const sharedPlan of sharedPlans.docs) {
+      if (sharedPlan.id === planId) continue;
+      const sharedAssets = await db
+        .collection(`cases/${caseId}/plans/${sharedPlan.id}/assets`)
+        .get();
+      const hasOverlap = sharedAssets.docs.some((doc) =>
+        currentAssetIds.has(String(doc.data()?.assetId ?? ""))
+      );
+      if (hasOverlap) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "資産が他の共有済み指図と重複しています");
+      }
+    }
+
+    const now = c.get("deps").now();
+    await planRef.set(
+      {
+        status: "SHARED",
+        sharedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, { status: "SHARED" });
   });
 
   return app;
