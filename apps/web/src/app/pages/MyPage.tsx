@@ -46,22 +46,15 @@ export default function MyPage() {
     setSaving(true);
     try {
       await updateProfile(auth.currentUser, { displayName: parsed.data });
-      try {
-        await setDoc(
-          doc(db, "profiles", auth.currentUser.uid),
-          {
-            uid: auth.currentUser.uid,
-            displayName: parsed.data,
-            updatedAt: serverTimestamp()
-          },
-          { merge: true }
-        );
-      } catch (err: any) {
-        const message = String(err?.message ?? "");
-        if (err?.code !== "permission-denied" && !message.includes("PERMISSION_DENIED")) {
-          throw err;
-        }
-      }
+      await setDoc(
+        doc(db, "profiles", auth.currentUser.uid),
+        {
+          uid: auth.currentUser.uid,
+          displayName: parsed.data,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
       setLastSavedName(parsed.data);
       setStatus({ type: "success", message: "表示名を更新しました。" });
     } catch (err: any) {
