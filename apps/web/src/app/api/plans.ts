@@ -55,82 +55,84 @@ export type PlanHistoryEntry = {
   meta: Record<string, unknown> | null;
 };
 
-export const createPlan = async (input: { title: string }) => {
-  const result = await apiFetch("/v1/plans", {
+export const createPlan = async (caseId: string, input: { title: string }) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans`, {
     method: "POST",
     body: JSON.stringify(input)
   });
   return result.data as { planId: string; title: string; status: PlanStatus };
 };
 
-export const listPlans = async () => {
-  const result = await apiFetch("/v1/plans", { method: "GET" });
+export const listPlans = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans`, { method: "GET" });
   return result.data as PlanListItem[];
 };
 
-export const getPlan = async (planId: string) => {
-  const result = await apiFetch(`/v1/plans/${planId}`, { method: "GET" });
+export const getPlan = async (caseId: string, planId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}`, { method: "GET" });
   return result.data as PlanDetail;
 };
 
-export const listPlanHistory = async (planId: string) => {
-  const result = await apiFetch(`/v1/plans/${planId}/history`, { method: "GET" });
+export const listPlanHistory = async (caseId: string, planId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}/history`, { method: "GET" });
   return result.data as PlanHistoryEntry[];
 };
 
-export const updatePlanStatus = async (planId: string, status: PlanStatus) => {
-  await apiFetch(`/v1/plans/${planId}/status`, {
+export const updatePlanStatus = async (caseId: string, planId: string, status: PlanStatus) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/status`, {
     method: "POST",
     body: JSON.stringify({ status })
   });
 };
 
-export const listPlanAssets = async (planId: string) => {
-  const result = await apiFetch(`/v1/plans/${planId}/assets`, { method: "GET" });
+export const listPlanAssets = async (caseId: string, planId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets`, { method: "GET" });
   return result.data as PlanAsset[];
 };
 
-export const addPlanHeir = async (planId: string, heirUid: string) => {
-  await apiFetch(`/v1/plans/${planId}/heirs`, {
+export const addPlanHeir = async (caseId: string, planId: string, heirUid: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/heirs`, {
     method: "POST",
     body: JSON.stringify({ heirUid })
   });
 };
 
-export const removePlanHeir = async (planId: string, heirUid: string) => {
-  await apiFetch(`/v1/plans/${planId}/heirs/${heirUid}`, { method: "DELETE" });
+export const removePlanHeir = async (caseId: string, planId: string, heirUid: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/heirs/${heirUid}`, { method: "DELETE" });
 };
 
 export const addPlanAsset = async (
+  caseId: string,
   planId: string,
   input: { assetId: string; unitType: "PERCENT" | "AMOUNT"; token?: PlanToken | null }
 ) => {
-  const result = await apiFetch(`/v1/plans/${planId}/assets`, {
+  const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets`, {
     method: "POST",
     body: JSON.stringify(input)
   });
   return result.data as { planAssetId: string };
 };
 
-export const deletePlanAsset = async (planId: string, planAssetId: string) => {
-  await apiFetch(`/v1/plans/${planId}/assets/${planAssetId}`, { method: "DELETE" });
+export const deletePlanAsset = async (caseId: string, planId: string, planAssetId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets/${planAssetId}`, { method: "DELETE" });
 };
 
 export const updatePlanAllocations = async (
+  caseId: string,
   planId: string,
   planAssetId: string,
   input: { unitType: "PERCENT" | "AMOUNT"; allocations: PlanAllocation[] }
 ) => {
-  await apiFetch(`/v1/plans/${planId}/assets/${planAssetId}/allocations`, {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets/${planAssetId}/allocations`, {
     method: "POST",
     body: JSON.stringify(input)
   });
 };
 
-export const sharePlan = async (planId: string) => {
-  await apiFetch(`/v1/plans/${planId}/share`, { method: "POST" });
+export const sharePlan = async (caseId: string, planId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/share`, { method: "POST" });
 };
 
-export const inactivatePlan = async (planId: string) => {
-  await apiFetch(`/v1/plans/${planId}/inactivate`, { method: "POST" });
+export const inactivatePlan = async (caseId: string, planId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/inactivate`, { method: "POST" });
 };
