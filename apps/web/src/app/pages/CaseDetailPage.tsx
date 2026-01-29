@@ -2,12 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
+import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
+import { Input } from "../../features/shared/components/ui/input";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
+import {
+  createInvite,
+  listCaseHeirs,
+  listInvitesByOwner,
+  type CaseHeir,
+  type InviteListItem
+} from "../api/invites";
 import { useAuth } from "../../features/auth/auth-provider";
 import styles from "../../styles/caseDetailPage.module.css";
+import { relationOptions } from "@kototsute/shared";
 
 const statusLabels: Record<string, string> = {
   DRAFT: "下書き",
@@ -24,7 +34,7 @@ const formatDate = (value: string) => {
   }
 };
 
-type TabKey = "assets" | "plans" | "documents";
+type TabKey = "assets" | "plans" | "heirs" | "documents";
 
 export default function CaseDetailPage() {
   const { caseId } = useParams();
@@ -32,6 +42,13 @@ export default function CaseDetailPage() {
   const [caseData, setCaseData] = useState<CaseSummary | null>(null);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [plans, setPlans] = useState<PlanListItem[]>([]);
+  const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
+  const [heirs, setHeirs] = useState<CaseHeir[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRelation, setInviteRelation] = useState(relationOptions[0]);
+  const [inviteRelationOther, setInviteRelationOther] = useState("");
+  const [inviteMemo, setInviteMemo] = useState("");
+  const [inviting, setInviting] = useState(false);
   const [tab, setTab] = useState<TabKey>("assets");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,16 +72,24 @@ export default function CaseDetailPage() {
         const owner = detail.ownerUid === user?.uid;
         setIsOwner(owner);
         if (owner) {
-          const [assetItems, planItems] = await Promise.all([
+          const [assetItems, planItems, inviteItems] = await Promise.all([
             listAssets(caseId),
-            listPlans(caseId)
+            listPlans(caseId),
+            listInvitesByOwner(caseId)
           ]);
           setAssets(assetItems);
           setPlans(planItems);
+          setOwnerInvites(inviteItems);
+          setHeirs([]);
         } else {
-          const planItems = await listPlans(caseId);
+          const [planItems, heirItems] = await Promise.all([
+            listPlans(caseId),
+            listCaseHeirs(caseId)
+          ]);
           setAssets([]);
           setPlans(planItems);
+          setOwnerInvites([]);
+          setHeirs(heirItems);
         }
       } catch (err: any) {
         setError(err?.message ?? "ケースの取得に失敗しました");
@@ -74,6 +99,34 @@ export default function CaseDetailPage() {
     };
     load();
   }, [caseId, user?.uid]);
+
+  const handleInviteSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!caseId) {
+      setError("ケースIDが取得できません");
+      return;
+    }
+    setError(null);
+    setInviting(true);
+    try {
+      await createInvite(caseId, {
+        email: inviteEmail,
+        relationLabel: inviteRelation,
+        relationOther: inviteRelation === "その他" ? inviteRelationOther : undefined,
+        memo: inviteMemo.trim() ? inviteMemo : undefined
+      });
+      setInviteEmail("");
+      setInviteRelation(relationOptions[0]);
+      setInviteRelationOther("");
+      setInviteMemo("");
+      const inviteItems = await listInvitesByOwner(caseId);
+      setOwnerInvites(inviteItems);
+    } catch (err: any) {
+      setError(err?.message ?? "招待の送信に失敗しました");
+    } finally {
+      setInviting(false);
+    }
+  };
 
   return (
     <section className={styles.page}>
@@ -115,6 +168,13 @@ export default function CaseDetailPage() {
           onClick={() => setTab("plans")}
         >
           指図
+        </button>
+        <button
+          type="button"
+          className={tab === "heirs" ? styles.tabActive : styles.tab}
+          onClick={() => setTab("heirs")}
+        >
+          相続人
         </button>
         <button
           type="button"
@@ -224,6 +284,117 @@ export default function CaseDetailPage() {
             <div className={styles.emptyTitle}>まだ書類がありません</div>
             <div className={styles.emptyBody}>死亡診断書などの提出がここに表示されます。</div>
           </div>
+        </div>
+      ) : null}
+
+      {tab === "heirs" ? (
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>相続人</h2>
+          </div>
+          {isOwner ? (
+            <form className={styles.form} onSubmit={handleInviteSubmit}>
+              <FormField label="メールアドレス">
+                <Input
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="example@example.com"
+                  type="email"
+                />
+              </FormField>
+              <FormField label="関係">
+                <select
+                  className={styles.select}
+                  value={inviteRelation}
+                  onChange={(event) => setInviteRelation(event.target.value)}
+                >
+                  {relationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              {inviteRelation === "その他" ? (
+                <FormField label="関係（自由入力）">
+                  <Input
+                    value={inviteRelationOther}
+                    onChange={(event) => setInviteRelationOther(event.target.value)}
+                    placeholder="例: 同居人"
+                  />
+                </FormField>
+              ) : null}
+              <FormField label="メモ（任意）">
+                <Input
+                  value={inviteMemo}
+                  onChange={(event) => setInviteMemo(event.target.value)}
+                  placeholder="例: 生前からの連絡先"
+                />
+              </FormField>
+              <div className={styles.formActions}>
+                <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? "送信中..." : "招待を送る"}
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          {loading ? null : isOwner ? (
+            ownerInvites.length === 0 ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyTitle}>まだ招待がありません</div>
+                <div className={styles.emptyBody}>相続人に招待を送信できます。</div>
+              </div>
+            ) : (
+              <div className={styles.list}>
+                {ownerInvites.map((invite) => (
+                  <div key={invite.inviteId} className={styles.row}>
+                    <div className={styles.rowMain}>
+                      <div className={styles.rowTitle}>{invite.email}</div>
+                      <div className={styles.rowMeta}>
+                        関係:{" "}
+                        {invite.relationLabel === "その他"
+                          ? invite.relationOther ?? "その他"
+                          : invite.relationLabel}
+                      </div>
+                    </div>
+                    <div className={styles.rowSide}>
+                      <span className={styles.statusBadge}>
+                        {invite.status === "pending"
+                          ? "未対応"
+                          : invite.status === "accepted"
+                            ? "承認済み"
+                            : "辞退済み"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : heirs.length === 0 ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>相続人が登録されていません</div>
+              <div className={styles.emptyBody}>承認済みの相続人がここに表示されます。</div>
+            </div>
+          ) : (
+            <div className={styles.list}>
+              {heirs.map((heir) => (
+                <div key={heir.inviteId} className={styles.row}>
+                  <div className={styles.rowMain}>
+                    <div className={styles.rowTitle}>{heir.email}</div>
+                    <div className={styles.rowMeta}>
+                      関係:{" "}
+                      {heir.relationLabel === "その他"
+                        ? heir.relationOther ?? "その他"
+                        : heir.relationLabel}
+                    </div>
+                  </div>
+                  <div className={styles.rowSide}>
+                    <span className={styles.statusBadge}>承認済み</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
     </section>

@@ -6,6 +6,8 @@ export type InviteListItem = {
   inviteId: string;
   caseId: string;
   ownerUid: string;
+  ownerDisplayName?: string | null;
+  caseOwnerDisplayName?: string | null;
   email: string;
   status: InviteStatus;
   relationLabel: string;
@@ -16,6 +18,15 @@ export type InviteListItem = {
   updatedAt: string;
   acceptedAt: string | null;
   declinedAt: string | null;
+};
+
+export type CaseHeir = {
+  inviteId: string;
+  email: string;
+  relationLabel: string;
+  relationOther: string | null;
+  acceptedByUid: string | null;
+  acceptedAt: string | null;
 };
 
 export type InviteCreateInput = {
@@ -43,12 +54,22 @@ export const listInvitesReceived = async (caseId: string) => {
   return result.data as InviteListItem[];
 };
 
+export const listInvitesReceivedAll = async () => {
+  const result = await apiFetch(`/v1/cases/invites?scope=received`, { method: "GET" });
+  return result.data as InviteListItem[];
+};
+
 export const acceptInvite = async (caseId: string, inviteId: string) => {
   await apiFetch(`/v1/cases/${caseId}/invites/${inviteId}/accept`, { method: "POST" });
 };
 
 export const declineInvite = async (caseId: string, inviteId: string) => {
   await apiFetch(`/v1/cases/${caseId}/invites/${inviteId}/decline`, { method: "POST" });
+};
+
+export const listCaseHeirs = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/heirs`, { method: "GET" });
+  return result.data as CaseHeir[];
 };
 
 export const deleteInvite = async (_caseId: string, _inviteId: string) => {};

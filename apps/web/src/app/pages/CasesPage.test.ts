@@ -20,6 +20,12 @@ vi.mock("../api/cases", () => ({
   })
 }));
 
+vi.mock("../api/invites", () => ({
+  listInvitesReceivedAll: async () => [],
+  acceptInvite: async () => {},
+  declineInvite: async () => {}
+}));
+
 const render = async () => {
   const { default: CasesPage } = await import("./CasesPage");
   return renderToString(

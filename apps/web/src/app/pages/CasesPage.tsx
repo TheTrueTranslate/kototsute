@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { createCase, listCases, type CaseSummary } from "../api/cases";
+import {
+  acceptInvite,
+  declineInvite,
+  listInvitesReceivedAll,
+  type InviteListItem
+} from "../api/invites";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Button } from "../../features/shared/components/ui/button";
@@ -26,26 +32,40 @@ export default function CasesPage() {
   const { user } = useAuth();
   const [created, setCreated] = useState<CaseSummary[]>([]);
   const [received, setReceived] = useState<CaseSummary[]>([]);
+  const [receivedInvites, setReceivedInvites] = useState<InviteListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const displayName = useMemo(() => user?.displayName ?? "", [user]);
 
   const load = async () => {
     try {
-      const result = await listCases();
-      setCreated(result.created ?? []);
-      setReceived(result.received ?? []);
+      const [casesResult, invitesResult] = await Promise.all([
+        listCases(),
+        listInvitesReceivedAll().catch((err) => {
+          if (err?.status === 401 || err?.message === "UNAUTHORIZED") {
+            return [];
+          }
+          throw err;
+        })
+      ]);
+      setCreated(casesResult.created ?? []);
+      setReceived(casesResult.received ?? []);
+      setReceivedInvites(invitesResult ?? []);
     } catch (err: any) {
       if (err?.status === 401 || err?.message === "UNAUTHORIZED") {
         setCreated([]);
         setReceived([]);
+        setReceivedInvites([]);
         return;
       }
       setError(err?.message ?? "ケースの取得に失敗しました");
     } finally {
       setLoading(false);
+      setInvitesLoading(false);
     }
   };
 
@@ -70,6 +90,23 @@ export default function CasesPage() {
     }
   };
 
+  const handleInviteAction = async (invite: InviteListItem, action: "accept" | "decline") => {
+    setProcessingInviteId(invite.inviteId);
+    setError(null);
+    try {
+      if (action === "accept") {
+        await acceptInvite(invite.caseId, invite.inviteId);
+      } else {
+        await declineInvite(invite.caseId, invite.inviteId);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "招待の処理に失敗しました");
+    } finally {
+      setProcessingInviteId(null);
+    }
+  };
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -79,6 +116,64 @@ export default function CasesPage() {
         </div>
       </header>
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>受け取った招待</h2>
+        </div>
+        {invitesLoading ? null : receivedInvites.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyTitle}>まだ招待がありません</div>
+            <div className={styles.emptyBody}>招待が届くとここに表示されます。</div>
+          </div>
+        ) : (
+          <div className={styles.list}>
+            {receivedInvites.map((invite) => (
+              <div key={invite.inviteId} className={styles.row}>
+                <div className={styles.rowMain}>
+                  <div className={styles.rowTitle}>
+                    {invite.caseOwnerDisplayName ?? invite.ownerDisplayName ?? "ケース招待"}
+                  </div>
+                  <div className={styles.rowMeta}>
+                    関係:{" "}
+                    {invite.relationLabel === "その他"
+                      ? invite.relationOther ?? "その他"
+                      : invite.relationLabel}
+                  </div>
+                </div>
+                <div className={styles.rowSide}>
+                  <span className={styles.statusBadge}>
+                    {invite.status === "pending"
+                      ? "未対応"
+                      : invite.status === "accepted"
+                        ? "承認済み"
+                        : "辞退済み"}
+                  </span>
+                  {invite.status === "pending" ? (
+                    <div className={styles.rowActions}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleInviteAction(invite, "decline")}
+                        disabled={processingInviteId === invite.inviteId}
+                      >
+                        辞退
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleInviteAction(invite, "accept")}
+                        disabled={processingInviteId === invite.inviteId}
+                      >
+                        承認
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className={styles.section}>
         <div className={styles.sectionHeader}>

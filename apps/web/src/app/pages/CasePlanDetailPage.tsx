@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
-import { getPlan, type PlanDetail } from "../api/plans";
+import { getPlan, listPlanAssets, type PlanAsset, type PlanDetail } from "../api/plans";
+import { listCaseHeirs, type CaseHeir } from "../api/invites";
 import styles from "../../styles/caseDetailPage.module.css";
 
 const statusLabels: Record<string, string> = {
@@ -23,6 +24,8 @@ const formatDate = (value: string | null | undefined) => {
 export default function CasePlanDetailPage() {
   const { caseId, planId } = useParams();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
+  const [assets, setAssets] = useState<PlanAsset[]>([]);
+  const [heirs, setHeirs] = useState<CaseHeir[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,8 +39,14 @@ export default function CasePlanDetailPage() {
     }
     const load = async () => {
       try {
-        const detail = await getPlan(caseId, planId);
+        const [detail, assetItems, heirItems] = await Promise.all([
+          getPlan(caseId, planId),
+          listPlanAssets(caseId, planId),
+          listCaseHeirs(caseId)
+        ]);
         setPlan(detail);
+        setAssets(assetItems);
+        setHeirs(heirItems);
       } catch (err: any) {
         setError(err?.message ?? "指図の取得に失敗しました");
       } finally {
@@ -105,10 +114,53 @@ export default function CasePlanDetailPage() {
         <div className={styles.panelHeader}>
           <h2 className={styles.panelTitle}>共有内容</h2>
         </div>
-        <div className={styles.emptyState}>
-          <div className={styles.emptyTitle}>共有された内容は準備中です</div>
-          <div className={styles.emptyBody}>資産や分配先の詳細は後続の画面で表示します。</div>
+        {loading ? null : assets.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyTitle}>共有された資産がありません</div>
+            <div className={styles.emptyBody}>指図に含まれる資産がここに表示されます。</div>
+          </div>
+        ) : (
+          <div className={styles.list}>
+            {assets.map((asset) => (
+              <div key={asset.planAssetId} className={styles.row}>
+                <div className={styles.rowMain}>
+                  <div className={styles.rowTitle}>{asset.assetLabel || "未設定"}</div>
+                  <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
+                </div>
+                <div className={styles.rowSide}>{asset.unitType === "AMOUNT" ? "金額" : "割合"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <h2 className={styles.panelTitle}>相続人</h2>
         </div>
+        {loading ? null : heirs.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyTitle}>承認済みの相続人がいません</div>
+            <div className={styles.emptyBody}>招待が承認されるとここに表示されます。</div>
+          </div>
+        ) : (
+          <div className={styles.list}>
+            {heirs.map((heir) => (
+              <div key={heir.inviteId} className={styles.row}>
+                <div className={styles.rowMain}>
+                  <div className={styles.rowTitle}>{heir.email}</div>
+                  <div className={styles.rowMeta}>
+                    関係:{" "}
+                    {heir.relationLabel === "その他"
+                      ? heir.relationOther ?? "その他"
+                      : heir.relationLabel}
+                  </div>
+                </div>
+                <div className={styles.rowSide}>承認済み</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

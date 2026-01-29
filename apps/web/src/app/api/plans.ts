@@ -39,6 +39,7 @@ export type PlanAsset = {
   assetId: string;
   assetType: string;
   assetLabel: string;
+  assetAddress?: string | null;
   token: PlanToken | null;
   unitType: "PERCENT" | "AMOUNT";
   allocations: PlanAllocation[];

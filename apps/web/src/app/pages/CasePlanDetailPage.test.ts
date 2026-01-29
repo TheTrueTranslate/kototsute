@@ -10,7 +10,12 @@ vi.mock("../api/plans", () => ({
     status: "SHARED",
     sharedAt: "2024-01-01",
     updatedAt: "2024-01-02"
-  })
+  }),
+  listPlanAssets: async () => []
+}));
+
+vi.mock("../api/invites", () => ({
+  listCaseHeirs: async () => []
 }));
 
 const render = async () => {

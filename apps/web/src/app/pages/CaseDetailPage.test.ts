@@ -31,6 +31,12 @@ vi.mock("../api/plans", () => ({
   listPlans: async () => []
 }));
 
+vi.mock("../api/invites", () => ({
+  listInvitesByOwner: async () => [],
+  listCaseHeirs: async () => [],
+  createInvite: async () => ({ inviteId: "invite-1" })
+}));
+
 vi.mock("../../features/auth/auth-provider", () => ({
   useAuth: () => ({ user: { uid: "owner" }, loading: false })
 }));
