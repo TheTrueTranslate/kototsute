@@ -3,14 +3,10 @@ import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ResetPage from "./pages/ResetPage";
-import AssetsPage from "./pages/AssetsPage";
+import CasesPage from "./pages/CasesPage";
+import CaseDetailPage from "./pages/CaseDetailPage";
 import AssetNewPage from "./pages/AssetNewPage";
-import AssetDetailPage from "./pages/AssetDetailPage";
-import InvitesPage from "./pages/InvitesPage";
-import InvitesReceivedPage from "./pages/InvitesReceivedPage";
-import PlansPage from "./pages/PlansPage";
 import PlanNewPage from "./pages/PlanNewPage";
-import PlanDetailPage from "./pages/PlanDetailPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import MyPage from "./pages/MyPage";
 import AppSidebar from "../features/shared/components/app-sidebar";
@@ -58,7 +54,7 @@ function AppShell() {
               element={
                 isAuthenticated ? (
                   <RequireAuth>
-                    <AssetsPage />
+                    <CasesPage />
                   </RequireAuth>
                 ) : (
                   <HomePage />
@@ -69,15 +65,15 @@ function AppShell() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/reset" element={<ResetPage />} />
             <Route
-              path="/assets"
+              path="/cases"
               element={
                 <RequireAuth>
-                  <AssetsPage />
+                  <CasesPage />
                 </RequireAuth>
               }
             />
             <Route
-              path="/assets/new"
+              path="/cases/:caseId/assets/new"
               element={
                 <RequireAuth>
                   <AssetNewPage />
@@ -85,39 +81,7 @@ function AppShell() {
               }
             />
             <Route
-              path="/assets/:assetId"
-              element={
-                <RequireAuth>
-                  <AssetDetailPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/invites"
-              element={
-                <RequireAuth>
-                  <InvitesPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/invites/received"
-              element={
-                <RequireAuth>
-                  <InvitesReceivedPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/plans"
-              element={
-                <RequireAuth>
-                  <PlansPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/plans/new"
+              path="/cases/:caseId/plans/new"
               element={
                 <RequireAuth>
                   <PlanNewPage />
@@ -125,10 +89,10 @@ function AppShell() {
               }
             />
             <Route
-              path="/plans/:planId"
+              path="/cases/:caseId"
               element={
                 <RequireAuth>
-                  <PlanDetailPage />
+                  <CaseDetailPage />
                 </RequireAuth>
               }
             />

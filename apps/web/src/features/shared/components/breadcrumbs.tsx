@@ -13,13 +13,8 @@ type BreadcrumbsProps = {
 };
 
 const routeLabels: Record<string, string> = {
-  "/": "ホーム",
-  "/assets": "資産一覧",
-  "/assets/new": "資産登録",
-  "/invites": "相続人",
-  "/invites/received": "招待",
-  "/plans": "指図一覧",
-  "/plans/new": "指図作成",
+  "/": "ケース",
+  "/cases": "ケース",
   "/notifications": "通知",
   "/login": "ログイン",
   "/register": "新規登録",

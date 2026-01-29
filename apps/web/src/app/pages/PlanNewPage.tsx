@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
@@ -8,6 +9,7 @@ import { createPlan } from "../api/plans";
 import styles from "../../styles/plansPage.module.css";
 
 export default function PlanNewPage() {
+  const { caseId } = useParams();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,8 +20,13 @@ export default function PlanNewPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await createPlan({ title });
-      navigate(`/plans/${result.planId}`);
+      if (!caseId) {
+        setError("ケースIDが取得できません");
+        setLoading(false);
+        return;
+      }
+      await createPlan(caseId, { title });
+      navigate(`/cases/${caseId}`);
     } catch (err: any) {
       setError(err?.message ?? "指図の作成に失敗しました");
     } finally {
@@ -30,6 +37,13 @@ export default function PlanNewPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
+        <Breadcrumbs
+          items={[
+            { label: "ケース", href: "/cases" },
+            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
+            { label: "指図作成" }
+          ]}
+        />
         <h1 className="text-title">指図作成</h1>
       </header>
 
@@ -44,7 +58,11 @@ export default function PlanNewPage() {
           />
         </FormField>
         <div className={styles.headerActions}>
-          <Button type="button" variant="outline" onClick={() => navigate("/plans")}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate(caseId ? `/cases/${caseId}` : "/cases")}
+          >
             戻る
           </Button>
           <Button type="submit" disabled={!title.trim() || loading}>
