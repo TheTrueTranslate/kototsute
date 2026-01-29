@@ -9,9 +9,22 @@ import {
 } from "../api/invites";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
+import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
+import { Input } from "../../features/shared/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../features/shared/components/ui/dialog";
 import { useAuth } from "../../features/auth/auth-provider";
 import styles from "../../styles/casesPage.module.css";
+import { auth, db } from "../../features/shared/lib/firebase";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { updateProfile } from "firebase/auth";
 
 const statusLabels: Record<string, string> = {
   DRAFT: "下書き",
@@ -38,6 +51,8 @@ export default function CasesPage() {
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [draftDisplayName, setDraftDisplayName] = useState("");
 
   const displayName = useMemo(() => user?.displayName ?? "", [user]);
 
@@ -73,16 +88,43 @@ export default function CasesPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    setDraftDisplayName(displayName);
+  }, [displayName]);
+
+  const handleCreateOpen = () => {
+    setError(null);
+    setIsCreateOpen(true);
+  };
+
   const handleCreate = async () => {
-    if (!displayName) {
-      setError("表示名が設定されていません。登録情報を確認してください。");
-      return;
-    }
     setCreating(true);
     setError(null);
     try {
-      const createdCase = await createCase({ ownerDisplayName: displayName });
+      const trimmed = draftDisplayName.trim();
+      if (!trimmed) {
+        setError("表示名を入力してください。");
+        return;
+      }
+      if (!auth.currentUser) {
+        setError("ログイン情報が取得できません。再ログインしてください。");
+        return;
+      }
+      if (auth.currentUser.displayName !== trimmed) {
+        await updateProfile(auth.currentUser, { displayName: trimmed });
+        await setDoc(
+          doc(db, "profiles", auth.currentUser.uid),
+          {
+            uid: auth.currentUser.uid,
+            displayName: trimmed,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
+      const createdCase = await createCase({ ownerDisplayName: trimmed });
       setCreated([createdCase]);
+      setIsCreateOpen(false);
     } catch (err: any) {
       setError(err?.message ?? "ケースの作成に失敗しました");
     } finally {
@@ -179,7 +221,7 @@ export default function CasesPage() {
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>作成したケース</h2>
           {created.length === 0 ? (
-            <Button type="button" onClick={handleCreate} disabled={creating || loading}>
+            <Button type="button" onClick={handleCreateOpen} disabled={creating || loading}>
               {creating ? "作成中..." : "ケースを作成"}
             </Button>
           ) : null}
@@ -235,6 +277,44 @@ export default function CasesPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ケースを作成</DialogTitle>
+            <DialogDescription>
+              被相続人としてケースを作成します。表示名は相続人に共有されます。
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className={styles.dialogForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleCreate();
+            }}
+          >
+            <FormField label="表示名">
+              <Input
+                value={draftDisplayName}
+                onChange={(event) => setDraftDisplayName(event.target.value)}
+                placeholder="例: 山田 太郎"
+              />
+            </FormField>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateOpen(false)}
+              >
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={creating || !draftDisplayName.trim()}>
+                {creating ? "作成中..." : "作成する"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

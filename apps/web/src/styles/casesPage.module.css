@@ -11,7 +11,7 @@
 }
 
 .section {
-  @apply mt-6 grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
+  @apply mt-8 grid gap-3;
 }
 
 .sectionHeader {
@@ -23,15 +23,15 @@
 }
 
 .list {
-  @apply mt-2 flex flex-col gap-4;
+  @apply mt-2 flex flex-col;
 }
 
 .rowLink {
-  @apply rounded-xl border border-transparent p-4 transition hover:border-border hover:bg-muted/40;
+  @apply block transition hover:text-foreground;
 }
 
 .row {
-  @apply flex flex-wrap items-center justify-between gap-4;
+  @apply flex flex-wrap items-center justify-between gap-4 border-b border-border/60 py-3;
 }
 
 .rowMain {
@@ -59,7 +59,7 @@
 }
 
 .emptyState {
-  @apply rounded-2xl border border-border bg-muted/40 px-6 py-8;
+  @apply rounded-2xl border border-border bg-muted/40 px-6 py-6;
 }
 
 .emptyTitle {
@@ -68,4 +68,8 @@
 
 .emptyBody {
   @apply mt-2 text-body text-muted-foreground;
+}
+
+.dialogForm {
+  @apply grid gap-4;
 }
