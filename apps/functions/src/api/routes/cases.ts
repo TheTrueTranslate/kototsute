@@ -44,6 +44,43 @@ export const casesRoutes = () => {
     return jsonOk(c, { created, received });
   });
 
+  app.get("invites", async (c) => {
+    const auth = c.get("auth");
+    const scope = String(c.req.query("scope") ?? "");
+    if (scope !== "received") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "scopeの指定が不正です");
+    }
+    if (!auth.email) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "メールアドレスが登録されていません");
+    }
+
+    const db = getFirestore();
+    const normalizedEmail = normalizeEmail(auth.email ?? "");
+    const snapshot = await db.collectionGroup("invites").where("email", "==", normalizedEmail).get();
+    const rawInvites: Array<Record<string, any>> = snapshot.docs.map((doc) => ({
+      inviteId: doc.id,
+      ...(doc.data() as Record<string, any>)
+    }));
+    const caseInvites = rawInvites.filter((invite) => Boolean(invite.caseId));
+
+    const caseIds = Array.from(
+      new Set(caseInvites.map((invite) => String(invite.caseId ?? "")).filter(Boolean))
+    );
+    const caseSnapshots = await Promise.all(
+      caseIds.map(async (caseId) => [caseId, await db.collection("cases").doc(caseId).get()] as const)
+    );
+    const caseOwnerMap = new Map(
+      caseSnapshots.map(([caseId, snap]) => [caseId, snap.data()?.ownerDisplayName ?? null])
+    );
+
+    const data = caseInvites.map((invite) => ({
+      ...invite,
+      caseOwnerDisplayName: caseOwnerMap.get(String(invite.caseId ?? "")) ?? null
+    }));
+
+    return jsonOk(c, data);
+  });
+
   app.get(":caseId", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
@@ -91,6 +128,7 @@ export const casesRoutes = () => {
         await existingDoc.ref.set(
           {
             status: "pending",
+            ownerDisplayName: caseSnap.data()?.ownerDisplayName ?? null,
             relationLabel: parsed.data.relationLabel,
             relationOther: parsed.data.relationOther?.trim() ?? null,
             memo: parsed.data.memo?.trim() ?? null,
@@ -108,6 +146,7 @@ export const casesRoutes = () => {
     await inviteRef.set({
       caseId,
       ownerUid: auth.uid,
+      ownerDisplayName: caseSnap.data()?.ownerDisplayName ?? null,
       email: normalizedEmail,
       status: "pending",
       relationLabel: parsed.data.relationLabel,
@@ -231,6 +270,29 @@ export const casesRoutes = () => {
       { merge: true }
     );
     return jsonOk(c, { status: "declined" });
+  });
+
+  app.get(":caseId/heirs", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const snapshot = await db
+      .collection(`cases/${caseId}/invites`)
+      .where("status", "==", "accepted")
+      .get();
+    const data = snapshot.docs.map((doc) => ({ inviteId: doc.id, ...doc.data() }));
+    return jsonOk(c, data);
   });
 
   app.post(":caseId/assets", async (c) => {
@@ -391,6 +453,65 @@ export const casesRoutes = () => {
     }
 
     return jsonOk(c, { planId: planSnap.id, ...planSnap.data() });
+  });
+
+  app.get(":caseId/plans/:planId/assets", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const isOwner = caseData.ownerUid === auth.uid;
+    if (!isOwner && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const snapshot = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
+    const planAssets: Array<Record<string, any>> = snapshot.docs.map((doc) => ({
+      planAssetId: doc.id,
+      ...(doc.data() as Record<string, any>)
+    }));
+    const assetIds = planAssets
+      .map((asset) => String(asset.assetId ?? ""))
+      .filter((assetId) => assetId.length > 0);
+    const assetSnaps = await Promise.all(
+      assetIds.map(async (assetId) => [assetId, await db.collection(`cases/${caseId}/assets`).doc(assetId).get()] as const)
+    );
+    const assetMap = new Map(
+      assetSnaps.map(([assetId, snap]) => [assetId, snap.data() ?? {}])
+    );
+
+    const data = planAssets.map((planAsset) => {
+      const assetId = String(planAsset.assetId ?? "");
+      const asset = assetMap.get(assetId) ?? {};
+      return {
+        planAssetId: planAsset.planAssetId,
+        assetId,
+        assetType: "xrp-wallet",
+        assetLabel: asset.label ?? "",
+        assetAddress: asset.address ?? null,
+        token: null,
+        unitType: planAsset.unitType ?? "PERCENT",
+        allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : []
+      };
+    });
+
+    return jsonOk(c, data);
   });
 
 

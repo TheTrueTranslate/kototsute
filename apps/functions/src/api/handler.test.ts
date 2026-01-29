@@ -990,6 +990,57 @@ describe("createApiHandler", () => {
     expect(caseSnap.data()?.memberUids ?? []).toContain("heir_1");
   });
 
+  it("lists received case invites", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites`,
+        body: { email: "heir@example.com", relationLabel: "長男" }
+      }) as any,
+      createRes() as any
+    );
+
+    const memberHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const listRes = createRes();
+    await memberHandler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: "/v1/cases/invites?scope=received"
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.[0]?.caseId).toBe(caseId);
+  });
+
   it("creates and lists case assets", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
@@ -1125,6 +1176,72 @@ describe("createApiHandler", () => {
     );
 
     expect(shareBRes.statusCode).toBe(400);
+  });
+
+  it("lists case plan assets", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const assetRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetRes as any
+    );
+    const assetId = assetRes.body?.data?.assetId;
+
+    const planRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "A" }
+      }) as any,
+      planRes as any
+    );
+    const planId = planRes.body?.data?.planId;
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planId}/assets`,
+        body: { assetId }
+      }) as any,
+      createRes() as any
+    );
+
+    const listRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/plans/${planId}/assets`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.assetLabel).toBe("XRP Wallet");
   });
 
   it("lists case plans", async () => {
