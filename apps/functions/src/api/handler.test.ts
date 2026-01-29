@@ -1169,4 +1169,104 @@ describe("createApiHandler", () => {
     expect(listRes.statusCode).toBe(200);
     expect(listRes.body?.data?.length).toBe(1);
   });
+
+  it("lists shared plans for case members", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const planARes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "A" }
+      }) as any,
+      planARes as any
+    );
+    const planAId = planARes.body?.data?.planId;
+
+    const planBRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "B" }
+      }) as any,
+      planBRes as any
+    );
+    const planBId = planBRes.body?.data?.planId;
+
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planAId}/share`
+      }) as any,
+      createRes() as any
+    );
+
+    await getFirestore()
+      .collection("cases")
+      .doc(caseId)
+      .set({ memberUids: ["owner_1", "heir_1"] }, { merge: true });
+
+    const memberHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const listRes = createRes();
+    await memberHandler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/plans`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.planId).toBe(planAId);
+
+    const sharedRes = createRes();
+    await memberHandler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/plans/${planAId}`
+      }) as any,
+      sharedRes as any
+    );
+
+    expect(sharedRes.statusCode).toBe(200);
+
+    const blockedRes = createRes();
+    await memberHandler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/plans/${planBId}`
+      }) as any,
+      blockedRes as any
+    );
+
+    expect(blockedRes.statusCode).toBe(403);
+  });
 });

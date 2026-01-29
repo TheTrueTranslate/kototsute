@@ -347,11 +347,19 @@ export const casesRoutes = () => {
     if (!caseSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Case not found");
     }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const isOwner = caseData.ownerUid === auth.uid;
+    if (!isOwner && !memberUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const snapshot = await db.collection(`cases/${caseId}/plans`).get();
+    const snapshot = isOwner
+      ? await db.collection(`cases/${caseId}/plans`).get()
+      : await db
+          .collection(`cases/${caseId}/plans`)
+          .where("status", "==", "SHARED")
+          .get();
     const data = snapshot.docs.map((doc) => ({ planId: doc.id, ...doc.data() }));
     return jsonOk(c, data);
   });
@@ -366,7 +374,10 @@ export const casesRoutes = () => {
     if (!caseSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Case not found");
     }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const isOwner = caseData.ownerUid === auth.uid;
+    if (!isOwner && !memberUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -374,6 +385,9 @@ export const casesRoutes = () => {
     const planSnap = await planRef.get();
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
     return jsonOk(c, { planId: planSnap.id, ...planSnap.data() });
