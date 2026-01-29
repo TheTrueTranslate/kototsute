@@ -990,6 +990,68 @@ describe("createApiHandler", () => {
     expect(caseSnap.data()?.memberUids ?? []).toContain("heir_1");
   });
 
+  it("lists case heirs", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const inviteRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites`,
+        body: { email: "heir@example.com", relationLabel: "長男" }
+      }) as any,
+      inviteRes as any
+    );
+    const inviteId = inviteRes.body?.data?.inviteId;
+
+    const memberHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await memberHandler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteId}/accept`
+      }) as any,
+      createRes() as any
+    );
+
+    const listRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heirs`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.email).toBe("heir@example.com");
+  });
+
   it("lists received case invites", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import {
   assetCreateSchema,
   displayNameSchema,
@@ -120,6 +121,15 @@ export const casesRoutes = () => {
     const normalizedEmail = normalizeEmail(parsed.data.email);
     const now = c.get("deps").now();
     const invitesCollection = db.collection(`cases/${caseId}/invites`);
+    const resolveInviteReceiver = async (): Promise<string | null> => {
+      try {
+        const user = await getAuth().getUserByEmail(normalizedEmail);
+        return user.uid;
+      } catch (error: any) {
+        if (error?.code === "auth/user-not-found") return null;
+        throw error;
+      }
+    };
     const existingSnapshot = await invitesCollection.where("email", "==", normalizedEmail).get();
     const existingDoc = existingSnapshot.docs[0];
     if (existingDoc) {
@@ -137,11 +147,25 @@ export const casesRoutes = () => {
           },
           { merge: true }
         );
+        const receiverUid = await resolveInviteReceiver();
+        if (receiverUid) {
+          const notificationRef = db.collection("notifications").doc();
+          await notificationRef.set({
+            receiverUid,
+            type: "CASE_INVITE_SENT",
+            title: "ケース招待が届きました",
+            body: "ケースへの招待を受け取りました。",
+            related: { kind: "case-invite", id: existingDoc.id, caseId },
+            isRead: false,
+            createdAt: now
+          });
+        }
         return jsonOk(c, { inviteId: existingDoc.id, status: "pending" });
       }
       return jsonError(c, 409, "CONFLICT", "このメールアドレスは既に招待済みです");
     }
 
+    const receiverUid = await resolveInviteReceiver();
     const inviteRef = invitesCollection.doc();
     await inviteRef.set({
       caseId,
@@ -158,6 +182,19 @@ export const casesRoutes = () => {
       createdAt: now,
       updatedAt: now
     });
+
+    if (receiverUid) {
+      const notificationRef = db.collection("notifications").doc();
+      await notificationRef.set({
+        receiverUid,
+        type: "CASE_INVITE_SENT",
+        title: "ケース招待が届きました",
+        body: "ケースへの招待を受け取りました。",
+        related: { kind: "case-invite", id: inviteRef.id, caseId },
+        isRead: false,
+        createdAt: now
+      });
+    }
 
     return jsonOk(c, { inviteId: inviteRef.id });
   });
