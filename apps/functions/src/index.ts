@@ -3,7 +3,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { getApps, initializeApp } from "firebase-admin/app";
 import cors from "cors";
-import { createApiHandler, createDefaultDeps } from "./api/handler";
+import { createApiHandler, createDefaultDeps } from "./api/handler.js";
 
 if (getApps().length === 0) {
   initializeApp();

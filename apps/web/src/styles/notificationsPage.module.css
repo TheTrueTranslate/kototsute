@@ -1,0 +1,55 @@
+.page {
+  @apply mx-auto w-full max-w-[840px] px-6 py-10;
+}
+
+.header {
+  @apply mb-6 grid gap-4;
+}
+
+.headerRow {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.headerActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.list {
+  @apply mt-6 flex flex-col gap-4;
+}
+
+.row {
+  @apply flex flex-col gap-3 rounded-2xl border border-border bg-background px-5 py-4;
+}
+
+.rowUnread {
+  @apply border-foreground/20 bg-muted/40;
+}
+
+.rowTitle {
+  @apply text-section text-foreground;
+}
+
+.rowBody {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.rowMeta {
+  @apply text-meta text-muted-foreground;
+}
+
+.rowActions {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.emptyState {
+  @apply mt-10 rounded-2xl border border-border bg-muted/40 px-6 py-8;
+}
+
+.emptyTitle {
+  @apply text-section text-foreground;
+}
+
+.emptyBody {
+  @apply mt-2 text-body text-muted-foreground;
+}

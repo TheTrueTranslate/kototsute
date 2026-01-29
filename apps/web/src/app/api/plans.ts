@@ -1,0 +1,136 @@
+import { apiFetch } from "../../features/shared/lib/api";
+
+export type PlanStatus = "DRAFT" | "SHARED" | "INACTIVE";
+
+export type PlanListItem = {
+  planId: string;
+  title: string;
+  status: PlanStatus;
+  sharedAt: string | null;
+  updatedAt: string;
+};
+
+export type PlanHeir = {
+  uid: string;
+  email: string;
+  relationLabel: string;
+  relationOther: string | null;
+};
+
+export type PlanDetail = PlanListItem & {
+  heirUids: string[];
+  heirs: PlanHeir[];
+};
+
+export type PlanAllocation = {
+  heirUid: string | null;
+  value: number;
+  isUnallocated?: boolean;
+};
+
+export type PlanToken = {
+  currency: string;
+  issuer: string | null;
+  isNative: boolean;
+};
+
+export type PlanAsset = {
+  planAssetId: string;
+  assetId: string;
+  assetType: string;
+  assetLabel: string;
+  token: PlanToken | null;
+  unitType: "PERCENT" | "AMOUNT";
+  allocations: PlanAllocation[];
+};
+
+export type PlanHistoryEntry = {
+  historyId: string;
+  type: string;
+  title: string;
+  detail: string | null;
+  actorUid: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+  meta: Record<string, unknown> | null;
+};
+
+export const createPlan = async (input: { title: string }) => {
+  const result = await apiFetch("/v1/plans", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+  return result.data as { planId: string; title: string; status: PlanStatus };
+};
+
+export const listPlans = async () => {
+  const result = await apiFetch("/v1/plans", { method: "GET" });
+  return result.data as PlanListItem[];
+};
+
+export const getPlan = async (planId: string) => {
+  const result = await apiFetch(`/v1/plans/${planId}`, { method: "GET" });
+  return result.data as PlanDetail;
+};
+
+export const listPlanHistory = async (planId: string) => {
+  const result = await apiFetch(`/v1/plans/${planId}/history`, { method: "GET" });
+  return result.data as PlanHistoryEntry[];
+};
+
+export const updatePlanStatus = async (planId: string, status: PlanStatus) => {
+  await apiFetch(`/v1/plans/${planId}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status })
+  });
+};
+
+export const listPlanAssets = async (planId: string) => {
+  const result = await apiFetch(`/v1/plans/${planId}/assets`, { method: "GET" });
+  return result.data as PlanAsset[];
+};
+
+export const addPlanHeir = async (planId: string, heirUid: string) => {
+  await apiFetch(`/v1/plans/${planId}/heirs`, {
+    method: "POST",
+    body: JSON.stringify({ heirUid })
+  });
+};
+
+export const removePlanHeir = async (planId: string, heirUid: string) => {
+  await apiFetch(`/v1/plans/${planId}/heirs/${heirUid}`, { method: "DELETE" });
+};
+
+export const addPlanAsset = async (
+  planId: string,
+  input: { assetId: string; unitType: "PERCENT" | "AMOUNT"; token?: PlanToken | null }
+) => {
+  const result = await apiFetch(`/v1/plans/${planId}/assets`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+  return result.data as { planAssetId: string };
+};
+
+export const deletePlanAsset = async (planId: string, planAssetId: string) => {
+  await apiFetch(`/v1/plans/${planId}/assets/${planAssetId}`, { method: "DELETE" });
+};
+
+export const updatePlanAllocations = async (
+  planId: string,
+  planAssetId: string,
+  input: { unitType: "PERCENT" | "AMOUNT"; allocations: PlanAllocation[] }
+) => {
+  await apiFetch(`/v1/plans/${planId}/assets/${planAssetId}/allocations`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+};
+
+export const sharePlan = async (planId: string) => {
+  await apiFetch(`/v1/plans/${planId}/share`, { method: "POST" });
+};
+
+export const inactivatePlan = async (planId: string) => {
+  await apiFetch(`/v1/plans/${planId}/inactivate`, { method: "POST" });
+};

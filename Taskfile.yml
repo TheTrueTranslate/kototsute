@@ -4,6 +4,7 @@ vars:
   ROOT: "."
   WEB_DIR: "apps/web"
   FUNCTIONS_DIR: "apps/functions"
+  SHARED_DIR: "packages/shared"
   PROJECT_ID: "kototsute"
   EMULATOR_DATA_DIR: "tmp/emulators"
 
@@ -40,9 +41,9 @@ tasks:
       - pnpm -C {{.WEB_DIR}} dev -- --open
 
   build:
-    desc: "Build web app"
+    desc: "Build shared, functions, and web"
     cmds:
-      - pnpm -C {{.WEB_DIR}} build
+      - pnpm -C {{.SHARED_DIR}} build && pnpm -C {{.FUNCTIONS_DIR}} build && pnpm -C {{.WEB_DIR}} build
 
   preview:
     desc: "Preview production build"
@@ -50,9 +51,9 @@ tasks:
       - pnpm -C {{.WEB_DIR}} preview
 
   functions:build:
-    desc: "Build Firebase Functions"
+    desc: "Build shared + Firebase Functions"
     cmds:
-      - pnpm -C {{.FUNCTIONS_DIR}} build
+      - pnpm -C {{.SHARED_DIR}} build && pnpm -C {{.FUNCTIONS_DIR}} build
 
   functions:watch:
     desc: "Watch Firebase Functions (tsc -w)"

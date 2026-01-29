@@ -1,4 +1,4 @@
-import { apiFetch } from "../../lib/api";
+import { apiFetch } from "../../features/shared/lib/api";
 
 export type InviteStatus = "pending" | "accepted" | "declined";
 

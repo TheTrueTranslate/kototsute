@@ -1,0 +1,274 @@
+.page {
+  @apply mx-auto w-full max-w-[960px] px-6 py-10;
+}
+
+.header {
+  @apply mb-6 grid gap-4;
+}
+
+.headerRow {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.headerActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.list {
+  @apply mt-6 flex flex-col gap-4;
+}
+
+.row {
+  @apply flex flex-col gap-3 border-b border-border pb-4;
+}
+
+.rowInline {
+  @apply md:flex-row md:items-center md:justify-between;
+}
+
+.rowLink {
+  @apply rounded-xl border border-transparent p-4 transition hover:border-border hover:bg-muted/40;
+}
+
+.rowMain {
+  @apply grid gap-1;
+}
+
+.rowTitle {
+  @apply text-section text-foreground;
+}
+
+.rowMeta {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.rowSide {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.statusBadge {
+  @apply rounded-full border border-border bg-muted/40 px-3 py-1 text-meta font-medium text-foreground;
+}
+
+.emptyState {
+  @apply mt-10 rounded-2xl border border-border bg-muted/40 px-6 py-8;
+}
+
+.emptyTitle {
+  @apply text-section text-foreground;
+}
+
+.emptyBody {
+  @apply mt-2 text-body text-muted-foreground;
+}
+
+.section {
+  @apply mt-6 grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
+}
+
+.tabPanel {
+  @apply mt-6 grid gap-4;
+}
+
+.sectionTitle {
+  @apply text-section text-foreground;
+}
+
+.sectionBody {
+  @apply grid gap-4;
+}
+
+.callout {
+  @apply flex items-start gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-3;
+}
+
+.calloutIcon {
+  @apply flex h-9 w-9 items-center justify-center rounded-full bg-background;
+}
+
+.calloutIconSvg {
+  @apply h-4 w-4 text-foreground;
+}
+
+.calloutBody {
+  @apply grid gap-1;
+}
+
+.calloutTitle {
+  @apply text-body text-foreground;
+}
+
+.calloutText {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.calloutLink {
+  @apply mt-1 inline-flex items-center text-body-sm text-foreground underline decoration-border underline-offset-4 transition hover:text-foreground/80;
+}
+
+.calloutLink:disabled {
+  @apply cursor-not-allowed text-muted-foreground no-underline;
+}
+
+.infoList {
+  @apply grid gap-4;
+}
+
+.infoRow {
+  @apply grid gap-2 md:grid-cols-[140px_1fr];
+}
+
+.infoLabel {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.infoValue {
+  @apply flex flex-wrap items-center gap-3 text-body text-foreground;
+}
+
+.infoHint {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.form {
+  @apply mt-6 grid gap-5;
+}
+
+.fieldRow {
+  @apply grid gap-4 md:grid-cols-2;
+}
+
+.select {
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-body-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring;
+}
+
+.helper {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.inlineRow {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.assetCard {
+  @apply grid gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-4;
+}
+
+.assetHeader {
+  @apply flex flex-wrap items-start justify-between gap-2;
+}
+
+.assetTitle {
+  @apply text-body text-foreground;
+}
+
+.flow {
+  @apply mt-2 grid gap-4 rounded-xl border border-border/70 bg-background/60 px-3 py-3;
+  grid-template-columns: 120px 1fr;
+}
+
+.flowAssetNode {
+  @apply flex items-center gap-2 text-body-sm text-foreground;
+}
+
+.flowLabel {
+  @apply text-body-sm text-foreground;
+}
+
+.flowDot {
+  @apply h-2 w-2 rounded-full bg-foreground;
+}
+
+.flowHeirList {
+  @apply grid gap-2;
+}
+
+.flowHeirRow {
+  @apply flex items-center gap-3;
+}
+
+.flowConnector {
+  @apply h-0.5 w-14 rounded-full;
+  background-image: linear-gradient(90deg, var(--flow-color), rgba(15, 23, 42, 0.15), var(--flow-color));
+  background-size: 200% 100%;
+  animation: flow-line 2.4s linear infinite;
+}
+
+.flowHeirPill {
+  @apply flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-meta text-foreground;
+  border-color: var(--flow-color);
+}
+
+.flowHeirLabel {
+  @apply text-meta text-foreground;
+}
+
+.flowHeirValue {
+  @apply text-meta text-muted-foreground;
+}
+
+.allocationBar {
+  @apply mt-3 flex h-3 w-full overflow-hidden rounded-full border border-border bg-muted/50;
+}
+
+.allocationSegment {
+  @apply h-full transition-all;
+  flex: 0 0 auto;
+}
+
+.allocationRow {
+  @apply grid gap-2 md:grid-cols-[1fr_140px_auto];
+}
+
+.allocationItem {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.allocationInput {
+  @apply max-w-[140px];
+}
+
+.unitSuffix {
+  @apply text-meta text-muted-foreground;
+}
+
+@keyframes flow-line {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.divider {
+  @apply h-px w-full bg-border;
+}
+
+.badgeMuted {
+  @apply text-meta text-muted-foreground;
+}
+
+.historyMeta {
+  @apply mt-2 flex flex-wrap items-center gap-2;
+}
+
+.historyTitle {
+  @apply flex flex-wrap items-center gap-2 text-section text-foreground;
+}
+
+.historyTime {
+  @apply text-meta text-muted-foreground;
+}
+
+.shareNotes {
+  @apply grid gap-2;
+}
+
+.deleteButton {
+  @apply border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive;
+}
+
+.deleteSummary {
+  @apply rounded-xl border border-border bg-muted/40 px-4 py-3;
+}

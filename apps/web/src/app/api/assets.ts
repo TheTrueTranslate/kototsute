@@ -1,4 +1,4 @@
-import { apiFetch } from "../../lib/api";
+import { apiFetch } from "../../features/shared/lib/api";
 
 export type AssetListItem = {
   assetId: string;
@@ -35,7 +35,15 @@ export type AssetDetail = {
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
   verificationChallenge: string | null;
   verificationAddress: string;
-  xrpl: { status: "ok"; balanceXrp: string; ledgerIndex?: number } | { status: "error"; message: string } | null;
+  xrpl:
+    | {
+        status: "ok";
+        balanceXrp: string;
+        ledgerIndex?: number;
+        tokens?: Array<{ currency: string; issuer: string | null; isNative: boolean }>;
+      }
+    | { status: "error"; message: string }
+    | null;
   syncLogs: AssetSyncLog[];
 };
 

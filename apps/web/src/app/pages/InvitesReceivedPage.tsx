@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { acceptInvite, declineInvite, listInvitesReceived, type InviteListItem } from "../api/invites";
-import FormAlert from "../../components/form-alert";
-import { Button } from "../../components/ui/button";
-import Breadcrumbs from "../../components/breadcrumbs";
+import FormAlert from "../../features/shared/components/form-alert";
+import { Button } from "../../features/shared/components/ui/button";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import styles from "../../styles/invitesPage.module.css";
 
 const statusLabels: Record<string, string> = {

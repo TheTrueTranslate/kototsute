@@ -3,14 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import AuthLayout from "../../components/auth-layout";
-import FormAlert from "../../components/form-alert";
-import FormField from "../../components/form-field";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { auth } from "../../lib/firebase";
-import { getAuthErrorMessage } from "../auth/authError";
-import { registerSchema, type RegisterForm } from "../auth/validators";
+import AuthLayout from "../../features/shared/components/auth-layout";
+import FormAlert from "../../features/shared/components/form-alert";
+import FormField from "../../features/shared/components/form-field";
+import { Button } from "../../features/shared/components/ui/button";
+import { Input } from "../../features/shared/components/ui/input";
+import { auth } from "../../features/shared/lib/firebase";
+import { getAuthErrorMessage } from "../../features/auth/authError";
+import { registerSchema, type RegisterForm } from "../../features/auth/validators";
 import styles from "../../styles/authPages.module.css";
 
 type FormStatus = {

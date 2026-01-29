@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { listAssets, type AssetListItem } from "../api/assets";
 import styles from "../../styles/assetsPage.module.css";
-import FormAlert from "../../components/form-alert";
-import { Button } from "../../components/ui/button";
+import FormAlert from "../../features/shared/components/form-alert";
+import { Button } from "../../features/shared/components/ui/button";
 import { Link } from "react-router-dom";
-import Breadcrumbs from "../../components/breadcrumbs";
+import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 
 const statusLabels: Record<string, string> = {
   UNVERIFIED: "未検証",
