@@ -338,6 +338,48 @@ export const casesRoutes = () => {
     return jsonOk(c, { planId: planRef.id, title: parsed.data.title });
   });
 
+  app.get(":caseId/plans", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const snapshot = await db.collection(`cases/${caseId}/plans`).get();
+    const data = snapshot.docs.map((doc) => ({ planId: doc.id, ...doc.data() }));
+    return jsonOk(c, data);
+  });
+
+  app.get(":caseId/plans/:planId", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    return jsonOk(c, { planId: planSnap.id, ...planSnap.data() });
+  });
+
+
   app.post(":caseId/plans/:planId/assets", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
