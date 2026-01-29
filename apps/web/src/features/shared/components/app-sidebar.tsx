@@ -17,6 +17,18 @@ import { listNotifications } from "../../../app/api/notifications";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../../auth/auth-provider";
+import FormAlert from "./form-alert";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "./ui/dialog";
 
 const mainItems = [
   {
@@ -48,6 +60,8 @@ export default function AppSidebar() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -75,8 +89,15 @@ export default function AppSidebar() {
   }, [user?.uid]);
 
   const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/login");
+    setLogoutError(null);
+    try {
+      await signOut(auth);
+      navigate("/login");
+      return true;
+    } catch (err: any) {
+      setLogoutError(err?.message ?? "ログアウトに失敗しました。");
+      return false;
+    }
   };
 
   return (
@@ -128,13 +149,39 @@ export default function AppSidebar() {
               </SidebarMenuItem>
             ))}
             <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={handleLogout}
-                className="h-11 text-[0.95rem] font-medium"
-              >
-                <LogOut className="size-5" />
-                <span>ログアウト</span>
-              </SidebarMenuButton>
+              <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+                <DialogTrigger asChild>
+                  <SidebarMenuButton className="h-11 text-[0.95rem] font-medium">
+                    <LogOut className="size-5" />
+                    <span>ログアウト</span>
+                  </SidebarMenuButton>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>ログアウトしますか？</DialogTitle>
+                    <DialogDescription>現在のセッションを終了します。</DialogDescription>
+                  </DialogHeader>
+                  {logoutError ? <FormAlert variant="error">{logoutError}</FormAlert> : null}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        キャンセル
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await handleLogout();
+                        if (ok) {
+                          setLogoutOpen(false);
+                        }
+                      }}
+                    >
+                      ログアウト
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>

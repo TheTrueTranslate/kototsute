@@ -9,6 +9,16 @@ import { Input } from "../../features/shared/components/ui/input";
 import { auth, db } from "../../features/shared/lib/firebase";
 import styles from "../../styles/myPage.module.css";
 import { useNavigate } from "react-router-dom";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "../../features/shared/components/ui/dialog";
 
 type FormStatus = {
   type: "success" | "error";
@@ -23,6 +33,7 @@ export default function MyPage() {
   const [status, setStatus] = useState<FormStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
@@ -72,8 +83,10 @@ export default function MyPage() {
     try {
       await signOut(auth);
       navigate("/login");
+      return true;
     } catch (err: any) {
       setLogoutError(err?.message ?? "ログアウトに失敗しました。");
+      return false;
     }
   };
 
@@ -125,10 +138,38 @@ export default function MyPage() {
           <div className={styles.row}>
             <span className={styles.label}>ログアウト</span>
             <div className={styles.actionsInline}>
-              {logoutError ? <span className={styles.errorText}>{logoutError}</span> : null}
-              <Button type="button" variant="outline" onClick={handleLogout}>
-                ログアウト
-              </Button>
+              <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline">
+                    ログアウト
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>ログアウトしますか？</DialogTitle>
+                    <DialogDescription>現在のセッションを終了します。</DialogDescription>
+                  </DialogHeader>
+                  {logoutError ? <FormAlert variant="error">{logoutError}</FormAlert> : null}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        キャンセル
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await handleLogout();
+                        if (ok) {
+                          setLogoutOpen(false);
+                        }
+                      }}
+                    >
+                      ログアウト
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
