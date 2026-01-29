@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { updateProfile } from "firebase/auth";
+import { signOut, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { displayNameSchema } from "@kototsute/shared";
 import { useAuth } from "../../features/auth/auth-provider";
@@ -8,6 +8,7 @@ import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import { auth, db } from "../../features/shared/lib/firebase";
 import styles from "../../styles/myPage.module.css";
+import { useNavigate } from "react-router-dom";
 
 type FormStatus = {
   type: "success" | "error";
@@ -16,10 +17,12 @@ type FormStatus = {
 
 export default function MyPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [lastSavedName, setLastSavedName] = useState(user?.displayName ?? "");
   const [status, setStatus] = useState<FormStatus | null>(null);
   const [saving, setSaving] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
@@ -61,6 +64,16 @@ export default function MyPage() {
       setStatus({ type: "error", message: err?.message ?? "表示名の更新に失敗しました。" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLogoutError(null);
+    try {
+      await signOut(auth);
+      navigate("/login");
+    } catch (err: any) {
+      setLogoutError(err?.message ?? "ログアウトに失敗しました。");
     }
   };
 
@@ -108,6 +121,15 @@ export default function MyPage() {
           <div className={styles.row}>
             <span className={styles.label}>UID</span>
             <span className={styles.valueMono}>{user?.uid ?? "-"}</span>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>ログアウト</span>
+            <div className={styles.actionsInline}>
+              {logoutError ? <span className={styles.errorText}>{logoutError}</span> : null}
+              <Button type="button" variant="outline" onClick={handleLogout}>
+                ログアウト
+              </Button>
+            </div>
           </div>
         </div>
       </div>

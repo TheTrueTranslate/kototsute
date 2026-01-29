@@ -45,3 +45,11 @@
 .editField {
   @apply flex-1;
 }
+
+.actionsInline {
+  @apply flex items-center gap-3;
+}
+
+.errorText {
+  @apply text-meta text-danger;
+}
