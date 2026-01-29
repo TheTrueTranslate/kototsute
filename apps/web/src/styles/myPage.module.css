@@ -37,3 +37,11 @@
 .valueMono {
   @apply text-body-sm font-mono text-foreground break-all;
 }
+
+.form {
+  @apply grid gap-4;
+}
+
+.actions {
+  @apply flex items-center justify-end;
+}
