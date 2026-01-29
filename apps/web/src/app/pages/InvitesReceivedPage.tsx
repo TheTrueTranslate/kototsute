@@ -129,7 +129,7 @@ export default function InvitesReceivedPage() {
                       </Button>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="outlineDestructive"
                         onClick={() => handleDecline(invite.inviteId)}
                       >
                         辞退する

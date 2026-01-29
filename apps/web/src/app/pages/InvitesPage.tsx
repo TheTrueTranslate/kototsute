@@ -259,7 +259,7 @@ export default function InvitesPage() {
                     </Button>
                     <Button
                       type="button"
-                      variant="destructive"
+                      variant="outlineDestructive"
                       onClick={() => {
                         setDeleteTarget(invite);
                         setDeleteOpen(true);
@@ -272,7 +272,7 @@ export default function InvitesPage() {
                   <div className={styles.actions}>
                     <Button
                       type="button"
-                      variant="destructive"
+                      variant="outlineDestructive"
                       onClick={() => {
                         setDeleteTarget(invite);
                         setDeleteOpen(true);
@@ -314,7 +314,7 @@ export default function InvitesPage() {
               <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
                 キャンセル
               </Button>
-              <Button type="button" variant="destructive" onClick={handleDeleteConfirm}>
+              <Button type="button" variant="outlineDestructive" onClick={handleDeleteConfirm}>
                 削除
               </Button>
             </div>

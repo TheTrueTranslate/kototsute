@@ -116,7 +116,7 @@ export default function AssetDetailPage() {
             <Button variant="outline" onClick={() => loadAsset(true)}>
               最新の状態を取得
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button variant="outlineDestructive" onClick={handleDelete}>
               削除
             </Button>
           </div>
