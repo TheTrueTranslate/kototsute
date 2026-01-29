@@ -499,7 +499,7 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
                 {relatedPlans.map((plan) => (
                   <Link
                     key={plan.planId}
-                    to={`/cases/${caseId}/plans/${plan.planId}`}
+                    to={`/cases/${caseId}/plans/${plan.planId}/edit`}
                     className={styles.relatedLink}
                   >
                     {plan.title ?? "指図"}

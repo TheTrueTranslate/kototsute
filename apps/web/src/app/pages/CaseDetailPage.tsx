@@ -28,12 +28,17 @@ const statusLabels: Record<string, string> = {
   COMPLETED: "相続完了"
 };
 
-const formatDate = (value: string) => {
-  try {
-    return new Date(value).toLocaleDateString();
-  } catch {
-    return "-";
-  }
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString();
+};
+
+const planStatusLabels: Record<string, string> = {
+  DRAFT: "下書き",
+  SHARED: "共有中",
+  INACTIVE: "無効"
 };
 
 type RelationOption = (typeof relationOptions)[number];
@@ -65,13 +70,12 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
   );
 };
 
-type TabKey = "assets" | "plans" | "heirs" | "documents";
+type TabKey = "assets" | "plans" | "heirs";
 
 const tabItems: { key: TabKey; label: string }[] = [
   { key: "assets", label: "資産" },
   { key: "plans", label: "指図" },
-  { key: "heirs", label: "相続人" },
-  { key: "documents", label: "書類/証跡" }
+  { key: "heirs", label: "相続人" }
 ];
 
 const isTabKey = (value: string | null): value is TabKey =>
@@ -288,7 +292,7 @@ export default function CaseDetailPage() {
                     </div>
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
-                        {plan.status === "SHARED" ? "共有中" : plan.status}
+                        {planStatusLabels[plan.status] ?? plan.status}
                       </span>
                     </div>
                   </div>
@@ -296,18 +300,6 @@ export default function CaseDetailPage() {
               ))}
             </div>
           )}
-        </div>
-      ) : null}
-
-      {tab === "documents" ? (
-        <div className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>書類/証跡</h2>
-          </div>
-          <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ書類がありません</div>
-            <div className={styles.emptyBody}>死亡診断書などの提出がここに表示されます。</div>
-          </div>
         </div>
       ) : null}
 
