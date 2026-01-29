@@ -39,6 +39,6 @@ const render = async () => {
 describe("CasePlanDetailPage", () => {
   it("renders plan title", async () => {
     const html = await render();
-    expect(html).toContain("共有プラン");
+    expect(html).toContain("指図詳細");
   });
 });
