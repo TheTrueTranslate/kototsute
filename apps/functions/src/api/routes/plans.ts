@@ -3,10 +3,10 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { AssetId } from "@kototsute/asset";
 import { planAllocationSchema, planCreateSchema } from "@kototsute/shared";
-import type { ApiBindings } from "../types";
-import { jsonError, jsonOk } from "../utils/response";
-import { formatDate } from "../utils/date";
-import { appendPlanHistory, formatPlanToken, normalizePlanAllocations } from "../utils/plan";
+import type { ApiBindings } from "../types.js";
+import { jsonError, jsonOk } from "../utils/response.js";
+import { formatDate } from "../utils/date.js";
+import { appendPlanHistory, formatPlanToken, normalizePlanAllocations } from "../utils/plan.js";
 
 export const plansRoutes = () => {
   const app = new Hono<ApiBindings>();

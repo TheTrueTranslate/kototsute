@@ -3,13 +3,13 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import * as logger from "firebase-functions/logger";
 import { DomainError } from "@kototsute/shared";
-import type { ApiBindings, ApiDeps } from "./types";
-import { createAuthMiddleware } from "./middlewares/auth";
-import { assetsRoutes } from "./routes/assets";
-import { invitesRoutes } from "./routes/invites";
-import { plansRoutes } from "./routes/plans";
-import { notificationsRoutes } from "./routes/notifications";
-import { jsonError } from "./utils/response";
+import type { ApiBindings, ApiDeps } from "./types.js";
+import { createAuthMiddleware } from "./middlewares/auth.js";
+import { assetsRoutes } from "./routes/assets.js";
+import { invitesRoutes } from "./routes/invites.js";
+import { plansRoutes } from "./routes/plans.js";
+import { notificationsRoutes } from "./routes/notifications.js";
+import { jsonError } from "./utils/response.js";
 
 export const createApp = (deps: ApiDeps) => {
   const app = new Hono<ApiBindings>().basePath("/v1");
@@ -23,8 +23,8 @@ export const createApp = (deps: ApiDeps) => {
     "*",
     cors({
       origin: (origin) => origin ?? "*",
-      methods: ["GET", "POST", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"]
+      allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"]
     })
   );
 

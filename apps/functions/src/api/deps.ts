@@ -1,6 +1,6 @@
 import { FirestoreAssetRepository } from "@kototsute/asset";
 import { getAuth } from "firebase-admin/auth";
-import type { ApiDeps } from "./types";
+import type { ApiDeps } from "./types.js";
 
 const unauthorizedError = () => new Error("UNAUTHORIZED");
 

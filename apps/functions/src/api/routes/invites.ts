@@ -2,10 +2,10 @@ import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { inviteCreateSchema } from "@kototsute/shared";
-import type { ApiBindings } from "../types";
-import { jsonError, jsonOk } from "../utils/response";
-import { normalizeEmail } from "../utils/email";
-import { formatDate } from "../utils/date";
+import type { ApiBindings } from "../types.js";
+import { jsonError, jsonOk } from "../utils/response.js";
+import { normalizeEmail } from "../utils/email.js";
+import { formatDate } from "../utils/date.js";
 
 export const invitesRoutes = () => {
   const app = new Hono<ApiBindings>();

@@ -4,7 +4,7 @@ import type { ApiDeps } from "./types.js";
 
 export { createDefaultDeps } from "./deps.js";
 
-export const requestHandler = (app: Hono) => {
+export const requestHandler = (app: Hono<any, any, any>) => {
   return async (req: any, res: any) => {
     const method = String(req.method ?? "GET").toUpperCase();
     const protocol = req.protocol ?? "https";
@@ -21,7 +21,7 @@ export const requestHandler = (app: Hono) => {
       }
     });
 
-    let body: BodyInit | undefined;
+    let body: unknown;
     if (!["GET", "HEAD"].includes(method)) {
       const rawBody = req.body;
       if (rawBody === undefined || rawBody === null) {
@@ -31,7 +31,7 @@ export const requestHandler = (app: Hono) => {
         rawBody instanceof Uint8Array ||
         rawBody instanceof ArrayBuffer
       ) {
-        body = rawBody as BodyInit;
+        body = rawBody;
       } else {
         body = JSON.stringify(rawBody);
         if (!headers.has("content-type")) {
@@ -44,7 +44,7 @@ export const requestHandler = (app: Hono) => {
       new Request(url.toString(), {
         method,
         headers,
-        body
+        body: body as any
       })
     );
 

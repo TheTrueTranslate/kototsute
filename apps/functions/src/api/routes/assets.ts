@@ -9,9 +9,9 @@ import {
   RegisterAsset
 } from "@kototsute/asset";
 import { assetCreateSchema } from "@kototsute/shared";
-import type { ApiBindings } from "../types";
-import { jsonError, jsonOk } from "../utils/response";
-import { formatDate } from "../utils/date";
+import type { ApiBindings } from "../types.js";
+import { jsonError, jsonOk } from "../utils/response.js";
+import { formatDate } from "../utils/date.js";
 import {
   XRPL_VERIFY_ADDRESS,
   createChallenge,
@@ -19,7 +19,7 @@ import {
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
   fetchXrplTx
-} from "../utils/xrpl";
+} from "../utils/xrpl.js";
 
 export const assetsRoutes = () => {
   const app = new Hono<ApiBindings>();

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
-import type { ApiBindings } from "../types";
-import { jsonError, jsonOk } from "../utils/response";
-import { formatDate } from "../utils/date";
+import type { ApiBindings } from "../types.js";
+import { jsonError, jsonOk } from "../utils/response.js";
+import { formatDate } from "../utils/date.js";
 
 export const notificationsRoutes = () => {
   const app = new Hono<ApiBindings>();

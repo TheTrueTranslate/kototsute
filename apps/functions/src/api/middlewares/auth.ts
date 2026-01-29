@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { ApiBindings } from "../types";
+import type { ApiBindings } from "../types.js";
 
 export const createAuthMiddleware = (): MiddlewareHandler<ApiBindings> => {
   return async (c, next) => {
