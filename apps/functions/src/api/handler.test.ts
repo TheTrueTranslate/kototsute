@@ -1036,6 +1036,63 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.[0]?.email).toBe("heir@example.com");
   });
 
+  it("stores and returns task progress", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const updateSharedRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/task-progress/shared`,
+        body: { completedTaskIds: ["task-1", "task-2", "task-1", ""] }
+      }) as any,
+      updateSharedRes as any
+    );
+    expect(updateSharedRes.statusCode).toBe(200);
+
+    const updateMyRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/task-progress/me`,
+        body: { completedTaskIds: ["mine-1"] }
+      }) as any,
+      updateMyRes as any
+    );
+    expect(updateMyRes.statusCode).toBe(200);
+
+    const listRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/task-progress`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.sharedCompletedTaskIds).toEqual(["task-1", "task-2"]);
+    expect(listRes.body?.data?.userCompletedTaskIds).toEqual(["mine-1"]);
+  });
+
   it("lists received case invites", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({
