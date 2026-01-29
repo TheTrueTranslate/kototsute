@@ -7,6 +7,7 @@ import { Asset } from "@kototsute/asset";
 import { AssetIdentifier } from "@kototsute/asset";
 import { OccurredAt } from "@kototsute/asset";
 import { getFirestore } from "firebase-admin/firestore";
+import { InMemoryCaseRepository } from "./utils/in-memory-case-repo";
 
 const authState = {
   existingEmails: new Set<string>(),
@@ -268,6 +269,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -291,6 +293,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -328,6 +331,7 @@ describe("createApiHandler", () => {
 
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -386,6 +390,7 @@ describe("createApiHandler", () => {
 
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -406,6 +411,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -438,6 +444,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -466,6 +473,7 @@ describe("createApiHandler", () => {
   it("creates and lists plans", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -492,6 +500,7 @@ describe("createApiHandler", () => {
   it("adds heir from accepted invite and shares plan", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -553,6 +562,7 @@ describe("createApiHandler", () => {
 
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -600,6 +610,7 @@ describe("createApiHandler", () => {
     authState.existingEmails.add("heir@example.com");
     const ownerHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -616,6 +627,7 @@ describe("createApiHandler", () => {
 
     const heirHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -656,6 +668,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const ownerHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -672,6 +685,7 @@ describe("createApiHandler", () => {
 
     const heirHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -694,6 +708,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const ownerHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -710,6 +725,7 @@ describe("createApiHandler", () => {
 
     const heirHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-02T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -736,6 +752,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const ownerHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -752,6 +769,7 @@ describe("createApiHandler", () => {
 
     const heirHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-02T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -774,6 +792,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const handler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -808,6 +827,7 @@ describe("createApiHandler", () => {
     const repo = new InMemoryAssetRepository();
     const ownerHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-01T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -824,6 +844,7 @@ describe("createApiHandler", () => {
 
     const heirHandler = createApiHandler({
       repo,
+      caseRepo: new InMemoryCaseRepository(),
       now: () => new Date("2024-01-02T00:00:00.000Z"),
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
@@ -844,5 +865,69 @@ describe("createApiHandler", () => {
 
     expect(deleteRes.statusCode).toBe(400);
     expect(deleteRes.body?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("creates and lists cases", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createRes() as any
+    );
+
+    const listRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: "/v1/cases"
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.created?.length).toBe(1);
+  });
+
+  it("gets case detail", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createResBody = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createResBody as any
+    );
+
+    const caseId = createResBody.body?.data?.caseId;
+    const detailRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}`
+      }) as any,
+      detailRes as any
+    );
+
+    expect(detailRes.statusCode).toBe(200);
+    expect(detailRes.body?.data?.caseId).toBe(caseId);
   });
 });
