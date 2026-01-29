@@ -62,8 +62,9 @@ export default function CaseDetailPage() {
           setAssets(assetItems);
           setPlans(planItems);
         } else {
+          const planItems = await listPlans(caseId);
           setAssets([]);
-          setPlans([]);
+          setPlans(planItems);
         }
       } catch (err: any) {
         setError(err?.message ?? "ケースの取得に失敗しました");
@@ -128,7 +129,7 @@ export default function CaseDetailPage() {
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>資産</h2>
-            {caseId ? (
+            {caseId && isOwner ? (
               <Button asChild size="sm">
                 <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
               </Button>
@@ -166,23 +167,27 @@ export default function CaseDetailPage() {
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>指図</h2>
-            {caseId ? (
+            {caseId && isOwner ? (
               <Button asChild size="sm">
                 <Link to={`/cases/${caseId}/plans/new`}>指図を作成</Link>
               </Button>
             ) : null}
           </div>
-          {loading ? null : isOwner === false ? (
+          {loading ? null : plans.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>共有された指図のみ閲覧できます</div>
-              <div className={styles.emptyBody}>
-                共有された指図がある場合はここに表示されます。
-              </div>
-            </div>
-          ) : plans.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>まだ指図がありません</div>
-              <div className={styles.emptyBody}>最初の指図を作成できます。</div>
+              {isOwner === false ? (
+                <>
+                  <div className={styles.emptyTitle}>共有された指図がありません</div>
+                  <div className={styles.emptyBody}>
+                    共有された指図がある場合はここに表示されます。
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={styles.emptyTitle}>まだ指図がありません</div>
+                  <div className={styles.emptyBody}>最初の指図を作成できます。</div>
+                </>
+              )}
             </div>
           ) : (
             <div className={styles.list}>
