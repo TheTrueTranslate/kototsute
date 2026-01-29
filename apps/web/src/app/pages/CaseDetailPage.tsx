@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
+import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import { getCase, type CaseSummary } from "../api/cases";
@@ -35,6 +36,13 @@ const formatDate = (value: string) => {
 };
 
 type TabKey = "assets" | "plans" | "heirs" | "documents";
+
+const tabItems: { key: TabKey; label: string }[] = [
+  { key: "assets", label: "資産" },
+  { key: "plans", label: "指図" },
+  { key: "heirs", label: "相続人" },
+  { key: "documents", label: "書類/証跡" }
+];
 
 export default function CaseDetailPage() {
   const { caseId } = useParams();
@@ -154,36 +162,7 @@ export default function CaseDetailPage() {
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
 
-      <div className={styles.tabs}>
-        <button
-          type="button"
-          className={tab === "assets" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("assets")}
-        >
-          資産
-        </button>
-        <button
-          type="button"
-          className={tab === "plans" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("plans")}
-        >
-          指図
-        </button>
-        <button
-          type="button"
-          className={tab === "heirs" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("heirs")}
-        >
-          相続人
-        </button>
-        <button
-          type="button"
-          className={tab === "documents" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("documents")}
-        >
-          書類/証跡
-        </button>
-      </div>
+      <Tabs items={tabItems} value={tab} onChange={(value) => setTab(value as TabKey)} />
 
       {tab === "assets" ? (
         <div className={styles.panel}>

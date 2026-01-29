@@ -53,4 +53,10 @@ describe("CaseDetailPage", () => {
     const html = await render();
     expect(html).toContain("ケース詳細");
   });
+
+  it("renders tabs with tablist role", async () => {
+    const html = await render();
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+  });
 });
