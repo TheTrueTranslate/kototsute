@@ -1,5 +1,5 @@
 .shell {
-  @apply min-h-screen bg-background;
+  @apply bg-background;
 }
 
 .panel {
