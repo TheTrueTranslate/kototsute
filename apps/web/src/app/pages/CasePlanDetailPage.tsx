@@ -21,6 +21,11 @@ const formatDate = (value: string | null | undefined) => {
   }
 };
 
+const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") => {
+  if (!Number.isFinite(value)) return "-";
+  return unitType === "PERCENT" ? `${value}%` : `${value}`;
+};
+
 export default function CasePlanDetailPage() {
   const { caseId, planId } = useParams();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
@@ -126,6 +131,30 @@ export default function CasePlanDetailPage() {
                 <div className={styles.rowMain}>
                   <div className={styles.rowTitle}>{asset.assetLabel || "未設定"}</div>
                   <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
+                  {asset.allocations?.length ? (
+                    <div className={styles.allocations}>
+                      {asset.allocations.map((allocation, index) => {
+                        const heirLabel =
+                          allocation.isUnallocated || !allocation.heirUid
+                            ? "未分配"
+                            : heirs.find((heir) => heir.acceptedByUid === allocation.heirUid)
+                                ?.email ?? "未登録";
+                        return (
+                          <div
+                            key={`${asset.planAssetId}-${index}`}
+                            className={styles.allocationRow}
+                          >
+                            <span className={styles.allocationLabel}>{heirLabel}</span>
+                            <span className={styles.allocationValue}>
+                              {formatAllocationValue(allocation.value, asset.unitType)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className={styles.rowMeta}>分配が設定されていません</div>
+                  )}
                 </div>
                 <div className={styles.rowSide}>{asset.unitType === "AMOUNT" ? "金額" : "割合"}</div>
               </div>

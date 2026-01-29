@@ -74,6 +74,22 @@
   @apply text-body-sm text-muted-foreground;
 }
 
+.allocations {
+  @apply mt-3 grid gap-2;
+}
+
+.allocationRow {
+  @apply flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2 text-body-sm text-foreground;
+}
+
+.allocationLabel {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.allocationValue {
+  @apply text-body-sm font-medium text-foreground;
+}
+
 .rowSide {
   @apply text-body-sm text-muted-foreground;
 }
