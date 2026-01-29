@@ -159,11 +159,12 @@ export const casesRoutes = () => {
         const receiverUid = await resolveInviteReceiver();
         if (receiverUid) {
           const notificationRef = db.collection("notifications").doc();
+          const ownerName = caseSnap.data()?.ownerDisplayName ?? "招待者";
           await notificationRef.set({
             receiverUid,
             type: "CASE_INVITE_SENT",
             title: "ケース招待が届きました",
-            body: "ケースへの招待を受け取りました。",
+            body: `${ownerName}さんから招待が届きました。`,
             related: { kind: "case-invite", id: existingDoc.id, caseId },
             isRead: false,
             createdAt: now
@@ -194,11 +195,12 @@ export const casesRoutes = () => {
 
     if (receiverUid) {
       const notificationRef = db.collection("notifications").doc();
+      const ownerName = caseSnap.data()?.ownerDisplayName ?? "招待者";
       await notificationRef.set({
         receiverUid,
         type: "CASE_INVITE_SENT",
         title: "ケース招待が届きました",
-        body: "ケースへの招待を受け取りました。",
+        body: `${ownerName}さんから招待が届きました。`,
         related: { kind: "case-invite", id: inviteRef.id, caseId },
         isRead: false,
         createdAt: now

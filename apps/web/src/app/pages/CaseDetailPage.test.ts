@@ -7,7 +7,8 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useParams: () => ({ caseId: "case-1" })
+    useParams: () => ({ caseId: "case-1" }),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()]
   };
 });
 

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
+import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
@@ -73,8 +74,13 @@ const tabItems: { key: TabKey; label: string }[] = [
   { key: "documents", label: "書類/証跡" }
 ];
 
+const isTabKey = (value: string | null): value is TabKey =>
+  Boolean(value && tabItems.some((item) => item.key === value));
+
 export default function CaseDetailPage() {
   const { caseId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryTab = searchParams.get("tab");
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<CaseSummary | null>(null);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
@@ -86,7 +92,7 @@ export default function CaseDetailPage() {
   const [inviteRelationOther, setInviteRelationOther] = useState("");
   const [inviteMemo, setInviteMemo] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [tab, setTab] = useState<TabKey>("assets");
+  const [tab, setTab] = useState<TabKey>(() => (isTabKey(queryTab) ? queryTab : "assets"));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
@@ -136,6 +142,22 @@ export default function CaseDetailPage() {
     };
     load();
   }, [caseId, user?.uid]);
+
+  useEffect(() => {
+    if (isTabKey(queryTab) && queryTab !== tab) {
+      setTab(queryTab);
+    } else if (queryTab && !isTabKey(queryTab)) {
+      setTab("assets");
+    }
+  }, [queryTab, tab]);
+
+  const handleTabChange = (value: string) => {
+    const nextTab = value as TabKey;
+    setTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", nextTab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleInviteSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -191,7 +213,7 @@ export default function CaseDetailPage() {
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
 
-      <Tabs items={tabItems} value={tab} onChange={(value) => setTab(value as TabKey)} />
+      <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
       {tab === "assets" ? (
         <div className={styles.panel}>
@@ -327,7 +349,7 @@ export default function CaseDetailPage() {
                 </FormField>
               ) : null}
               <FormField label="メモ（任意）">
-                <Input
+                <Textarea
                   value={inviteMemo}
                   onChange={(event) => setInviteMemo(event.target.value)}
                   placeholder="例: 生前からの連絡先"
@@ -362,10 +384,10 @@ export default function CaseDetailPage() {
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
                         {invite.status === "pending"
-                          ? "未対応"
+                          ? "招待中"
                           : invite.status === "accepted"
-                            ? "承認済み"
-                            : "辞退済み"}
+                            ? "参加中"
+                            : "辞退"}
                       </span>
                     </div>
                   </div>
