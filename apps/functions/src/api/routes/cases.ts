@@ -10,6 +10,15 @@ import {
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
 import { normalizeEmail } from "../utils/email.js";
+import { formatDate } from "../utils/date.js";
+import {
+  XRPL_VERIFY_ADDRESS,
+  createChallenge,
+  decodeHex,
+  fetchXrplAccountInfo,
+  fetchXrplAccountLines,
+  fetchXrplTx
+} from "../utils/xrpl.js";
 
 export const casesRoutes = () => {
   const app = new Hono<ApiBindings>();
@@ -361,6 +370,7 @@ export const casesRoutes = () => {
       ownerUid: auth.uid,
       label: parsed.data.label,
       address: parsed.data.address,
+      verificationStatus: "UNVERIFIED",
       createdAt: now,
       updatedAt: now
     });
@@ -381,8 +391,98 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
     const snapshot = await db.collection(`cases/${caseId}/assets`).get();
-    const data = snapshot.docs.map((doc) => ({ assetId: doc.id, ...doc.data() }));
+    const data = snapshot.docs.map((doc) => {
+      const asset = doc.data() ?? {};
+      return {
+        assetId: doc.id,
+        ...asset,
+        createdAt: formatDate(asset.createdAt),
+        updatedAt: formatDate(asset.updatedAt)
+      };
+    });
     return jsonOk(c, data);
+  });
+
+  app.get(":caseId/assets/:assetId", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+    const assetData = assetSnap.data() ?? {};
+
+    const includeXrpl =
+      String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "false") === "true" ||
+      String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "0") === "1";
+
+    let xrpl;
+    const address = typeof assetData.address === "string" ? assetData.address : "";
+    if (includeXrpl) {
+      if (!address) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "アドレスが取得できません");
+      }
+      xrpl = await fetchXrplAccountInfo(address);
+      if (xrpl.status === "ok") {
+        const lines = await fetchXrplAccountLines(address);
+        if (lines.status === "ok") {
+          xrpl = { ...xrpl, tokens: lines.tokens };
+        } else {
+          xrpl = { status: "error", message: lines.message };
+        }
+      }
+      const logRef = assetRef.collection("syncLogs").doc();
+      await logRef.set({
+        status: xrpl.status,
+        balanceXrp: xrpl.status === "ok" ? xrpl.balanceXrp : null,
+        ledgerIndex: xrpl.status === "ok" ? xrpl.ledgerIndex ?? null : null,
+        message: xrpl.status === "error" ? xrpl.message : null,
+        createdAt: deps.now()
+      });
+    }
+
+    const logsSnapshot = await assetRef
+      .collection("syncLogs")
+      .orderBy("createdAt", "desc")
+      .limit(10)
+      .get();
+    const syncLogs = logsSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        status: data.status,
+        balanceXrp: data.balanceXrp ?? null,
+        ledgerIndex: data.ledgerIndex ?? null,
+        message: data.message ?? null,
+        createdAt: formatDate(data.createdAt)
+      };
+    });
+
+    return jsonOk(c, {
+      assetId: assetSnap.id,
+      label: assetData.label ?? "",
+      address,
+      createdAt: formatDate(assetData.createdAt),
+      updatedAt: formatDate(assetData.updatedAt),
+      verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
+      verificationChallenge: assetData.verificationChallenge ?? null,
+      verificationAddress: XRPL_VERIFY_ADDRESS,
+      xrpl: xrpl ?? null,
+      syncLogs
+    });
   });
 
   app.delete(":caseId/assets/:assetId", async (c) => {
@@ -398,7 +498,149 @@ export const casesRoutes = () => {
     if (caseSnap.data()?.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
+
+    const plansSnap = await db.collection(`cases/${caseId}/plans`).get();
+    const relatedPlans: Array<{ planId: string; title: string | null }> = [];
+    for (const planDoc of plansSnap.docs) {
+      const planId = planDoc.id;
+      const planData = planDoc.data() ?? {};
+      const assetsSnap = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
+      const hasRelated = assetsSnap.docs.some(
+        (doc) => String(doc.data()?.assetId ?? "") === assetId
+      );
+      if (hasRelated) {
+        relatedPlans.push({
+          planId,
+          title: typeof planData.title === "string" ? planData.title : null
+        });
+      }
+    }
+    if (relatedPlans.length > 0) {
+      return c.json(
+        {
+          ok: false,
+          code: "ASSET_IN_USE",
+          message: "指図に紐づいているため削除できません",
+          data: { relatedPlans }
+        },
+        409
+      );
+    }
+
     await db.collection(`cases/${caseId}/assets`).doc(assetId).delete();
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/assets/:assetId/verify/challenge", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    const challenge = createChallenge();
+    await assetRef.set(
+      {
+        verificationStatus: "PENDING",
+        verificationChallenge: challenge,
+        verificationIssuedAt: deps.now()
+      },
+      { merge: true }
+    );
+    return jsonOk(c, {
+      challenge,
+      address: XRPL_VERIFY_ADDRESS,
+      amountDrops: "1"
+    });
+  });
+
+  app.post(":caseId/assets/:assetId/verify/confirm", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const body = await c.req.json().catch(() => ({}));
+    const txHash = body?.txHash;
+    if (typeof txHash !== "string" || txHash.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+    const assetData = assetSnap.data() ?? {};
+    const challenge = assetData.verificationChallenge as string | undefined;
+    if (!challenge) {
+      return jsonError(c, 400, "VERIFY_CHALLENGE_MISSING", "検証コードがありません");
+    }
+
+    const address = typeof assetData.address === "string" ? assetData.address : "";
+    if (!address) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "アドレスが取得できません");
+    }
+
+    const result = await fetchXrplTx(txHash);
+    if (!result.ok) {
+      return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
+    }
+
+    const tx = result.tx as any;
+    const from = tx?.Account;
+    const to = tx?.Destination;
+    const amount = tx?.Amount;
+    const memos = Array.isArray(tx?.Memos) ? tx.Memos : [];
+    const memoTexts = memos
+      .map((memo: any) => decodeHex(memo?.Memo?.MemoData))
+      .filter((value: string) => value.length > 0);
+    const memoMatch = memoTexts.includes(challenge);
+
+    if (from !== address) {
+      return jsonError(c, 400, "VERIFY_FROM_MISMATCH", "送信元アドレスが一致しません");
+    }
+    if (to !== XRPL_VERIFY_ADDRESS) {
+      return jsonError(c, 400, "VERIFY_DESTINATION_MISMATCH", "送金先アドレスが一致しません");
+    }
+    if (String(amount) !== "1") {
+      return jsonError(c, 400, "VERIFY_AMOUNT_MISMATCH", "送金額が一致しません（1 drop）");
+    }
+    if (!memoMatch) {
+      return jsonError(c, 400, "VERIFY_MEMO_MISMATCH", "Memoに検証コードが含まれていません");
+    }
+
+    await assetRef.set(
+      {
+        verificationStatus: "VERIFIED",
+        verificationVerifiedAt: deps.now()
+      },
+      { merge: true }
+    );
+
     return jsonOk(c);
   });
 

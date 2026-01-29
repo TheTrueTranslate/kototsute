@@ -1104,11 +1104,15 @@ describe("createApiHandler", () => {
   });
 
   it("creates and lists case assets", async () => {
+    const timestampLike = {
+      toDate: () => new Date("2024-01-01T00:00:00.000Z"),
+      toJSON: () => ({ seconds: 1704067200, nanoseconds: 0 })
+    };
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo,
-      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      now: () => timestampLike as any,
       getAuthUser,
       getOwnerUidForRead: async (uid) => uid
     });
@@ -1146,6 +1150,139 @@ describe("createApiHandler", () => {
     expect(listRes.statusCode).toBe(200);
     expect(listRes.body?.data?.length).toBe(1);
     expect(listRes.body?.data?.[0]?.label).toBe("XRP Wallet");
+    expect(listRes.body?.data?.[0]?.createdAt).toBe("2024-01-01T00:00:00.000Z");
+    expect(listRes.body?.data?.[0]?.updatedAt).toBe("2024-01-01T00:00:00.000Z");
+  });
+
+  it("returns case asset detail with xrpl info", async () => {
+    const fetchMock = vi.fn(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({ result: { account_data: { Balance: "1000000" }, ledger_index: 1 } })
+        } as any;
+      }
+      if (body.method === "account_lines") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { lines: [{ currency: "JPYC", account: "rIssuer", balance: "100" }] }
+          })
+        } as any;
+      }
+      return { ok: false, json: async () => ({}) } as any;
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`,
+        query: { includeXrpl: "true" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
+  });
+
+  it("rejects case asset deletion when related plan exists", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const planCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "プランA" }
+      }) as any,
+      planCreateRes as any
+    );
+    const planId = planCreateRes.body?.data?.planId;
+
+    const addAssetRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planId}/assets`,
+        body: { assetId }
+      }) as any,
+      addAssetRes as any
+    );
+
+    const delRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "DELETE",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      delRes as any
+    );
+
+    expect(delRes.statusCode).toBe(409);
+    expect(delRes.body?.code).toBe("ASSET_IN_USE");
+    expect(delRes.body?.data?.relatedPlans?.length).toBe(1);
   });
 
   it("prevents sharing when assets overlap with shared plans", async () => {
