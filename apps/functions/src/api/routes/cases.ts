@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
-import { displayNameSchema, inviteCreateSchema } from "@kototsute/shared";
+import { assetCreateSchema, displayNameSchema, inviteCreateSchema } from "@kototsute/shared";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
 import { normalizeEmail } from "../utils/email.js";
@@ -226,6 +226,76 @@ export const casesRoutes = () => {
       { merge: true }
     );
     return jsonOk(c, { status: "declined" });
+  });
+
+  app.post(":caseId/assets", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = assetCreateSchema.safeParse({
+      label: body?.label,
+      address: body?.address
+    });
+    if (!parsed.success) {
+      return jsonError(c, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "入力が不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const now = c.get("deps").now();
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc();
+    await assetRef.set({
+      assetId: assetRef.id,
+      ownerUid: auth.uid,
+      label: parsed.data.label,
+      address: parsed.data.address,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, { assetId: assetRef.id, label: parsed.data.label });
+  });
+
+  app.get(":caseId/assets", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const snapshot = await db.collection(`cases/${caseId}/assets`).get();
+    const data = snapshot.docs.map((doc) => ({ assetId: doc.id, ...doc.data() }));
+    return jsonOk(c, data);
+  });
+
+  app.delete(":caseId/assets/:assetId", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).delete();
+    return jsonOk(c);
   });
 
   return app;
