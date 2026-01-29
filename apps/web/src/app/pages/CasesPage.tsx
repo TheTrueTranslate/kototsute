@@ -112,15 +112,22 @@ export default function CasesPage() {
       }
       if (auth.currentUser.displayName !== trimmed) {
         await updateProfile(auth.currentUser, { displayName: trimmed });
-        await setDoc(
-          doc(db, "profiles", auth.currentUser.uid),
-          {
-            uid: auth.currentUser.uid,
-            displayName: trimmed,
-            updatedAt: serverTimestamp()
-          },
-          { merge: true }
-        );
+        try {
+          await setDoc(
+            doc(db, "profiles", auth.currentUser.uid),
+            {
+              uid: auth.currentUser.uid,
+              displayName: trimmed,
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+        } catch (err: any) {
+          const message = String(err?.message ?? "");
+          if (err?.code !== "permission-denied" && !message.includes("PERMISSION_DENIED")) {
+            throw err;
+          }
+        }
       }
       const createdCase = await createCase({ ownerDisplayName: trimmed });
       setCreated([createdCase]);

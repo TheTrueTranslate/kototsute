@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { displayNameSchema } from "@kototsute/shared";
@@ -20,29 +20,11 @@ export default function MyPage() {
   const [lastSavedName, setLastSavedName] = useState(user?.displayName ?? "");
   const [status, setStatus] = useState<FormStatus | null>(null);
   const [saving, setSaving] = useState(false);
-  const autoSaveTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
     setLastSavedName(user?.displayName ?? "");
   }, [user?.displayName]);
-
-  useEffect(() => {
-    if (autoSaveTimer.current) {
-      window.clearTimeout(autoSaveTimer.current);
-    }
-    if (!displayName.trim() || displayName.trim() === lastSavedName.trim()) {
-      return;
-    }
-    autoSaveTimer.current = window.setTimeout(() => {
-      void saveDisplayName();
-    }, 800);
-    return () => {
-      if (autoSaveTimer.current) {
-        window.clearTimeout(autoSaveTimer.current);
-      }
-    };
-  }, [displayName, lastSavedName]);
 
   const saveDisplayName = async () => {
     setStatus(null);
@@ -64,15 +46,22 @@ export default function MyPage() {
     setSaving(true);
     try {
       await updateProfile(auth.currentUser, { displayName: parsed.data });
-      await setDoc(
-        doc(db, "profiles", auth.currentUser.uid),
-        {
-          uid: auth.currentUser.uid,
-          displayName: parsed.data,
-          updatedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
+      try {
+        await setDoc(
+          doc(db, "profiles", auth.currentUser.uid),
+          {
+            uid: auth.currentUser.uid,
+            displayName: parsed.data,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch (err: any) {
+        const message = String(err?.message ?? "");
+        if (err?.code !== "permission-denied" && !message.includes("PERMISSION_DENIED")) {
+          throw err;
+        }
+      }
       setLastSavedName(parsed.data);
       setStatus({ type: "success", message: "表示名を更新しました。" });
     } catch (err: any) {

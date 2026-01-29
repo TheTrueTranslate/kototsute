@@ -45,12 +45,19 @@ export default function RegisterPage({ className }: PageProps) {
     try {
       const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       await updateProfile(credential.user, { displayName: data.displayName });
-      await setDoc(doc(db, "profiles", credential.user.uid), {
-        uid: credential.user.uid,
-        displayName: data.displayName,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await setDoc(doc(db, "profiles", credential.user.uid), {
+          uid: credential.user.uid,
+          displayName: data.displayName,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (err: any) {
+        const message = String(err?.message ?? "");
+        if (err?.code !== "permission-denied" && !message.includes("PERMISSION_DENIED")) {
+          throw err;
+        }
+      }
       navigate("/login", { state: { registered: true } });
     } catch (error) {
       setStatus({ type: "error", message: getAuthErrorMessage(error) });
