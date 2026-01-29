@@ -230,6 +230,15 @@ importers:
         specifier: ^2.0.5
         version: 2.1.9(@types/node@25.0.10)
 
+  packages/tasks:
+    devDependencies:
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@25.0.10)
+
   packages/ui:
     dependencies:
       react:
