@@ -16,6 +16,7 @@ const routeLabels: Record<string, string> = {
   "/": "ケース",
   "/cases": "ケース",
   "/notifications": "通知",
+  "/invites": "招待",
   "/login": "ログイン",
   "/register": "新規登録",
   "/reset": "パスワードリセット",
