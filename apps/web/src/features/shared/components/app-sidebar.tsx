@@ -10,7 +10,8 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
   SidebarHeader,
-  SidebarTrigger
+  SidebarTrigger,
+  useSidebar
 } from "./ui/sidebar";
 import { Bell, CircleUser, Folder, LogOut, Mail } from "lucide-react";
 import { listNotifications } from "../../../app/api/notifications";
@@ -56,9 +57,30 @@ const accountItems = [
   }
 ];
 
+export type NotificationBadgeVariant = "none" | "dot" | "count";
+
+export const getNotificationBadgeVariant = (
+  unreadCount: number,
+  state: "expanded" | "collapsed"
+): NotificationBadgeVariant => {
+  if (unreadCount <= 0) return "none";
+  return state === "collapsed" ? "dot" : "count";
+};
+
+export const getNotificationBadgeClass = (variant: Exclude<NotificationBadgeVariant, "none">) =>
+  variant === "dot"
+    ? "absolute right-0 top-0 inline-flex h-2.5 w-2.5 rounded-full bg-destructive"
+    : "absolute -right-2 -top-2 inline-flex min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.65rem] font-semibold text-white";
+
+export const getSidebarTriggerClass = (state: "expanded" | "collapsed") =>
+  state === "collapsed"
+    ? "h-9 w-full justify-center rounded-lg"
+    : "h-9 w-9";
+
 export default function AppSidebar() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { state } = useSidebar();
   const [unreadCount, setUnreadCount] = useState(0);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -102,9 +124,9 @@ export default function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      <SidebarHeader className="px-4 pt-4">
+      <SidebarHeader className="px-4 pt-4 group-data-[collapsible=icon]:px-2">
         <div className="flex items-center justify-end">
-          <SidebarTrigger className="h-9 w-9" />
+          <SidebarTrigger className={getSidebarTriggerClass(state)} />
         </div>
       </SidebarHeader>
       <SidebarSeparator />
@@ -122,11 +144,26 @@ export default function AppSidebar() {
                   <Link to={item.url}>
                     <span className="relative">
                       <item.icon className="size-5" />
-                      {item.url === "/notifications" && unreadCount > 0 ? (
-                        <span className="absolute -right-2 -top-2 inline-flex min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.65rem] font-semibold text-white">
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </span>
-                      ) : null}
+                      {item.url === "/notifications"
+                        ? (() => {
+                            const variant = getNotificationBadgeVariant(unreadCount, state);
+                            if (variant === "none") return null;
+                            if (variant === "dot") {
+                              return (
+                                <span
+                                  className={getNotificationBadgeClass("dot")}
+                                  aria-label={`未読${unreadCount}件`}
+                                  role="status"
+                                />
+                              );
+                            }
+                            return (
+                              <span className={getNotificationBadgeClass("count")}>
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </span>
+                            );
+                          })()
+                        : null}
                     </span>
                     <span>{item.title}</span>
                   </Link>
