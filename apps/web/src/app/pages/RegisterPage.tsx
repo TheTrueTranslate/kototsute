@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import AuthLayout from "../../features/shared/components/auth-layout";
@@ -8,7 +9,7 @@ import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
-import { auth } from "../../features/shared/lib/firebase";
+import { auth, db } from "../../features/shared/lib/firebase";
 import { getAuthErrorMessage } from "../../features/auth/authError";
 import { registerSchema, type RegisterForm } from "../../features/auth/validators";
 import styles from "../../styles/authPages.module.css";
@@ -23,6 +24,7 @@ type PageProps = {
 };
 
 export default function RegisterPage({ className }: PageProps) {
+  const displayNameId = useId();
   const emailId = useId();
   const passwordId = useId();
   const confirmId = useId();
@@ -41,7 +43,14 @@ export default function RegisterPage({ className }: PageProps) {
   const onSubmit = handleSubmit(async (data) => {
     setStatus(null);
     try {
-      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      await updateProfile(credential.user, { displayName: data.displayName });
+      await setDoc(doc(db, "profiles", credential.user.uid), {
+        uid: credential.user.uid,
+        displayName: data.displayName,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
       navigate("/login", { state: { registered: true } });
     } catch (error) {
       setStatus({ type: "error", message: getAuthErrorMessage(error) });
@@ -68,6 +77,15 @@ export default function RegisterPage({ className }: PageProps) {
         {status ? (
           <FormAlert variant={status.type}>{status.message}</FormAlert>
         ) : null}
+        <FormField label="表示名" error={errors.displayName?.message} htmlFor={displayNameId}>
+          <Input
+            id={displayNameId}
+            type="text"
+            autoComplete="name"
+            placeholder="例: 山田 太郎"
+            {...register("displayName")}
+          />
+        </FormField>
         <FormField label="メールアドレス" error={errors.email?.message} htmlFor={emailId}>
           <Input
             id={emailId}

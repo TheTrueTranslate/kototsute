@@ -47,36 +47,42 @@ export type AssetDetail = {
   syncLogs: AssetSyncLog[];
 };
 
-export const createAsset = async (input: { label: string; address: string }) => {
-  const result = await apiFetch("/v1/assets", {
+export const createAsset = async (caseId: string, input: { label: string; address: string }) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets`, {
     method: "POST",
     body: JSON.stringify(input)
   });
   return result.data as AssetCreateResponse;
 };
 
-export const listAssets = async () => {
-  const result = await apiFetch("/v1/assets", { method: "GET" });
+export const listAssets = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets`, { method: "GET" });
   return result.data as AssetListItem[];
 };
 
-export const getAsset = async (assetId: string, options?: { includeXrpl?: boolean }) => {
+export const getAsset = async (
+  caseId: string,
+  assetId: string,
+  options?: { includeXrpl?: boolean }
+) => {
   const query = options?.includeXrpl ? "?includeXrpl=true" : "";
-  const result = await apiFetch(`/v1/assets/${assetId}${query}`, { method: "GET" });
+  const result = await apiFetch(`/v1/cases/${caseId}/assets/${assetId}${query}`, { method: "GET" });
   return result.data as AssetDetail;
 };
 
-export const deleteAsset = async (assetId: string) => {
-  await apiFetch(`/v1/assets/${assetId}`, { method: "DELETE" });
+export const deleteAsset = async (caseId: string, assetId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/assets/${assetId}`, { method: "DELETE" });
 };
 
-export const requestVerifyChallenge = async (assetId: string) => {
-  const result = await apiFetch(`/v1/assets/${assetId}/verify/challenge`, { method: "POST" });
+export const requestVerifyChallenge = async (caseId: string, assetId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/verify/challenge`, {
+    method: "POST"
+  });
   return result.data as { challenge: string; address: string; amountDrops: string };
 };
 
-export const confirmVerify = async (assetId: string, txHash: string) => {
-  await apiFetch(`/v1/assets/${assetId}/verify/confirm`, {
+export const confirmVerify = async (caseId: string, assetId: string, txHash: string) => {
+  await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/verify/confirm`, {
     method: "POST",
     body: JSON.stringify({ txHash })
   });

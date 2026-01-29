@@ -37,3 +37,19 @@
 .valueMono {
   @apply text-body-sm font-mono text-foreground break-all;
 }
+
+.editRow {
+  @apply flex flex-1 flex-wrap items-center gap-3;
+}
+
+.editField {
+  @apply flex-1;
+}
+
+.actionsInline {
+  @apply flex items-center gap-3;
+}
+
+.errorText {
+  @apply text-meta text-danger;
+}

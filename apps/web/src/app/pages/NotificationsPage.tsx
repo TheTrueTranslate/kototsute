@@ -17,6 +17,47 @@ const formatDate = (value?: string | null) => {
   return parsed.toLocaleString();
 };
 
+type NotificationsTableProps = {
+  notifications: NotificationItem[];
+  onRead: (notificationId: string) => void;
+};
+
+export function NotificationsTable({ notifications, onRead }: NotificationsTableProps) {
+  return (
+    <div className={styles.table}>
+      <div className={styles.tableHeader}>
+        <div>内容</div>
+        <div>受信日時</div>
+        <div className={styles.tableHeaderAction}>操作</div>
+      </div>
+      {notifications.map((notification) => (
+        <div
+          key={notification.notificationId}
+          className={[styles.tableRow, notification.isRead ? "" : styles.rowUnread].filter(Boolean).join(" ")}
+        >
+          <div className={styles.cellMain}>
+            <div className={styles.cellTitle}>{notification.title}</div>
+            <div className={styles.cellBody}>{notification.body}</div>
+          </div>
+          <div className={styles.cellMeta}>{formatDate(notification.createdAt)}</div>
+          <div className={styles.cellAction}>
+            {notification.isRead ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRead(notification.notificationId)}
+              >
+                既読にする
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -84,30 +125,7 @@ export default function NotificationsPage() {
           <p className={styles.emptyBody}>招待や指図の更新があると表示されます。</p>
         </div>
       ) : (
-        <div className={styles.list}>
-          {notifications.map((notification) => (
-            <div
-              key={notification.notificationId}
-              className={[styles.row, notification.isRead ? "" : styles.rowUnread].filter(Boolean).join(" ")}
-            >
-              <div className={styles.rowActions}>
-                <div>
-                  <div className={styles.rowTitle}>{notification.title}</div>
-                  <div className={styles.rowBody}>{notification.body}</div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleRead(notification.notificationId)}
-                  disabled={notification.isRead}
-                >
-                  {notification.isRead ? "既読" : "既読にする"}
-                </Button>
-              </div>
-              <div className={styles.rowMeta}>受信日時: {formatDate(notification.createdAt)}</div>
-            </div>
-          ))}
-        </div>
+        <NotificationsTable notifications={notifications} onRead={handleRead} />
       )}
     </section>
   );

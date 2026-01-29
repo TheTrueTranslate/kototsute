@@ -9,7 +9,7 @@ import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import styles from "../../styles/assetsPage.module.css";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 
 type FormValues = z.infer<typeof assetCreateSchema>;
@@ -49,6 +49,7 @@ const assetTypes: AssetTypeOption[] = [
 ];
 
 export default function AssetNewPage() {
+  const { caseId } = useParams();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<AssetTypeOption["id"]>("xrp-wallet");
@@ -62,9 +63,13 @@ export default function AssetNewPage() {
     setError(null);
     setSuccess(null);
     try {
-      await createAsset(values);
+      if (!caseId) {
+        setError("ケースIDが取得できません");
+        return;
+      }
+      await createAsset(caseId, values);
       reset();
-      navigate("/");
+      navigate(`/cases/${caseId}`);
     } catch (err: any) {
       setError(err?.message ?? "登録に失敗しました");
     }
@@ -75,7 +80,8 @@ export default function AssetNewPage() {
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "資産一覧", href: "/" },
+            { label: "ケース", href: "/cases" },
+            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
             { label: "資産登録" }
           ]}
         />

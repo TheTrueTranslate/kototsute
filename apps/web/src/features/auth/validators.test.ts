@@ -13,11 +13,22 @@ describe("registerSchema", () => {
 
   it("正しい入力を通す", () => {
     const result = registerSchema.safeParse({
+      displayName: "山田太郎",
       email: "a@example.com",
       password: "password123",
       confirmPassword: "password123"
     });
     expect(result.success).toBe(true);
+  });
+
+  it("表示名未入力を弾く", () => {
+    const result = registerSchema.safeParse({
+      displayName: "",
+      email: "a@example.com",
+      password: "password123",
+      confirmPassword: "password123"
+    });
+    expect(result.success).toBe(false);
   });
 });
 

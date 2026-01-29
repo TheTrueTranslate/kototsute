@@ -14,32 +14,61 @@
   @apply flex flex-wrap items-center gap-2;
 }
 
-.list {
-  @apply mt-6 flex flex-col gap-4;
+.table {
+  @apply mt-6 flex flex-col;
 }
 
-.row {
-  @apply flex flex-col gap-3 rounded-2xl border border-border bg-background px-5 py-4;
+.tableHeader {
+  @apply grid items-center gap-4 border-b border-border px-2 pb-2 text-meta text-muted-foreground;
+  grid-template-columns: minmax(0, 1fr) 150px 96px;
+}
+
+.tableHeaderAction {
+  @apply text-right;
+}
+
+.tableRow {
+  @apply grid items-center gap-4 border-b border-border px-2 py-3;
+  grid-template-columns: minmax(0, 1fr) 150px 96px;
 }
 
 .rowUnread {
-  @apply border-foreground/20 bg-muted/40;
+  @apply border-foreground/30;
 }
 
-.rowTitle {
-  @apply text-section text-foreground;
+.cellMain {
+  @apply grid gap-1;
 }
 
-.rowBody {
+.cellTitle {
+  @apply text-body font-medium text-foreground;
+}
+
+.cellBody {
   @apply text-body-sm text-muted-foreground;
 }
 
-.rowMeta {
-  @apply text-meta text-muted-foreground;
+.cellMeta {
+  @apply text-body-sm text-muted-foreground;
 }
 
-.rowActions {
-  @apply flex flex-wrap items-center justify-between gap-2;
+.cellAction {
+  @apply flex justify-end;
+}
+
+@media (max-width: 640px) {
+  .tableHeader {
+    @apply hidden;
+  }
+
+  .tableRow {
+    @apply grid gap-2;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cellAction {
+    @apply justify-start;
+  }
 }
 
 .emptyState {

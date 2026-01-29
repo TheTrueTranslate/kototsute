@@ -6,9 +6,9 @@ vi.mock("../../features/shared/lib/api", () => ({
 }));
 
 describe("plans api", () => {
-  it("calls /v1/plans", async () => {
+  it("calls /v1/cases/:caseId/plans", async () => {
     const { listPlans } = await import("./plans");
-    await listPlans();
-    expect(apiFetchMock).toHaveBeenCalledWith("/v1/plans", { method: "GET" });
+    await listPlans("case-1");
+    expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/plans", { method: "GET" });
   });
 });

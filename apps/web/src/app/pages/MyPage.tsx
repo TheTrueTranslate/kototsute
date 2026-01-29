@@ -1,8 +1,94 @@
+import { useEffect, useState } from "react";
+import { signOut, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { displayNameSchema } from "@kototsute/shared";
 import { useAuth } from "../../features/auth/auth-provider";
+import FormAlert from "../../features/shared/components/form-alert";
+import { Button } from "../../features/shared/components/ui/button";
+import { Input } from "../../features/shared/components/ui/input";
+import { auth, db } from "../../features/shared/lib/firebase";
 import styles from "../../styles/myPage.module.css";
+import { useNavigate } from "react-router-dom";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "../../features/shared/components/ui/dialog";
+
+type FormStatus = {
+  type: "success" | "error";
+  message: string;
+};
 
 export default function MyPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+  const [lastSavedName, setLastSavedName] = useState(user?.displayName ?? "");
+  const [status, setStatus] = useState<FormStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  useEffect(() => {
+    setDisplayName(user?.displayName ?? "");
+    setLastSavedName(user?.displayName ?? "");
+  }, [user?.displayName]);
+
+  const saveDisplayName = async () => {
+    setStatus(null);
+    const parsed = displayNameSchema.safeParse(displayName);
+    if (!parsed.success) {
+      setStatus({
+        type: "error",
+        message: parsed.error.issues[0]?.message ?? "入力が不正です"
+      });
+      return;
+    }
+    if (!auth.currentUser) {
+      setStatus({ type: "error", message: "ログイン情報が取得できません。再ログインしてください。" });
+      return;
+    }
+    if (parsed.data === lastSavedName) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateProfile(auth.currentUser, { displayName: parsed.data });
+      await setDoc(
+        doc(db, "profiles", auth.currentUser.uid),
+        {
+          uid: auth.currentUser.uid,
+          displayName: parsed.data,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      setLastSavedName(parsed.data);
+      setStatus({ type: "success", message: "表示名を更新しました。" });
+    } catch (err: any) {
+      setStatus({ type: "error", message: err?.message ?? "表示名の更新に失敗しました。" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLogoutError(null);
+    try {
+      await signOut(auth);
+      navigate("/login");
+      return true;
+    } catch (err: any) {
+      setLogoutError(err?.message ?? "ログアウトに失敗しました。");
+      return false;
+    }
+  };
 
   return (
     <section className={styles.page}>
@@ -14,13 +100,77 @@ export default function MyPage() {
       <div className={styles.section}>
         <div className={styles.sectionTitle}>アカウント</div>
         <div className={styles.card}>
+          {status ? <FormAlert variant={status.type}>{status.message}</FormAlert> : null}
           <div className={styles.row}>
             <span className={styles.label}>メールアドレス</span>
             <span className={styles.value}>{user?.email ?? "未設定"}</span>
           </div>
+          <form
+            className={styles.row}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveDisplayName();
+            }}
+          >
+            <span className={styles.label}>表示名</span>
+            <div className={styles.editRow}>
+              <div className={styles.editField}>
+                <Input
+                  aria-label="表示名"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="例: 山田 太郎"
+                />
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={saving || !displayName.trim() || displayName.trim() === lastSavedName.trim()}
+              >
+                {saving ? "更新中..." : "更新"}
+              </Button>
+            </div>
+          </form>
           <div className={styles.row}>
             <span className={styles.label}>UID</span>
             <span className={styles.valueMono}>{user?.uid ?? "-"}</span>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>ログアウト</span>
+            <div className={styles.actionsInline}>
+              <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline">
+                    ログアウト
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>ログアウトしますか？</DialogTitle>
+                    <DialogDescription>現在のセッションを終了します。</DialogDescription>
+                  </DialogHeader>
+                  {logoutError ? <FormAlert variant="error">{logoutError}</FormAlert> : null}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        キャンセル
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await handleLogout();
+                        if (ok) {
+                          setLogoutOpen(false);
+                        }
+                      }}
+                    >
+                      ログアウト
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
       </div>

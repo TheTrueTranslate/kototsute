@@ -6,6 +6,7 @@ import { DomainError } from "@kototsute/shared";
 import type { ApiBindings, ApiDeps } from "./types.js";
 import { createAuthMiddleware } from "./middlewares/auth.js";
 import { assetsRoutes } from "./routes/assets.js";
+import { casesRoutes } from "./routes/cases.js";
 import { invitesRoutes } from "./routes/invites.js";
 import { plansRoutes } from "./routes/plans.js";
 import { notificationsRoutes } from "./routes/notifications.js";
@@ -34,6 +35,11 @@ export const createApp = (deps: ApiDeps) => {
   assets.use("*", authMiddleware);
   assets.route("/", assetsRoutes());
   app.route("/assets", assets);
+
+  const cases = new Hono<ApiBindings>();
+  cases.use("*", authMiddleware);
+  cases.route("/", casesRoutes());
+  app.route("/cases", cases);
 
   const invites = new Hono<ApiBindings>();
   invites.use("*", authMiddleware);
