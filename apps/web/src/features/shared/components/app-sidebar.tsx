@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -11,13 +12,22 @@ import {
   SidebarHeader,
   SidebarTrigger
 } from "./ui/sidebar";
-import { Bell, CircleUser, Folder } from "lucide-react";
+import { Bell, CircleUser, Folder, LogOut, Mail } from "lucide-react";
+import { listNotifications } from "../../../app/api/notifications";
+import { auth } from "../lib/firebase";
+import { signOut } from "firebase/auth";
+import { useAuth } from "../../auth/auth-provider";
 
 const mainItems = [
   {
     title: "ケース",
     url: "/cases",
     icon: Folder
+  },
+  {
+    title: "招待",
+    url: "/invites",
+    icon: Mail
   },
   {
     title: "通知",
@@ -35,6 +45,40 @@ const accountItems = [
 ];
 
 export default function AppSidebar() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const notifications = await listNotifications();
+        const count = notifications.filter((item) => !item.isRead).length;
+        if (!cancelled) {
+          setUnreadCount(count);
+        }
+      } catch {
+        if (!cancelled) {
+          setUnreadCount(0);
+        }
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate("/login");
+  };
+
   return (
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader className="px-4 pt-4">
@@ -55,7 +99,14 @@ export default function AppSidebar() {
                   className="h-11 text-[0.95rem] font-medium"
                 >
                   <Link to={item.url}>
-                    <item.icon className="size-5" />
+                    <span className="relative">
+                      <item.icon className="size-5" />
+                      {item.url === "/notifications" && unreadCount > 0 ? (
+                        <span className="absolute -right-2 -top-2 inline-flex min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.65rem] font-semibold text-white">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      ) : null}
+                    </span>
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -76,6 +127,15 @@ export default function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={handleLogout}
+                className="h-11 text-[0.95rem] font-medium"
+              >
+                <LogOut className="size-5" />
+                <span>ログアウト</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
