@@ -5,6 +5,15 @@ import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../features/shared/components/ui/dialog";
 import { Input } from "../../features/shared/components/ui/input";
 import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
@@ -94,6 +103,8 @@ type CaseDetailPageProps = {
   initialHeirWallet?: HeirWallet | null;
   initialTaskIds?: string[];
   initialHeirs?: CaseHeir[];
+  initialWalletDialogOpen?: boolean;
+  initialWalletDialogMode?: "register" | "verify";
 };
 
 const baseTabItems: { key: TabKey; label: string }[] = [
@@ -114,7 +125,9 @@ export default function CaseDetailPage({
   initialCaseData = null,
   initialHeirWallet = null,
   initialTaskIds = [],
-  initialHeirs = []
+  initialHeirs = [],
+  initialWalletDialogOpen = false,
+  initialWalletDialogMode = "register"
 }: CaseDetailPageProps) {
   const { caseId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -161,6 +174,9 @@ export default function CaseDetailPage({
   const [heirWalletAddressInput, setHeirWalletAddressInput] = useState(
     initialHeirWallet?.address ?? ""
   );
+  const [walletDialogOpen, setWalletDialogOpen] = useState(initialWalletDialogOpen);
+  const [walletDialogMode, setWalletDialogMode] =
+    useState<"register" | "verify">(initialWalletDialogMode);
   const tabItems = useMemo(() => {
     if (isOwner === false) {
       return [
@@ -375,6 +391,11 @@ export default function CaseDetailPage({
     } finally {
       setHeirWalletVerifyLoading(false);
     }
+  };
+
+  const handleOpenWalletDialog = (mode: "register" | "verify") => {
+    setWalletDialogMode(mode);
+    setWalletDialogOpen(true);
   };
 
   const handleTabChange = (value: string) => {
@@ -687,77 +708,131 @@ export default function CaseDetailPage({
               {heirWalletLoading ? (
                 <div className={styles.badgeMuted}>ウォレット情報を読み込み中...</div>
               ) : null}
-              <div className={styles.walletForm}>
-                <FormField label="ウォレットアドレス">
-                  <Input
-                    value={heirWalletAddressInput}
-                    onChange={(event) => setHeirWalletAddressInput(event.target.value)}
-                    placeholder="r..."
-                  />
-                </FormField>
-                <div className={styles.walletActions}>
-                  <Button type="button" onClick={handleSaveHeirWallet} disabled={heirWalletSaving}>
-                    {heirWalletSaving ? "保存中..." : "登録する"}
-                  </Button>
-                  {hasHeirWallet ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleRequestHeirWalletChallenge}
-                      disabled={heirWalletVerifyLoading}
-                    >
-                      所有確認を開始
-                    </Button>
-                  ) : null}
-                </div>
+              <div className={styles.walletActions}>
+                <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
+                  登録/変更
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleOpenWalletDialog("verify")}
+                  disabled={!hasHeirWallet}
+                >
+                  所有確認
+                </Button>
               </div>
-              {heirWalletVerifyError ? (
-                <FormAlert variant="error">{heirWalletVerifyError}</FormAlert>
-              ) : null}
-              {heirWalletVerifySuccess ? (
-                <FormAlert variant="success">{heirWalletVerifySuccess}</FormAlert>
-              ) : null}
-              {heirWalletChallenge ? (
-                <div className={styles.walletVerifyBox}>
-                  <div className={styles.walletHint}>
-                    次の内容で1 dropを送金し、取引ハッシュを入力してください。
-                  </div>
-                  <div className={styles.walletVerifyGrid}>
-                    <div>
-                      <div className={styles.walletVerifyLabel}>送金先</div>
-                      <div className={styles.walletVerifyValue}>{heirWalletChallenge.address}</div>
+              <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {walletDialogMode === "verify"
+                        ? "受取用ウォレットの所有確認"
+                        : "受取用ウォレットを登録"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      ウォレットアドレスの登録と所有確認を行います。
+                    </DialogDescription>
+                  </DialogHeader>
+                  {heirWalletError ? (
+                    <FormAlert variant="error">{heirWalletError}</FormAlert>
+                  ) : null}
+                  {heirWalletVerifyError ? (
+                    <FormAlert variant="error">{heirWalletVerifyError}</FormAlert>
+                  ) : null}
+                  {heirWalletVerifySuccess ? (
+                    <FormAlert variant="success">{heirWalletVerifySuccess}</FormAlert>
+                  ) : null}
+                  <div className={styles.walletForm}>
+                    <FormField label="ウォレットアドレス">
+                      <Input
+                        value={heirWalletAddressInput}
+                        onChange={(event) => setHeirWalletAddressInput(event.target.value)}
+                        placeholder="r..."
+                      />
+                    </FormField>
+                    <div className={styles.walletActions}>
+                      <Button
+                        type="button"
+                        onClick={handleSaveHeirWallet}
+                        disabled={heirWalletSaving}
+                      >
+                        {heirWalletSaving ? "保存中..." : "登録する"}
+                      </Button>
+                      {hasHeirWallet ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleRequestHeirWalletChallenge}
+                          disabled={heirWalletVerifyLoading}
+                        >
+                          所有確認を開始
+                        </Button>
+                      ) : null}
                     </div>
-                    <div>
-                      <div className={styles.walletVerifyLabel}>金額</div>
-                      <div className={styles.walletVerifyValue}>
-                        {heirWalletChallenge.amountDrops} drops
+                  </div>
+                  {hasHeirWallet ? (
+                    <div className={styles.walletVerifyBox}>
+                      <div className={styles.walletHint}>
+                        次の内容で1 dropを送金し、取引ハッシュを入力してください。
+                      </div>
+                      {heirWalletChallenge ? (
+                        <div className={styles.walletVerifyGrid}>
+                          <div>
+                            <div className={styles.walletVerifyLabel}>送金先</div>
+                            <div className={styles.walletVerifyValue}>
+                              {heirWalletChallenge.address}
+                            </div>
+                          </div>
+                          <div>
+                            <div className={styles.walletVerifyLabel}>金額</div>
+                            <div className={styles.walletVerifyValue}>
+                              {heirWalletChallenge.amountDrops} drops
+                            </div>
+                          </div>
+                          <div>
+                            <div className={styles.walletVerifyLabel}>Memo</div>
+                            <div className={styles.walletVerifyValue}>
+                              {heirWalletChallenge.challenge}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      <FormField label="取引ハッシュ">
+                        <Input
+                          value={heirWalletTxHash}
+                          onChange={(event) => setHeirWalletTxHash(event.target.value)}
+                          placeholder="tx hash"
+                        />
+                      </FormField>
+                      <div className={styles.walletActions}>
+                        <Button
+                          type="button"
+                          onClick={handleConfirmHeirWalletVerify}
+                          disabled={heirWalletVerifyLoading}
+                        >
+                          {heirWalletVerifyLoading ? "確認中..." : "所有確認を完了"}
+                        </Button>
                       </div>
                     </div>
-                    <div>
-                      <div className={styles.walletVerifyLabel}>Memo</div>
-                      <div className={styles.walletVerifyValue}>
-                        {heirWalletChallenge.challenge}
+                  ) : (
+                    walletDialogMode === "verify" && (
+                      <div className={styles.emptyState}>
+                        <div className={styles.emptyTitle}>まずは登録してください</div>
+                        <div className={styles.emptyBody}>
+                          受取用ウォレットの登録後に所有確認が可能です。
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <FormField label="取引ハッシュ">
-                    <Input
-                      value={heirWalletTxHash}
-                      onChange={(event) => setHeirWalletTxHash(event.target.value)}
-                      placeholder="tx hash"
-                    />
-                  </FormField>
-                  <div className={styles.walletActions}>
-                    <Button
-                      type="button"
-                      onClick={handleConfirmHeirWalletVerify}
-                      disabled={heirWalletVerifyLoading}
-                    >
-                      {heirWalletVerifyLoading ? "確認中..." : "所有確認を完了"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
+                    )
+                  )}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="ghost">
+                        閉じる
+                      </Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           ) : (
             <div className={styles.emptyState}>

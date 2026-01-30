@@ -196,4 +196,14 @@ describe("CaseDetailPage", () => {
     });
     expect(html).toContain("未確認");
   });
+
+  it("shows wallet action buttons in wallet tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+
+    const html = await render({ initialIsOwner: false });
+    expect(html).toContain("登録/変更");
+    expect(html).toContain("所有確認");
+  });
+
 });
