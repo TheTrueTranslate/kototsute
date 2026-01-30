@@ -232,6 +232,35 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain(">所有確認<");
   });
 
+  it("hides register button when heir wallet is verified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "VERIFIED" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).not.toContain("登録/変更");
+  });
+
+  it("shows registered wallet address in wallet tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("ウォレットアドレス");
+    expect(html).toContain("rHeir");
+  });
+
+  it("shows wallet status label in wallet tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("ステータス");
+    expect(html).toContain("未確認");
+  });
+
   it("shows copyable verification fields for heir wallet", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=wallet");

@@ -754,11 +754,8 @@ export default function CaseDetailPage({
           </div>
           {isOwner === false ? (
             <div className={styles.walletSection}>
-              <div className={styles.walletHeader}>
-                <div>
-                  <h3 className={styles.walletTitle}>受取用ウォレット</h3>
-                  <p className={styles.walletMeta}>相続人本人が登録・所有確認を行います。</p>
-                </div>
+              <div className={styles.walletRow}>
+                <span className={styles.walletLabel}>ステータス</span>
                 <span className={styles.walletStatus}>
                   {isHeirWalletVerified
                     ? "所有確認済み"
@@ -771,10 +768,18 @@ export default function CaseDetailPage({
               {heirWalletLoading ? (
                 <div className={styles.badgeMuted}>ウォレット情報を読み込み中...</div>
               ) : null}
+              {hasHeirWallet ? (
+                <div className={styles.walletAddress}>
+                  <div className={styles.walletAddressLabel}>ウォレットアドレス</div>
+                  <div className={styles.walletAddressValue}>{heirWallet?.address}</div>
+                </div>
+              ) : null}
               <div className={styles.walletActions}>
-                <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
-                  登録/変更
-                </Button>
+                {isHeirWalletVerified ? null : (
+                  <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
+                    登録/変更
+                  </Button>
+                )}
                 {isHeirWalletVerified ? null : (
                   <Button
                     type="button"
