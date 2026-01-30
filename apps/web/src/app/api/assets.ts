@@ -31,6 +31,17 @@ export type AssetReserveToken = {
   reserveAmount: string;
 };
 
+export type AssetHistoryItem = {
+  historyId: string;
+  type: string;
+  title: string;
+  detail: string | null;
+  actorUid: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+  meta: Record<string, unknown> | null;
+};
+
 export type AssetDetail = {
   assetId: string;
   label: string;
@@ -46,10 +57,11 @@ export type AssetDetail = {
     | {
         status: "ok";
         balanceXrp: string;
-        ledgerIndex?: number;
-        tokens?: Array<{ currency: string; issuer: string | null; isNative: boolean }>;
+        ledgerIndex?: number | null;
+        tokens?: Array<{ currency: string; issuer: string | null; balance: string }>;
+        syncedAt?: string;
       }
-    | { status: "error"; message: string }
+    | { status: "error"; message: string; syncedAt?: string }
     | null;
   syncLogs: AssetSyncLog[];
 };
@@ -104,4 +116,11 @@ export const updateAssetReserve = async (
     method: "PATCH",
     body: JSON.stringify(input)
   });
+};
+
+export const getAssetHistory = async (caseId: string, assetId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/history`, {
+    method: "GET"
+  });
+  return result.data as AssetHistoryItem[];
 };

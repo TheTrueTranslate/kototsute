@@ -21,4 +21,12 @@ describe("assets api", () => {
       body: JSON.stringify({ reserveXrp: "0", reserveTokens: [] })
     });
   });
+
+  it("calls /v1/cases/:caseId/assets/:assetId/history", async () => {
+    const { getAssetHistory } = await import("./assets");
+    await getAssetHistory("case-1", "asset-1");
+    expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/assets/asset-1/history", {
+      method: "GET"
+    });
+  });
 });
