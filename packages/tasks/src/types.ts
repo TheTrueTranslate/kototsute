@@ -1,13 +1,12 @@
 export type TaskItem = {
   id: string;
-  title: string;
-  description?: string;
+  description: string;
+  title?: string;
   priority?: number;
   requiresWallet?: boolean;
 };
 
 export type TodoMaster = {
-  shared: TaskItem[];
   owner: TaskItem[];
   heir: TaskItem[];
 };
