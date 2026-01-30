@@ -1,14 +1,21 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
+
+let authUser = { uid: "owner" };
+let searchParams = new URLSearchParams();
+let heirWalletData: { address: string | null; verificationStatus: string | null } = {
+  address: null,
+  verificationStatus: null
+};
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
     useParams: () => ({ caseId: "case-1" }),
-    useSearchParams: () => [new URLSearchParams(), vi.fn()]
+    useSearchParams: () => [searchParams, vi.fn()]
   };
 });
 
@@ -47,6 +54,17 @@ vi.mock("../api/tasks", () => ({
   updateMyTaskProgress: async () => {}
 }));
 
+vi.mock("../api/heir-wallets", () => ({
+  getHeirWallet: async () => heirWalletData,
+  saveHeirWallet: async () => {},
+  requestHeirWalletVerifyChallenge: async () => ({
+    challenge: "challenge",
+    address: "rVerify",
+    amountDrops: "1"
+  }),
+  confirmHeirWalletVerify: async () => {}
+}));
+
 vi.mock("../api/invites", () => ({
   listInvitesByOwner: async () => [],
   listCaseHeirs: async () => [],
@@ -54,17 +72,23 @@ vi.mock("../api/invites", () => ({
 }));
 
 vi.mock("../../features/auth/auth-provider", () => ({
-  useAuth: () => ({ user: { uid: "owner" }, loading: false })
+  useAuth: () => ({ user: authUser, loading: false })
 }));
 
-const render = async () => {
+const render = async (props: Record<string, any> = {}) => {
   const { default: CaseDetailPage } = await import("./CaseDetailPage");
   return renderToString(
-    React.createElement(MemoryRouter, null, React.createElement(CaseDetailPage))
+    React.createElement(MemoryRouter, null, React.createElement(CaseDetailPage, props))
   );
 };
 
 describe("CaseDetailPage", () => {
+  beforeEach(() => {
+    authUser = { uid: "owner" };
+    searchParams = new URLSearchParams();
+    heirWalletData = { address: null, verificationStatus: null };
+  });
+
   it("shows case detail header", async () => {
     const html = await render();
     expect(html).toContain("ケース詳細");
@@ -102,5 +126,33 @@ describe("CaseDetailPage", () => {
   it("does not show shared tasks section", async () => {
     const html = await render();
     expect(html).not.toContain("共有タスク");
+  });
+
+  it("shows wallet registration required for heir without wallet", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=tasks");
+    heirWalletData = { address: null, verificationStatus: null };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("ウォレット登録が必要です");
+  });
+
+  it("shows wallet verification required for heir with unverified wallet", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=tasks");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("所有確認が必要です");
+  });
+
+  it("does not show wallet notice when heir wallet is verified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=tasks");
+    heirWalletData = { address: "rHeir", verificationStatus: "VERIFIED" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).not.toContain("ウォレット登録が必要です");
+    expect(html).not.toContain("所有確認が必要です");
   });
 });
