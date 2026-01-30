@@ -33,3 +33,31 @@
 .stepActions {
   @apply flex items-center justify-between gap-2;
 }
+
+.methodSelect {
+  @apply mt-2 grid gap-2;
+}
+
+.methodOption {
+  @apply flex items-center gap-2 text-body-sm text-foreground;
+}
+
+.methodActions {
+  @apply mt-3 flex items-center gap-2;
+}
+
+.transferList {
+  @apply mt-3 grid gap-3;
+}
+
+.transferRow {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.transferLabel {
+  @apply text-body text-foreground;
+}
+
+.transferMeta {
+  @apply text-meta text-muted-foreground;
+}
