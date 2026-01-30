@@ -14,6 +14,7 @@
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "../../packages/shared" },
-    { "path": "../../packages/asset" }
+    { "path": "../../packages/asset" },
+    { "path": "../../packages/tasks" }
   ]
 }

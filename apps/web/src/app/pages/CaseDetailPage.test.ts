@@ -40,6 +40,15 @@ vi.mock("../api/plans", () => ({
   listPlans: async () => []
 }));
 
+vi.mock("../api/tasks", () => ({
+  getTaskProgress: async () => ({
+    sharedCompletedTaskIds: [],
+    userCompletedTaskIds: []
+  }),
+  updateSharedTaskProgress: async () => {},
+  updateMyTaskProgress: async () => {}
+}));
+
 vi.mock("../api/invites", () => ({
   listInvitesByOwner: async () => [],
   listCaseHeirs: async () => [],
@@ -67,6 +76,7 @@ describe("CaseDetailPage", () => {
     const html = await render();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
+    expect(html).toContain("タスク");
   });
 
   it("links to asset detail page", async () => {

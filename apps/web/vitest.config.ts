@@ -6,7 +6,8 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "./src"),
       "@kototsute/shared": resolve(__dirname, "../../packages/shared/src"),
-      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src")
+      "@kototsute/asset": resolve(__dirname, "../../packages/asset/src"),
+      "@kototsute/tasks": resolve(__dirname, "../../packages/tasks/src")
     }
   },
   test: {
