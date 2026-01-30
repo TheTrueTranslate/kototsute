@@ -28,6 +28,12 @@ import {
   type AssetHistoryItem,
   type AssetReserveToken
 } from "../api/assets";
+import { copyText } from "../../features/shared/lib/copy-text";
+import {
+  dropsToXrpInput,
+  normalizeNumberInput,
+  xrpToDropsInput
+} from "../../features/shared/lib/xrp-amount";
 import styles from "../../styles/assetDetailPage.module.css";
 
 const verificationLabels: Record<AssetDetail["verificationStatus"], string> = {
@@ -235,9 +241,9 @@ export default function AssetDetailPage({
     try {
       const result = await requestVerifyChallenge(caseId, assetId);
       setChallenge(result);
-      setDropsInput(result.amountDrops ?? "1");
-      const dropsNumber = Number(result.amountDrops ?? "1");
-      setXrpInput(Number.isFinite(dropsNumber) ? formatXrp(dropsNumber / 1_000_000) : "");
+      const dropsValue = result.amountDrops ?? "1";
+      setDropsInput(dropsValue);
+      setXrpInput(dropsToXrpInput(dropsValue));
       setAsset((prev) =>
         prev
           ? {
@@ -253,37 +259,16 @@ export default function AssetDetailPage({
     }
   };
 
-  const normalizeNumberInput = (value: string) => {
-    const cleaned = value.replace(/[^\d.]/g, "");
-    const [head, ...rest] = cleaned.split(".");
-    return rest.length ? `${head}.${rest.join("")}` : head;
-  };
-
-  const formatXrp = (value: number) => {
-    if (!Number.isFinite(value)) return "";
-    return value.toFixed(6).replace(/\.?0+$/, "");
-  };
-
   const handleDropsChange = (value: string) => {
     const cleaned = normalizeNumberInput(value);
     setDropsInput(cleaned);
-    const numeric = Number(cleaned);
-    if (!Number.isFinite(numeric)) {
-      setXrpInput("");
-      return;
-    }
-    setXrpInput(formatXrp(numeric / 1_000_000));
+    setXrpInput(dropsToXrpInput(cleaned));
   };
 
   const handleXrpChange = (value: string) => {
     const cleaned = normalizeNumberInput(value);
     setXrpInput(cleaned);
-    const numeric = Number(cleaned);
-    if (!Number.isFinite(numeric)) {
-      setDropsInput("");
-      return;
-    }
-    setDropsInput(String(Math.round(numeric * 1_000_000)));
+    setDropsInput(xrpToDropsInput(cleaned));
   };
 
   const getReserveTokenKey = (token: { currency: string; issuer: string | null }) =>
@@ -354,18 +339,10 @@ export default function AssetDetailPage({
   };
 
   const handleCopy = async (label: string, value: string) => {
-    if (!value) {
-      setCopyMessage("コピーできる値がありません");
-      return;
-    }
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      }
-      setCopyMessage(`${label}をコピーしました`);
+    const result = await copyText(label, value);
+    setCopyMessage(result.message);
+    if (result.ok) {
       window.setTimeout(() => setCopyMessage(null), 1500);
-    } catch {
-      setCopyMessage("コピーに失敗しました");
     }
   };
 

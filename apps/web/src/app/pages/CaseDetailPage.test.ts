@@ -55,6 +55,23 @@ vi.mock("../api/tasks", () => ({
   updateMyTaskProgress: async () => {}
 }));
 
+vi.mock("../../features/shared/components/ui/dialog", () => ({
+  Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
+    React.createElement("div", null, open ? children : null),
+  DialogContent: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogHeader: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogFooter: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogTitle: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogDescription: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogClose: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children)
+}));
+
 vi.mock("../api/heir-wallets", () => ({
   getHeirWallet: async () => heirWalletData,
   saveHeirWallet: async () => {},
@@ -204,6 +221,31 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false });
     expect(html).toContain("登録/変更");
     expect(html).toContain("所有確認");
+  });
+
+  it("hides verify button when heir wallet is verified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "VERIFIED" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).not.toContain(">所有確認<");
+  });
+
+  it("shows copyable verification fields for heir wallet", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: heirWalletData,
+      initialWalletDialogOpen: true,
+      initialWalletDialogMode: "verify"
+    });
+    expect(html).toContain("Amount (drops)");
+    expect(html).toContain("Amount (XRP)");
+    expect(html).toContain("Memo");
   });
 
 });
