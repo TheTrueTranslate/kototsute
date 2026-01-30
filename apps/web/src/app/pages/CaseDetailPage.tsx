@@ -183,14 +183,18 @@ export default function CaseDetailPage({
   };
 
   useEffect(() => {
+    let active = true;
     if (!caseId) {
-      setError("ケースIDが取得できません");
-      setLoading(false);
+      if (active) {
+        setError("ケースIDが取得できません");
+        setLoading(false);
+      }
       return;
     }
     const load = async () => {
       try {
         const detail = await getCase(caseId);
+        if (!active) return;
         setCaseData(detail);
         const owner = detail.ownerUid === user?.uid;
         setIsOwner(owner);
@@ -200,6 +204,7 @@ export default function CaseDetailPage({
             listPlans(caseId),
             listInvitesByOwner(caseId)
           ]);
+          if (!active) return;
           setAssets(assetItems);
           setPlans(planItems);
           setOwnerInvites(inviteItems);
@@ -210,6 +215,7 @@ export default function CaseDetailPage({
             listPlans(caseId),
             listCaseHeirs(caseId)
           ]);
+          if (!active) return;
           setAssets([]);
           setPlans(planItems);
           setOwnerInvites([]);
@@ -233,12 +239,17 @@ export default function CaseDetailPage({
           }
         }
       } catch (err: any) {
-        setError(err?.message ?? "ケースの取得に失敗しました");
+        if (active) {
+          setError(err?.message ?? "ケースの取得に失敗しました");
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     load();
+    return () => {
+      active = false;
+    };
   }, [caseId, user?.uid]);
 
   useEffect(() => {

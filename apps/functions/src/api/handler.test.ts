@@ -1036,6 +1036,99 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.[0]?.email).toBe("heir@example.com");
   });
 
+  it("includes walletStatus for case heirs", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const inviteEmails = ["heir1@example.com", "heir2@example.com", "heir3@example.com"];
+    const inviteIds: string[] = [];
+    for (const email of inviteEmails) {
+      const inviteRes = createRes();
+      await ownerHandler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: `/v1/cases/${caseId}/invites`,
+          body: { email, relationLabel: "長男" }
+        }) as any,
+        inviteRes as any
+      );
+      inviteIds.push(inviteRes.body?.data?.inviteId);
+    }
+
+    const memberHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await memberHandler(
+      authedReq("heir_1", "heir1@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[0]}/accept`
+      }) as any,
+      createRes() as any
+    );
+    await memberHandler(
+      authedReq("heir_2", "heir2@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[1]}/accept`
+      }) as any,
+      createRes() as any
+    );
+    await memberHandler(
+      authedReq("heir_3", "heir3@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[2]}/accept`
+      }) as any,
+      createRes() as any
+    );
+
+    const db = getFirestore();
+    await db
+      .collection(`cases/${caseId}/heirWallets`)
+      .doc("heir_2")
+      .set({ address: "rHeir2", verificationStatus: "PENDING" });
+    await db
+      .collection(`cases/${caseId}/heirWallets`)
+      .doc("heir_3")
+      .set({ address: "rHeir3", verificationStatus: "VERIFIED" });
+
+    const listRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heirs`
+      }) as any,
+      listRes as any
+    );
+
+    const byUid = new Map(
+      (listRes.body?.data ?? []).map((item: any) => [item.acceptedByUid, item.walletStatus])
+    );
+    expect(byUid.get("heir_1")).toBe("UNREGISTERED");
+    expect(byUid.get("heir_2")).toBe("PENDING");
+    expect(byUid.get("heir_3")).toBe("VERIFIED");
+  });
+
   it("stores and returns task progress", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({

@@ -343,7 +343,28 @@ export const casesRoutes = () => {
       .collection(`cases/${caseId}/invites`)
       .where("status", "==", "accepted")
       .get();
-    const data = snapshot.docs.map((doc) => ({ inviteId: doc.id, ...doc.data() }));
+    const invites: Array<Record<string, any>> = snapshot.docs.map((doc) => ({
+      inviteId: doc.id,
+      ...(doc.data() as Record<string, any>)
+    }));
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`);
+    const data = await Promise.all(
+      invites.map(async (invite) => {
+        const heirUid = typeof invite.acceptedByUid === "string" ? invite.acceptedByUid : "";
+        let walletStatus = "UNREGISTERED";
+        if (heirUid) {
+          const walletSnap = await walletRef.doc(heirUid).get();
+          const wallet = walletSnap.data() ?? {};
+          const address = typeof wallet.address === "string" ? wallet.address : "";
+          const verificationStatus =
+            typeof wallet.verificationStatus === "string" ? wallet.verificationStatus : "";
+          if (address) {
+            walletStatus = verificationStatus === "VERIFIED" ? "VERIFIED" : "PENDING";
+          }
+        }
+        return { ...invite, walletStatus };
+      })
+    );
     return jsonOk(c, data);
   });
 

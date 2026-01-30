@@ -27,6 +27,7 @@ export type CaseHeir = {
   relationOther: string | null;
   acceptedByUid: string | null;
   acceptedAt: string | null;
+  walletStatus?: "UNREGISTERED" | "PENDING" | "VERIFIED";
 };
 
 export type InviteCreateInput = {
