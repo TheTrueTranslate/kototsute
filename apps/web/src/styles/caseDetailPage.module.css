@@ -42,6 +42,10 @@
   @apply text-section text-foreground;
 }
 
+.panelActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
 .list {
   @apply flex flex-col gap-4;
 }

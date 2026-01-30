@@ -550,9 +550,14 @@ export default function CaseDetailPage({
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>資産</h2>
             {caseId && isOwner ? (
-              <Button asChild size="sm">
-                <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
-              </Button>
+              <div className={styles.panelActions}>
+                <Button asChild size="sm" variant="secondary">
+                  <Link to={`/cases/${caseId}/asset-lock`}>資産をロックする</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
+                </Button>
+              </div>
             ) : null}
           </div>
           {loading ? null : isOwner === false ? (

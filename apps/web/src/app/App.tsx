@@ -5,6 +5,7 @@ import RegisterPage from "./pages/RegisterPage";
 import ResetPage from "./pages/ResetPage";
 import CasesPage from "./pages/CasesPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
+import AssetLockPage from "./pages/AssetLockPage";
 import AssetNewPage from "./pages/AssetNewPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
 import PlanNewPage from "./pages/PlanNewPage";
@@ -93,6 +94,14 @@ function AppShell() {
           element={
             <RequireAuth>
               <AssetNewPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/cases/:caseId/asset-lock"
+          element={
+            <RequireAuth>
+              <AssetLockPage />
             </RequireAuth>
           }
         />
