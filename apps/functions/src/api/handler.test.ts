@@ -1320,6 +1320,158 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
   });
 
+  it("returns empty heir wallet when not registered", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ memberUids: ["heir_1"] }, { merge: true });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heir-wallet`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.address ?? null).toBeNull();
+    expect(res.body?.data?.verificationStatus ?? null).toBeNull();
+  });
+
+  it("allows heir to register wallet and verify ownership", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ memberUids: ["heir_1"] }, { merge: true });
+
+    const registerRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet`,
+        body: { address: "rHeirWallet" }
+      }) as any,
+      registerRes as any
+    );
+    expect(registerRes.statusCode).toBe(200);
+
+    const challengeRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet/verify/challenge`
+      }) as any,
+      challengeRes as any
+    );
+    expect(challengeRes.statusCode).toBe(200);
+    const challenge = challengeRes.body?.data?.challenge;
+    expect(typeof challenge).toBe("string");
+
+    const memoHex = Buffer.from(String(challenge)).toString("hex");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          Account: "rHeirWallet",
+          Destination: "rp7W5EetJmFuACL7tT1RJNoLE4S92Pg1JS",
+          Amount: "1",
+          Memos: [{ Memo: { MemoData: memoHex } }]
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const verifyRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet/verify/confirm`,
+        body: { txHash: "tx_hash" }
+      }) as any,
+      verifyRes as any
+    );
+    expect(verifyRes.statusCode).toBe(200);
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heir-wallet`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.address).toBe("rHeirWallet");
+    expect(detailRes.body?.data?.verificationStatus).toBe("VERIFIED");
+  });
+
+  it("forbids owner from managing heir wallet", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet`,
+        body: { address: "rOwnerWallet" }
+      }) as any,
+      res as any
+    );
+    expect(res.statusCode).toBe(403);
+  });
+
   it("lists asset history with sync logs", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
