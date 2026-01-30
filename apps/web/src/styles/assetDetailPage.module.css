@@ -173,3 +173,43 @@
 .footerActions {
   @apply mt-10 flex justify-end;
 }
+
+.reserveGrid {
+  @apply grid gap-4;
+}
+
+.reserveTokenBlock {
+  @apply grid gap-2;
+}
+
+.reserveTokenList {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3;
+}
+
+.reserveTokenRow {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.reserveTokenLabel {
+  @apply flex flex-wrap items-center gap-2 text-body-sm;
+}
+
+.reserveTokenCheckbox {
+  @apply h-4 w-4 accent-primary;
+}
+
+.reserveTokenName {
+  @apply font-medium text-foreground;
+}
+
+.reserveTokenIssuer {
+  @apply text-muted-foreground;
+}
+
+.reserveTokenInput {
+  @apply w-full max-w-[160px];
+}
+
+.reserveActions {
+  @apply flex justify-end;
+}

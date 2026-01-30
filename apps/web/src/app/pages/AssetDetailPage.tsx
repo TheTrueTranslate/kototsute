@@ -21,7 +21,9 @@ import {
   deleteAsset,
   getAsset,
   requestVerifyChallenge,
-  type AssetDetail
+  updateAssetReserve,
+  type AssetDetail,
+  type AssetReserveToken
 } from "../api/assets";
 import styles from "../../styles/assetDetailPage.module.css";
 
@@ -75,8 +77,25 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [relatedPlans, setRelatedPlans] = useState<RelatedPlan[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [reserveXrpInput, setReserveXrpInput] = useState("0");
+  const [reserveTokens, setReserveTokens] = useState<AssetReserveToken[]>([]);
+  const [reserveSaving, setReserveSaving] = useState(false);
+  const [reserveError, setReserveError] = useState<string | null>(null);
+  const [reserveSuccess, setReserveSuccess] = useState<string | null>(null);
 
   const title = useMemo(() => asset?.label ?? "資産詳細", [asset?.label]);
+  const availableTokens = useMemo(() => {
+    if (asset?.xrpl?.status === "ok") {
+      return asset.xrpl.tokens ?? [];
+    }
+    return [];
+  }, [asset?.xrpl]);
+
+  useEffect(() => {
+    if (!asset) return;
+    setReserveXrpInput(asset.reserveXrp ?? "0");
+    setReserveTokens(Array.isArray(asset.reserveTokens) ? asset.reserveTokens : []);
+  }, [asset?.assetId]);
 
   const loadAsset = async (options?: { includeXrpl?: boolean }) => {
     if (!caseId || !assetId) return;
@@ -174,6 +193,70 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
       return;
     }
     setDropsInput(String(Math.round(numeric * 1_000_000)));
+  };
+
+  const getReserveTokenKey = (token: { currency: string; issuer: string | null }) =>
+    `${token.currency}::${token.issuer ?? ""}`;
+
+  const isReserveTokenSelected = (token: { currency: string; issuer: string | null }) =>
+    reserveTokens.some(
+      (item) => item.currency === token.currency && item.issuer === token.issuer
+    );
+
+  const handleToggleReserveToken = (token: { currency: string; issuer: string | null }) => {
+    const key = getReserveTokenKey(token);
+    if (isReserveTokenSelected(token)) {
+      setReserveTokens((prev) =>
+        prev.filter((item) => getReserveTokenKey(item) !== key)
+      );
+      return;
+    }
+    setReserveTokens((prev) => [
+      ...prev,
+      { currency: token.currency, issuer: token.issuer, reserveAmount: "0" }
+    ]);
+  };
+
+  const handleReserveTokenAmountChange = (
+    token: { currency: string; issuer: string | null },
+    value: string
+  ) => {
+    const cleaned = normalizeNumberInput(value);
+    setReserveTokens((prev) =>
+      prev.map((item) =>
+        item.currency === token.currency && item.issuer === token.issuer
+          ? { ...item, reserveAmount: cleaned }
+          : item
+      )
+    );
+  };
+
+  const handleSaveReserve = async () => {
+    if (!caseId || !assetId) return;
+    setReserveError(null);
+    setReserveSuccess(null);
+    setReserveSaving(true);
+    const normalizedXrp = reserveXrpInput.trim() === "" ? "0" : reserveXrpInput;
+    try {
+      await updateAssetReserve(caseId, assetId, {
+        reserveXrp: normalizedXrp,
+        reserveTokens
+      });
+      setReserveSuccess("留保設定を保存しました");
+      setAsset((prev) =>
+        prev
+          ? {
+              ...prev,
+              reserveXrp: normalizedXrp,
+              reserveTokens
+            }
+          : prev
+      );
+    } catch (err: any) {
+      setReserveError(err?.message ?? "留保設定の更新に失敗しました");
+    } finally {
+      setReserveSaving(false);
+    }
   };
 
   const handleCopy = async (label: string, value: string) => {
@@ -325,6 +408,74 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
             ) : (
               <div className={styles.emptyText}>まだXRPL情報を取得していません。</div>
             )}
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>留保設定</h2>
+              <span className={styles.metaHint}>相続対象から除外する数量を指定します</span>
+            </div>
+            {reserveError ? <FormAlert variant="error">{reserveError}</FormAlert> : null}
+            {reserveSuccess ? <FormAlert variant="success">{reserveSuccess}</FormAlert> : null}
+            <div className={styles.reserveGrid}>
+              <FormField label="XRP 留保数量">
+                <Input
+                  value={reserveXrpInput}
+                  onChange={(event) =>
+                    setReserveXrpInput(normalizeNumberInput(event.target.value))
+                  }
+                  placeholder="0"
+                />
+              </FormField>
+              <div className={styles.reserveTokenBlock}>
+                <div className={styles.metaLabel}>トークン留保</div>
+                {availableTokens.length === 0 ? (
+                  <div className={styles.emptyText}>XRPL同期後に一覧から選択できます。</div>
+                ) : (
+                  <div className={styles.reserveTokenList}>
+                    {availableTokens.map((token) => {
+                      const key = getReserveTokenKey(token);
+                      const selected = isReserveTokenSelected(token);
+                      const selectedToken = reserveTokens.find(
+                        (item) =>
+                          item.currency === token.currency && item.issuer === token.issuer
+                      );
+                      return (
+                        <div key={key} className={styles.reserveTokenRow}>
+                          <label className={styles.reserveTokenLabel}>
+                            <input
+                              type="checkbox"
+                              className={styles.reserveTokenCheckbox}
+                              checked={selected}
+                              onChange={() => handleToggleReserveToken(token)}
+                            />
+                            <span className={styles.reserveTokenName}>{token.currency}</span>
+                            <span className={styles.reserveTokenIssuer}>
+                              {token.issuer ?? "native"}
+                            </span>
+                          </label>
+                          {selected ? (
+                            <Input
+                              value={selectedToken?.reserveAmount ?? "0"}
+                              onChange={(event) =>
+                                handleReserveTokenAmountChange(token, event.target.value)
+                              }
+                              className={styles.reserveTokenInput}
+                              placeholder="0"
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className={styles.reserveActions}>
+                <Button size="sm" onClick={handleSaveReserve} disabled={reserveSaving}>
+                  {reserveSaving ? "保存中..." : "留保設定を保存"}
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className={styles.card}>

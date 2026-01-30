@@ -6,6 +6,8 @@ export type AssetListItem = {
   address: string;
   createdAt: string;
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
+  reserveXrp?: string;
+  reserveTokens?: AssetReserveToken[];
 };
 
 export type AssetCreateResponse = {
@@ -23,6 +25,12 @@ export type AssetSyncLog = {
   createdAt: string;
 };
 
+export type AssetReserveToken = {
+  currency: string;
+  issuer: string | null;
+  reserveAmount: string;
+};
+
 export type AssetDetail = {
   assetId: string;
   label: string;
@@ -32,6 +40,8 @@ export type AssetDetail = {
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
   verificationChallenge: string | null;
   verificationAddress: string;
+  reserveXrp: string;
+  reserveTokens: AssetReserveToken[];
   xrpl:
     | {
         status: "ok";
@@ -82,5 +92,16 @@ export const confirmVerify = async (caseId: string, assetId: string, txHash: str
   await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/verify/confirm`, {
     method: "POST",
     body: JSON.stringify({ txHash })
+  });
+};
+
+export const updateAssetReserve = async (
+  caseId: string,
+  assetId: string,
+  input: { reserveXrp: string; reserveTokens: AssetReserveToken[] }
+) => {
+  await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/reserve`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
   });
 };

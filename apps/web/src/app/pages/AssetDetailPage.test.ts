@@ -22,6 +22,8 @@ vi.mock("../api/assets", () => ({
     verificationStatus: "UNVERIFIED",
     verificationChallenge: null,
     verificationAddress: "rVerify",
+    reserveXrp: "0",
+    reserveTokens: [],
     xrpl: null,
     syncLogs: []
   }),
@@ -50,6 +52,8 @@ const render = async () => {
           verificationStatus: "UNVERIFIED",
           verificationChallenge: null,
           verificationAddress: "rVerify",
+          reserveXrp: "0",
+          reserveTokens: [],
           xrpl: null,
           syncLogs: []
         }
@@ -63,5 +67,10 @@ describe("AssetDetailPage", () => {
     const html = await render();
     expect(html).toContain("XRP Wallet");
     expect(html).toContain("rXXXX");
+  });
+
+  it("shows reserve section", async () => {
+    const html = await render();
+    expect(html).toContain("留保設定");
   });
 });
