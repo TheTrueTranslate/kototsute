@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import {
   assetCreateSchema,
+  assetReserveSchema,
   displayNameSchema,
   inviteCreateSchema,
   planAllocationSchema,
@@ -428,6 +429,8 @@ export const casesRoutes = () => {
       label: parsed.data.label,
       address: parsed.data.address,
       verificationStatus: "UNVERIFIED",
+      reserveXrp: "0",
+      reserveTokens: [],
       createdAt: now,
       updatedAt: now
     });
@@ -537,9 +540,57 @@ export const casesRoutes = () => {
       verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
       verificationChallenge: assetData.verificationChallenge ?? null,
       verificationAddress: XRPL_VERIFY_ADDRESS,
+      reserveXrp: typeof assetData.reserveXrp === "string" ? assetData.reserveXrp : "0",
+      reserveTokens: Array.isArray(assetData.reserveTokens) ? assetData.reserveTokens : [],
       xrpl: xrpl ?? null,
       syncLogs
     });
+  });
+
+  app.patch(":caseId/assets/:assetId/reserve", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = assetReserveSchema.safeParse({
+      reserveXrp: body?.reserveXrp,
+      reserveTokens: body?.reserveTokens ?? []
+    });
+    if (!parsed.success) {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        parsed.error.issues[0]?.message ?? "入力が不正です"
+      );
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    await assetRef.set(
+      {
+        reserveXrp: parsed.data.reserveXrp,
+        reserveTokens: parsed.data.reserveTokens,
+        updatedAt: deps.now()
+      },
+      { merge: true }
+    );
+    return jsonOk(c);
   });
 
   app.delete(":caseId/assets/:assetId", async (c) => {
