@@ -343,7 +343,28 @@ export const casesRoutes = () => {
       .collection(`cases/${caseId}/invites`)
       .where("status", "==", "accepted")
       .get();
-    const data = snapshot.docs.map((doc) => ({ inviteId: doc.id, ...doc.data() }));
+    const invites: Array<Record<string, any>> = snapshot.docs.map((doc) => ({
+      inviteId: doc.id,
+      ...(doc.data() as Record<string, any>)
+    }));
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`);
+    const data = await Promise.all(
+      invites.map(async (invite) => {
+        const heirUid = typeof invite.acceptedByUid === "string" ? invite.acceptedByUid : "";
+        let walletStatus = "UNREGISTERED";
+        if (heirUid) {
+          const walletSnap = await walletRef.doc(heirUid).get();
+          const wallet = walletSnap.data() ?? {};
+          const address = typeof wallet.address === "string" ? wallet.address : "";
+          const verificationStatus =
+            typeof wallet.verificationStatus === "string" ? wallet.verificationStatus : "";
+          if (address) {
+            walletStatus = verificationStatus === "VERIFIED" ? "VERIFIED" : "PENDING";
+          }
+        }
+        return { ...invite, walletStatus };
+      })
+    );
     return jsonOk(c, data);
   });
 
@@ -397,6 +418,202 @@ export const casesRoutes = () => {
       { completedTaskIds: uniqueIds, updatedAt: c.get("deps").now() },
       { merge: true }
     );
+    return jsonOk(c);
+  });
+
+  app.get(":caseId/heir-wallet", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`).doc(auth.uid);
+    const walletSnap = await walletRef.get();
+    const wallet = walletSnap.data() ?? {};
+    const address = typeof wallet.address === "string" ? wallet.address : null;
+    const verificationStatus =
+      typeof wallet.verificationStatus === "string" ? wallet.verificationStatus : null;
+
+    return jsonOk(c, {
+      address,
+      verificationStatus,
+      verificationIssuedAt: wallet.verificationIssuedAt ?? null,
+      verificationVerifiedAt: wallet.verificationVerifiedAt ?? null,
+      createdAt: wallet.createdAt ?? null,
+      updatedAt: wallet.updatedAt ?? null
+    });
+  });
+
+  app.post(":caseId/heir-wallet", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const address = typeof body?.address === "string" ? body.address.trim() : "";
+    if (!address) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "addressは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`).doc(auth.uid);
+    const walletSnap = await walletRef.get();
+    const walletData = walletSnap.data() ?? {};
+    const now = c.get("deps").now();
+    const previousAddress =
+      typeof walletData.address === "string" ? walletData.address : null;
+    const addressChanged = previousAddress !== address;
+
+    await walletRef.set(
+      {
+        address,
+        createdAt: walletData.createdAt ?? now,
+        updatedAt: now,
+        verificationStatus: addressChanged ? null : walletData.verificationStatus ?? null,
+        verificationChallenge: addressChanged ? null : walletData.verificationChallenge ?? null,
+        verificationIssuedAt: addressChanged ? null : walletData.verificationIssuedAt ?? null,
+        verificationVerifiedAt: addressChanged ? null : walletData.verificationVerifiedAt ?? null
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, { address });
+  });
+
+  app.post(":caseId/heir-wallet/verify/challenge", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`).doc(auth.uid);
+    const walletSnap = await walletRef.get();
+    if (!walletSnap.exists) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "ウォレットが未登録です");
+    }
+    const walletData = walletSnap.data() ?? {};
+    const address = typeof walletData.address === "string" ? walletData.address : "";
+    if (!address) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "ウォレットが未登録です");
+    }
+
+    const challenge = createChallenge();
+    await walletRef.set(
+      {
+        verificationStatus: "PENDING",
+        verificationChallenge: challenge,
+        verificationIssuedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, {
+      challenge,
+      address: XRPL_VERIFY_ADDRESS,
+      amountDrops: "1"
+    });
+  });
+
+  app.post(":caseId/heir-wallet/verify/confirm", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
+    if (!txHash) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const walletRef = db.collection(`cases/${caseId}/heirWallets`).doc(auth.uid);
+    const walletSnap = await walletRef.get();
+    if (!walletSnap.exists) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "ウォレットが未登録です");
+    }
+    const walletData = walletSnap.data() ?? {};
+    const address = typeof walletData.address === "string" ? walletData.address : "";
+    const challenge =
+      typeof walletData.verificationChallenge === "string"
+        ? walletData.verificationChallenge
+        : "";
+    if (!address || !challenge) {
+      return jsonError(c, 400, "VERIFY_CHALLENGE_MISSING", "検証コードがありません");
+    }
+
+    const result = await fetchXrplTx(txHash);
+    if (!result.ok) {
+      return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
+    }
+
+    const tx = result.tx as any;
+    const from = tx?.Account;
+    const to = tx?.Destination;
+    const amount = tx?.Amount;
+    const memos = Array.isArray(tx?.Memos) ? tx.Memos : [];
+    const memoTexts = memos
+      .map((memo: any) => decodeHex(memo?.Memo?.MemoData))
+      .filter((value: string) => value.length > 0);
+    const memoMatch = memoTexts.includes(challenge);
+
+    if (from !== address) {
+      return jsonError(c, 400, "VERIFY_FROM_MISMATCH", "送信元アドレスが一致しません");
+    }
+    if (to !== XRPL_VERIFY_ADDRESS) {
+      return jsonError(c, 400, "VERIFY_DESTINATION_MISMATCH", "送金先アドレスが一致しません");
+    }
+    if (String(amount) !== "1") {
+      return jsonError(c, 400, "VERIFY_AMOUNT_MISMATCH", "送金額が一致しません（1 drop）");
+    }
+    if (!memoMatch) {
+      return jsonError(c, 400, "VERIFY_MEMO_MISMATCH", "Memoに検証コードが含まれていません");
+    }
+
+    await walletRef.set(
+      {
+        verificationStatus: "VERIFIED",
+        verificationVerifiedAt: c.get("deps").now(),
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+
     return jsonOk(c);
   });
 

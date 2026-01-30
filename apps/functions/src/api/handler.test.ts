@@ -1036,6 +1036,99 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.[0]?.email).toBe("heir@example.com");
   });
 
+  it("includes walletStatus for case heirs", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const ownerHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const inviteEmails = ["heir1@example.com", "heir2@example.com", "heir3@example.com"];
+    const inviteIds: string[] = [];
+    for (const email of inviteEmails) {
+      const inviteRes = createRes();
+      await ownerHandler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: `/v1/cases/${caseId}/invites`,
+          body: { email, relationLabel: "長男" }
+        }) as any,
+        inviteRes as any
+      );
+      inviteIds.push(inviteRes.body?.data?.inviteId);
+    }
+
+    const memberHandler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-02T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await memberHandler(
+      authedReq("heir_1", "heir1@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[0]}/accept`
+      }) as any,
+      createRes() as any
+    );
+    await memberHandler(
+      authedReq("heir_2", "heir2@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[1]}/accept`
+      }) as any,
+      createRes() as any
+    );
+    await memberHandler(
+      authedReq("heir_3", "heir3@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites/${inviteIds[2]}/accept`
+      }) as any,
+      createRes() as any
+    );
+
+    const db = getFirestore();
+    await db
+      .collection(`cases/${caseId}/heirWallets`)
+      .doc("heir_2")
+      .set({ address: "rHeir2", verificationStatus: "PENDING" });
+    await db
+      .collection(`cases/${caseId}/heirWallets`)
+      .doc("heir_3")
+      .set({ address: "rHeir3", verificationStatus: "VERIFIED" });
+
+    const listRes = createRes();
+    await ownerHandler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heirs`
+      }) as any,
+      listRes as any
+    );
+
+    const byUid = new Map(
+      (listRes.body?.data ?? []).map((item: any) => [item.acceptedByUid, item.walletStatus])
+    );
+    expect(byUid.get("heir_1")).toBe("UNREGISTERED");
+    expect(byUid.get("heir_2")).toBe("PENDING");
+    expect(byUid.get("heir_3")).toBe("VERIFIED");
+  });
+
   it("stores and returns task progress", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
@@ -1318,6 +1411,158 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.xrpl?.balanceXrp).toBe("10");
     expect(res.body?.data?.xrpl?.tokens?.[0]?.balance).toBe("5");
     expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
+  });
+
+  it("returns empty heir wallet when not registered", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ memberUids: ["heir_1"] }, { merge: true });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heir-wallet`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.address ?? null).toBeNull();
+    expect(res.body?.data?.verificationStatus ?? null).toBeNull();
+  });
+
+  it("allows heir to register wallet and verify ownership", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ memberUids: ["heir_1"] }, { merge: true });
+
+    const registerRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet`,
+        body: { address: "rHeirWallet" }
+      }) as any,
+      registerRes as any
+    );
+    expect(registerRes.statusCode).toBe(200);
+
+    const challengeRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet/verify/challenge`
+      }) as any,
+      challengeRes as any
+    );
+    expect(challengeRes.statusCode).toBe(200);
+    const challenge = challengeRes.body?.data?.challenge;
+    expect(typeof challenge).toBe("string");
+
+    const memoHex = Buffer.from(String(challenge)).toString("hex");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          Account: "rHeirWallet",
+          Destination: "rp7W5EetJmFuACL7tT1RJNoLE4S92Pg1JS",
+          Amount: "1",
+          Memos: [{ Memo: { MemoData: memoHex } }]
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const verifyRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet/verify/confirm`,
+        body: { txHash: "tx_hash" }
+      }) as any,
+      verifyRes as any
+    );
+    expect(verifyRes.statusCode).toBe(200);
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/heir-wallet`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.address).toBe("rHeirWallet");
+    expect(detailRes.body?.data?.verificationStatus).toBe("VERIFIED");
+  });
+
+  it("forbids owner from managing heir wallet", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/heir-wallet`,
+        body: { address: "rOwnerWallet" }
+      }) as any,
+      res as any
+    );
+    expect(res.statusCode).toBe(403);
   });
 
   it("lists asset history with sync logs", async () => {

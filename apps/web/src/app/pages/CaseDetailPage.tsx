@@ -1,16 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Copy } from "lucide-react";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../features/shared/components/ui/dialog";
 import { Input } from "../../features/shared/components/ui/input";
 import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
 import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
+import {
+  confirmHeirWalletVerify,
+  getHeirWallet,
+  requestHeirWalletVerifyChallenge,
+  saveHeirWallet,
+  type HeirWallet
+} from "../api/heir-wallets";
 import {
   createInvite,
   listCaseHeirs,
@@ -19,6 +36,14 @@ import {
   type InviteListItem
 } from "../api/invites";
 import { useAuth } from "../../features/auth/auth-provider";
+import { copyText } from "../../features/shared/lib/copy-text";
+import {
+  dropsToXrpInput,
+  normalizeNumberInput,
+  xrpToDropsInput
+} from "../../features/shared/lib/xrp-amount";
+import { shouldAutoRequestChallenge } from "../../features/shared/lib/auto-challenge";
+import { shouldCloseWalletDialogOnVerify } from "../../features/shared/lib/wallet-dialog";
 import styles from "../../styles/caseDetailPage.module.css";
 import { relationOptions } from "@kototsute/shared";
 import { todoMaster, type TaskItem } from "@kototsute/tasks";
@@ -41,6 +66,12 @@ const planStatusLabels: Record<string, string> = {
   DRAFT: "下書き",
   SHARED: "共有中",
   INACTIVE: "無効"
+};
+
+const walletStatusLabels: Record<string, string> = {
+  UNREGISTERED: "未登録",
+  PENDING: "未確認",
+  VERIFIED: "確認済み"
 };
 
 type RelationOption = (typeof relationOptions)[number];
@@ -72,40 +103,105 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
   );
 };
 
-type TabKey = "assets" | "plans" | "tasks" | "heirs";
+type TabKey = "assets" | "plans" | "tasks" | "heirs" | "wallet";
 
-const tabItems: { key: TabKey; label: string }[] = [
+type CaseDetailPageProps = {
+  initialTab?: TabKey;
+  initialIsOwner?: boolean | null;
+  initialCaseData?: CaseSummary | null;
+  initialHeirWallet?: HeirWallet | null;
+  initialTaskIds?: string[];
+  initialHeirs?: CaseHeir[];
+  initialWalletDialogOpen?: boolean;
+  initialWalletDialogMode?: "register" | "verify";
+};
+
+const baseTabItems: { key: TabKey; label: string }[] = [
   { key: "assets", label: "資産" },
   { key: "plans", label: "指図" },
   { key: "tasks", label: "タスク" },
   { key: "heirs", label: "相続人" }
 ];
 
-const isTabKey = (value: string | null): value is TabKey =>
-  Boolean(value && tabItems.some((item) => item.key === value));
+const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet"];
 
-export default function CaseDetailPage() {
+const isTabKey = (value: string | null): value is TabKey =>
+  Boolean(value && allTabKeys.includes(value as TabKey));
+
+export default function CaseDetailPage({
+  initialTab,
+  initialIsOwner = null,
+  initialCaseData = null,
+  initialHeirWallet = null,
+  initialTaskIds = [],
+  initialHeirs = [],
+  initialWalletDialogOpen = false,
+  initialWalletDialogMode = "register"
+}: CaseDetailPageProps) {
   const { caseId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryTab = searchParams.get("tab");
   const { user } = useAuth();
-  const [caseData, setCaseData] = useState<CaseSummary | null>(null);
+  const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [plans, setPlans] = useState<PlanListItem[]>([]);
   const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
-  const [heirs, setHeirs] = useState<CaseHeir[]>([]);
+  const [heirs, setHeirs] = useState<CaseHeir[]>(initialHeirs);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRelation, setInviteRelation] = useState<RelationOption>(relationOptions[0]);
   const [inviteRelationOther, setInviteRelationOther] = useState("");
   const [inviteMemo, setInviteMemo] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [tab, setTab] = useState<TabKey>(() => (isTabKey(queryTab) ? queryTab : "assets"));
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>(() =>
+    initialTab ?? (isTabKey(queryTab) ? queryTab : "assets")
+  );
+  const [loading, setLoading] = useState(!initialCaseData);
   const [error, setError] = useState<string | null>(null);
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  const [isOwner, setIsOwner] = useState<boolean | null>(() => {
+    if (typeof initialIsOwner === "boolean") return initialIsOwner;
+    if (initialCaseData && user?.uid) {
+      return initialCaseData.ownerUid === user.uid;
+    }
+    return null;
+  });
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const [userCompletedTaskIds, setUserCompletedTaskIds] = useState<string[]>([]);
+  const [userCompletedTaskIds, setUserCompletedTaskIds] = useState<string[]>(initialTaskIds);
+  const [heirWallet, setHeirWallet] = useState<HeirWallet | null>(initialHeirWallet);
+  const [heirWalletLoading, setHeirWalletLoading] = useState(false);
+  const [heirWalletError, setHeirWalletError] = useState<string | null>(null);
+  const [heirWalletSaving, setHeirWalletSaving] = useState(false);
+  const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
+  const [heirWalletVerifyError, setHeirWalletVerifyError] = useState<string | null>(null);
+  const [heirWalletVerifySuccess, setHeirWalletVerifySuccess] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [heirWalletChallenge, setHeirWalletChallenge] = useState<{
+    challenge: string;
+    address: string;
+    amountDrops: string;
+  } | null>(null);
+  const [heirWalletTxHash, setHeirWalletTxHash] = useState("");
+  const [heirWalletAddressInput, setHeirWalletAddressInput] = useState(
+    initialHeirWallet?.address ?? ""
+  );
+  const [dropsInput, setDropsInput] = useState("1");
+  const [xrpInput, setXrpInput] = useState("0.000001");
+  const [walletDialogOpen, setWalletDialogOpen] = useState(initialWalletDialogOpen);
+  const [walletDialogMode, setWalletDialogMode] =
+    useState<"register" | "verify">(initialWalletDialogMode);
+  const tabItems = useMemo(() => {
+    if (isOwner === false) {
+      return [
+        baseTabItems[0],
+        baseTabItems[1],
+        baseTabItems[2],
+        { key: "wallet" as const, label: "受取用ウォレット" },
+        baseTabItems[3]
+      ];
+    }
+    return baseTabItems;
+  }, [isOwner]);
+  const availableTabKeys = useMemo(() => tabItems.map((item) => item.key), [tabItems]);
 
   const title = useMemo(
     () => caseData?.ownerDisplayName ?? "ケース詳細",
@@ -121,16 +217,35 @@ export default function CaseDetailPage() {
     [...tasks].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
   const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
+  const isHeir = isOwner === false;
+  const hasHeirWallet = Boolean(heirWallet?.address);
+  const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
+  const needsHeirWalletRegistration = isHeir && !hasHeirWallet;
+  const needsHeirWalletVerification = isHeir && hasHeirWallet && !isHeirWalletVerified;
+  const getWalletNotice = (taskId: string) => {
+    if (!isHeir) return null;
+    if (taskId === "heir.register-wallet" && needsHeirWalletRegistration) {
+      return "ウォレット登録が必要です";
+    }
+    if (taskId === "heir.verify-wallet" && needsHeirWalletVerification) {
+      return "所有確認が必要です";
+    }
+    return null;
+  };
 
   useEffect(() => {
+    let active = true;
     if (!caseId) {
-      setError("ケースIDが取得できません");
-      setLoading(false);
+      if (active) {
+        setError("ケースIDが取得できません");
+        setLoading(false);
+      }
       return;
     }
     const load = async () => {
       try {
         const detail = await getCase(caseId);
+        if (!active) return;
         setCaseData(detail);
         const owner = detail.ownerUid === user?.uid;
         setIsOwner(owner);
@@ -140,27 +255,52 @@ export default function CaseDetailPage() {
             listPlans(caseId),
             listInvitesByOwner(caseId)
           ]);
+          if (!active) return;
           setAssets(assetItems);
           setPlans(planItems);
           setOwnerInvites(inviteItems);
           setHeirs([]);
+          setHeirWallet(null);
         } else {
           const [planItems, heirItems] = await Promise.all([
             listPlans(caseId),
             listCaseHeirs(caseId)
           ]);
+          if (!active) return;
           setAssets([]);
           setPlans(planItems);
           setOwnerInvites([]);
           setHeirs(heirItems);
+          setHeirWalletLoading(true);
+          setHeirWalletError(null);
+          try {
+            const wallet = await getHeirWallet(caseId);
+            if (active) {
+              setHeirWallet(wallet);
+              setHeirWalletAddressInput(wallet?.address ?? "");
+            }
+          } catch (err: any) {
+            if (active) {
+              setHeirWalletError(err?.message ?? "ウォレットの取得に失敗しました");
+            }
+          } finally {
+            if (active) {
+              setHeirWalletLoading(false);
+            }
+          }
         }
       } catch (err: any) {
-        setError(err?.message ?? "ケースの取得に失敗しました");
+        if (active) {
+          setError(err?.message ?? "ケースの取得に失敗しました");
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     load();
+    return () => {
+      active = false;
+    };
   }, [caseId, user?.uid]);
 
   useEffect(() => {
@@ -187,12 +327,139 @@ export default function CaseDetailPage() {
   }, [caseId]);
 
   useEffect(() => {
-    if (isTabKey(queryTab) && queryTab !== tab) {
+    if (isTabKey(queryTab) && availableTabKeys.includes(queryTab) && queryTab !== tab) {
       setTab(queryTab);
-    } else if (queryTab && !isTabKey(queryTab)) {
-      setTab("assets");
+    } else if (queryTab && !availableTabKeys.includes(queryTab as TabKey)) {
+      setTab(availableTabKeys[0] ?? "assets");
     }
-  }, [queryTab, tab]);
+  }, [queryTab, tab, availableTabKeys]);
+
+  useEffect(() => {
+    if (!availableTabKeys.includes(tab)) {
+      setTab(availableTabKeys[0] ?? "assets");
+    }
+  }, [availableTabKeys, tab]);
+
+  useEffect(() => {
+    if (heirWallet?.address) {
+      setHeirWalletAddressInput(heirWallet.address);
+    }
+  }, [heirWallet?.address]);
+
+  const handleSaveHeirWallet = async () => {
+    if (!caseId) return;
+    const address = heirWalletAddressInput.trim();
+    if (!address) {
+      setHeirWalletError("ウォレットアドレスを入力してください");
+      return;
+    }
+    setHeirWalletSaving(true);
+    setHeirWalletError(null);
+    setHeirWalletVerifySuccess(null);
+    try {
+      await saveHeirWallet(caseId, address);
+      const wallet = await getHeirWallet(caseId);
+      setHeirWallet(wallet);
+      setHeirWalletChallenge(null);
+      setHeirWalletTxHash("");
+    } catch (err: any) {
+      setHeirWalletError(err?.message ?? "ウォレットの登録に失敗しました");
+    } finally {
+      setHeirWalletSaving(false);
+    }
+  };
+
+  const handleRequestHeirWalletChallenge = async () => {
+    if (!caseId) return;
+    setHeirWalletVerifyError(null);
+    setHeirWalletVerifySuccess(null);
+    setHeirWalletVerifyLoading(true);
+    try {
+      const result = await requestHeirWalletVerifyChallenge(caseId);
+      setHeirWalletChallenge(result);
+      const dropsValue = result.amountDrops ?? "1";
+      setDropsInput(dropsValue);
+      setXrpInput(dropsToXrpInput(dropsValue));
+    } catch (err: any) {
+      setHeirWalletVerifyError(err?.message ?? "検証コードの取得に失敗しました");
+    } finally {
+      setHeirWalletVerifyLoading(false);
+    }
+  };
+
+  const handleDropsChange = (value: string) => {
+    const cleaned = normalizeNumberInput(value);
+    setDropsInput(cleaned);
+    setXrpInput(dropsToXrpInput(cleaned));
+  };
+
+  const handleXrpChange = (value: string) => {
+    const cleaned = normalizeNumberInput(value);
+    setXrpInput(cleaned);
+    setDropsInput(xrpToDropsInput(cleaned));
+  };
+
+  const handleCopy = async (label: string, value: string) => {
+    const result = await copyText(label, value);
+    setCopyMessage(result.message);
+    if (result.ok) {
+      window.setTimeout(() => setCopyMessage(null), 1500);
+    }
+  };
+
+  const handleConfirmHeirWalletVerify = async () => {
+    if (!caseId) return;
+    const txHash = heirWalletTxHash.trim();
+    if (!txHash) {
+      setHeirWalletVerifyError("取引ハッシュを入力してください");
+      return;
+    }
+    setHeirWalletVerifyLoading(true);
+    setHeirWalletVerifyError(null);
+    setHeirWalletVerifySuccess(null);
+    try {
+      await confirmHeirWalletVerify(caseId, txHash);
+      const wallet = await getHeirWallet(caseId);
+      setHeirWallet(wallet);
+      setHeirWalletVerifySuccess("所有確認が完了しました");
+      setHeirWalletChallenge(null);
+      setHeirWalletTxHash("");
+      if (shouldCloseWalletDialogOnVerify(wallet?.verificationStatus === "VERIFIED")) {
+        setWalletDialogOpen(false);
+      }
+    } catch (err: any) {
+      setHeirWalletVerifyError(err?.message ?? "所有確認に失敗しました");
+    } finally {
+      setHeirWalletVerifyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !shouldAutoRequestChallenge({
+        isOpen: walletDialogOpen,
+        mode: walletDialogMode,
+        hasWallet: hasHeirWallet,
+        hasChallenge: Boolean(heirWalletChallenge),
+        isLoading: heirWalletVerifyLoading,
+        isVerified: isHeirWalletVerified
+      })
+    ) {
+      return;
+    }
+    void handleRequestHeirWalletChallenge();
+  }, [
+    walletDialogOpen,
+    walletDialogMode,
+    hasHeirWallet,
+    heirWalletChallenge,
+    heirWalletVerifyLoading
+  ]);
+
+  const handleOpenWalletDialog = (mode: "register" | "verify") => {
+    setWalletDialogMode(mode);
+    setWalletDialogOpen(true);
+  };
 
   const handleTabChange = (value: string) => {
     const nextTab = value as TabKey;
@@ -464,10 +731,247 @@ export default function CaseDetailPage() {
                     </div>
                   </div>
                   <div className={styles.rowSide}>
-                    <span className={styles.statusBadge}>承認済み</span>
+                    <div className={styles.rowBadgeStack}>
+                      <span className={styles.statusBadge}>承認済み</span>
+                      {heir.walletStatus ? (
+                        <span className={styles.statusBadge}>
+                          {walletStatusLabels[heir.walletStatus] ?? heir.walletStatus}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {tab === "wallet" ? (
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>受取用ウォレット</h2>
+          </div>
+          {isOwner === false ? (
+            <div className={styles.walletSection}>
+              <div className={styles.walletHeader}>
+                <div>
+                  <h3 className={styles.walletTitle}>受取用ウォレット</h3>
+                  <p className={styles.walletMeta}>相続人本人が登録・所有確認を行います。</p>
+                </div>
+                <span className={styles.walletStatus}>
+                  {isHeirWalletVerified
+                    ? "所有確認済み"
+                    : hasHeirWallet
+                      ? "未確認"
+                      : "未登録"}
+                </span>
+              </div>
+              {heirWalletError ? <FormAlert variant="error">{heirWalletError}</FormAlert> : null}
+              {heirWalletLoading ? (
+                <div className={styles.badgeMuted}>ウォレット情報を読み込み中...</div>
+              ) : null}
+              <div className={styles.walletActions}>
+                <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
+                  登録/変更
+                </Button>
+                {isHeirWalletVerified ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleOpenWalletDialog("verify")}
+                    disabled={!hasHeirWallet}
+                  >
+                    所有確認
+                  </Button>
+                )}
+              </div>
+              <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {walletDialogMode === "verify"
+                        ? "受取用ウォレットの所有確認"
+                        : "受取用ウォレットを登録"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      ウォレットアドレスの登録と所有確認を行います。
+                    </DialogDescription>
+                  </DialogHeader>
+                  {heirWalletError ? (
+                    <FormAlert variant="error">{heirWalletError}</FormAlert>
+                  ) : null}
+                  {heirWalletVerifyError ? (
+                    <FormAlert variant="error">{heirWalletVerifyError}</FormAlert>
+                  ) : null}
+                  {heirWalletVerifySuccess ? (
+                    <FormAlert variant="success">{heirWalletVerifySuccess}</FormAlert>
+                  ) : null}
+                  {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
+                  <div className={styles.walletForm}>
+                    <FormField label="ウォレットアドレス">
+                      <Input
+                        value={heirWalletAddressInput}
+                        onChange={(event) => setHeirWalletAddressInput(event.target.value)}
+                        placeholder="r..."
+                      />
+                    </FormField>
+                    <div className={styles.walletActions}>
+                      <Button
+                        type="button"
+                        onClick={handleSaveHeirWallet}
+                        disabled={heirWalletSaving}
+                      >
+                        {heirWalletSaving ? "保存中..." : "登録する"}
+                      </Button>
+                      {hasHeirWallet ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleRequestHeirWalletChallenge}
+                          disabled={heirWalletVerifyLoading}
+                        >
+                          所有確認を開始
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {hasHeirWallet ? (
+                    <div className={styles.walletVerifyBox}>
+                      <div className={styles.walletHint}>
+                        次の内容で1 dropを送金し、取引ハッシュを入力してください。
+                      </div>
+                      <div className={styles.verifyBlock}>
+                        <div className={styles.verifyRow}>
+                          <div>
+                            <div className={styles.walletVerifyLabel}>送金先</div>
+                            <div className={styles.walletVerifyValue}>
+                              {heirWalletChallenge?.address ?? "未発行"}
+                            </div>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={styles.copyButton}
+                            onClick={() =>
+                              handleCopy(
+                                "Destination",
+                                heirWalletChallenge?.address ?? ""
+                              )
+                            }
+                            aria-label="Destinationをコピー"
+                          >
+                            <Copy />
+                          </Button>
+                        </div>
+
+                        <div className={styles.verifyRow}>
+                          <div>
+                            <div className={styles.walletVerifyLabel}>Memo</div>
+                            <div className={styles.walletVerifyValue}>
+                              {heirWalletChallenge?.challenge ?? "未発行"}
+                            </div>
+                          </div>
+                          <div className={styles.verifyRowActions}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() =>
+                                handleCopy(
+                                  "Memo",
+                                  heirWalletChallenge?.challenge ?? ""
+                                )
+                              }
+                              aria-label="Memoをコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className={styles.amountGrid}>
+                          <div className={styles.amountField}>
+                            <FormField label="Amount (drops)">
+                              <Input
+                                value={dropsInput}
+                                onChange={(event) => handleDropsChange(event.target.value)}
+                                placeholder="例: 1"
+                              />
+                            </FormField>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() => handleCopy("Amount (drops)", dropsInput)}
+                              aria-label="Amount (drops)をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                          <div className={styles.amountField}>
+                            <FormField label="Amount (XRP)">
+                              <Input
+                                value={xrpInput}
+                                onChange={(event) => handleXrpChange(event.target.value)}
+                                placeholder="例: 0.000001"
+                              />
+                            </FormField>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() => handleCopy("Amount (XRP)", xrpInput)}
+                              aria-label="Amount (XRP)をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <FormField label="取引ハッシュ">
+                        <Input
+                          value={heirWalletTxHash}
+                          onChange={(event) => setHeirWalletTxHash(event.target.value)}
+                          placeholder="tx hash"
+                        />
+                      </FormField>
+                      <div className={styles.walletActions}>
+                        <Button
+                          type="button"
+                          onClick={handleConfirmHeirWalletVerify}
+                          disabled={heirWalletVerifyLoading}
+                        >
+                          {heirWalletVerifyLoading ? "確認中..." : "所有確認を完了"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    walletDialogMode === "verify" && (
+                      <div className={styles.emptyState}>
+                        <div className={styles.emptyTitle}>まずは登録してください</div>
+                        <div className={styles.emptyBody}>
+                          受取用ウォレットの登録後に所有確認が可能です。
+                        </div>
+                      </div>
+                    )
+                  )}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="ghost">
+                        閉じる
+                      </Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          ) : (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>相続人のみ操作できます</div>
+              <div className={styles.emptyBody}>
+                受取用ウォレットの登録は相続人本人が行います。
+              </div>
             </div>
           )}
         </div>
@@ -497,6 +1001,7 @@ export default function CaseDetailPage() {
               <div className={styles.taskList}>
                 {visiblePersonalTasks.map((task) => {
                   const checked = userCompletedTaskIds.includes(task.id);
+                  const walletNotice = getWalletNotice(task.id);
                   return (
                     <label key={task.id} className={styles.taskItem}>
                       <input
@@ -509,8 +1014,8 @@ export default function CaseDetailPage() {
                       />
                       <span className={styles.taskContent}>
                         <span className={styles.taskDescription}>{task.description}</span>
-                        {task.requiresWallet ? (
-                          <span className={styles.taskBadge}>ウォレット登録が必要です</span>
+                        {walletNotice ? (
+                          <span className={styles.taskBadge}>{walletNotice}</span>
                         ) : null}
                       </span>
                     </label>
