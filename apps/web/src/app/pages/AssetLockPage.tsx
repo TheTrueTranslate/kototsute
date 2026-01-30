@@ -13,9 +13,12 @@ import {
   DialogHeader,
   DialogTitle
 } from "../../features/shared/components/ui/dialog";
-import { syncAssetLockStep } from "./asset-lock-step-sync";
-import { resolveAssetLockStepIndex } from "./asset-lock-step-utils";
-import { resolveStartStepIndex, shouldStartAssetLock } from "./asset-lock-start";
+import { syncAssetLockStep } from "../../features/asset-lock/asset-lock-step-sync";
+import { resolveAssetLockStepIndex } from "../../features/asset-lock/asset-lock-step-utils";
+import {
+  resolveStartStepIndex,
+  shouldStartAssetLock
+} from "../../features/asset-lock/asset-lock-start";
 import {
   completeAssetLock,
   executeAssetLock,
