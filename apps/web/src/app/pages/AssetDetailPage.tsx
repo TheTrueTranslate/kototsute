@@ -531,130 +531,137 @@ export default function AssetDetailPage({
 
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>相続予定数</h2>
+                  <h2 className={styles.cardTitle}>相続予定数・留保設定</h2>
                   <span className={styles.metaHint}>
-                    留保数量を差し引いた予定量を表示します
+                    相続予定数は留保数量を差し引いて表示します
                   </span>
                 </div>
-                {asset.xrpl ? (
-                  asset.xrpl.status === "ok" ? (
-                    <div className={styles.inheritanceGrid}>
-                      <div className={styles.inheritanceBlock}>
-                        <div className={styles.metaLabel}>XRP</div>
-                        <div className={styles.inheritanceValue}>
-                          {inheritanceXrp === null
-                            ? "-"
-                            : `${formatAmount(inheritanceXrp)} XRP`}
-                        </div>
-                        <div className={styles.inheritanceMeta}>
-                          残高 {asset.xrpl.balanceXrp} XRP / 留保 {reserveXrpInput} XRP
-                        </div>
-                      </div>
-                      <div className={styles.inheritanceTokenBlock}>
-                        <div className={styles.metaLabel}>トークン</div>
-                        {inheritanceTokens.length === 0 ? (
-                          <div className={styles.emptyText}>トークンはありません。</div>
-                        ) : (
-                          <div className={styles.tokenList}>
-                            {inheritanceTokens.map((token) => (
-                              <div
-                                key={`${token.currency}-${token.issuer ?? ""}`}
-                                className={styles.tokenRow}
-                              >
-                                <div className={styles.tokenInfo}>
-                                  <div className={styles.tokenName}>{token.currency}</div>
-                                  <div className={styles.tokenIssuer}>
-                                    {token.issuer ?? "native"}
-                                  </div>
-                                  <div className={styles.tokenMeta}>
-                                    残高 {formatAmount(token.balance)} / 留保{" "}
-                                    {formatAmount(token.reserve)}
-                                  </div>
-                                </div>
-                                <div className={styles.tokenBalance}>
-                                  <span className={styles.tokenBalanceLabel}>相続予定</span>
-                                  <span>{formatAmount(token.planned)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <FormAlert variant="error">{asset.xrpl.message}</FormAlert>
-                  )
-                ) : (
-                  <div className={styles.emptyText}>
-                    ウォレット情報を同期すると表示されます。
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.card}>
-                <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>留保設定</h2>
-                  <span className={styles.metaHint}>相続対象から除外する数量を指定します</span>
-                </div>
-                {reserveError ? <FormAlert variant="error">{reserveError}</FormAlert> : null}
-                {reserveSuccess ? <FormAlert variant="success">{reserveSuccess}</FormAlert> : null}
-                <div className={styles.reserveGrid}>
-                  <FormField label="XRP 留保数量 (XRP)">
-                    <Input
-                      value={reserveXrpInput}
-                      onChange={(event) =>
-                        setReserveXrpInput(normalizeNumberInput(event.target.value))
-                      }
-                      placeholder="0"
-                    />
-                  </FormField>
-                  <div className={styles.reserveTokenBlock}>
-                    <div className={styles.metaLabel}>トークン留保</div>
-                    {availableTokens.length === 0 ? (
-                      <div className={styles.emptyText}>XRPL同期後に一覧から選択できます。</div>
-                    ) : (
-                      <div className={styles.reserveTokenList}>
-                        {availableTokens.map((token) => {
-                          const key = getReserveTokenKey(token);
-                          const selected = isReserveTokenSelected(token);
-                          const selectedToken = reserveTokens.find(
-                            (item) =>
-                              item.currency === token.currency && item.issuer === token.issuer
-                          );
-                          return (
-                            <div key={key} className={styles.reserveTokenRow}>
-                              <label className={styles.reserveTokenLabel}>
-                                <input
-                                  type="checkbox"
-                                  className={styles.reserveTokenCheckbox}
-                                  checked={selected}
-                                  onChange={() => handleToggleReserveToken(token)}
-                                />
-                                <span className={styles.reserveTokenName}>{token.currency}</span>
-                                <span className={styles.reserveTokenIssuer}>
-                                  {token.issuer ?? "native"}
-                                </span>
-                              </label>
-                              {selected ? (
-                                <Input
-                                  value={selectedToken?.reserveAmount ?? "0"}
-                                  onChange={(event) =>
-                                    handleReserveTokenAmountChange(token, event.target.value)
-                                  }
-                                  className={styles.reserveTokenInput}
-                                  placeholder="0"
-                                />
-                              ) : null}
+                <div className={styles.combinedGrid}>
+                  <div className={styles.combinedSection}>
+                    <h3 className={styles.sectionTitle}>相続予定数</h3>
+                    {asset.xrpl ? (
+                      asset.xrpl.status === "ok" ? (
+                        <div className={styles.inheritanceGrid}>
+                          <div className={styles.inheritanceBlock}>
+                            <div className={styles.metaLabel}>XRP</div>
+                            <div className={styles.inheritanceValue}>
+                              {inheritanceXrp === null
+                                ? "-"
+                                : `${formatAmount(inheritanceXrp)} XRP`}
                             </div>
-                          );
-                        })}
+                            <div className={styles.inheritanceMeta}>
+                              残高 {asset.xrpl.balanceXrp} XRP / 留保 {reserveXrpInput} XRP
+                            </div>
+                          </div>
+                          <div className={styles.inheritanceTokenBlock}>
+                            <div className={styles.metaLabel}>トークン</div>
+                            {inheritanceTokens.length === 0 ? (
+                              <div className={styles.emptyText}>トークンはありません。</div>
+                            ) : (
+                              <div className={styles.tokenList}>
+                                {inheritanceTokens.map((token) => (
+                                  <div
+                                    key={`${token.currency}-${token.issuer ?? ""}`}
+                                    className={styles.tokenRow}
+                                  >
+                                    <div className={styles.tokenInfo}>
+                                      <div className={styles.tokenName}>{token.currency}</div>
+                                      <div className={styles.tokenIssuer}>
+                                        {token.issuer ?? "native"}
+                                      </div>
+                                      <div className={styles.tokenMeta}>
+                                        残高 {formatAmount(token.balance)} / 留保{" "}
+                                        {formatAmount(token.reserve)}
+                                      </div>
+                                    </div>
+                                    <div className={styles.tokenBalance}>
+                                      <span className={styles.tokenBalanceLabel}>相続予定</span>
+                                      <span>{formatAmount(token.planned)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <FormAlert variant="error">{asset.xrpl.message}</FormAlert>
+                      )
+                    ) : (
+                      <div className={styles.emptyText}>
+                        ウォレット情報を同期すると表示されます。
                       </div>
                     )}
                   </div>
-                  <div className={styles.reserveActions}>
-                    <Button size="sm" onClick={handleSaveReserve} disabled={reserveSaving}>
-                      {reserveSaving ? "保存中..." : "留保設定を保存"}
-                    </Button>
+                  <div className={`${styles.combinedSection} ${styles.combinedSectionAlt}`}>
+                    <h3 className={styles.sectionTitle}>留保設定</h3>
+                    {reserveError ? <FormAlert variant="error">{reserveError}</FormAlert> : null}
+                    {reserveSuccess ? (
+                      <FormAlert variant="success">{reserveSuccess}</FormAlert>
+                    ) : null}
+                    <div className={styles.reserveGrid}>
+                      <FormField label="XRP 留保数量 (XRP)">
+                        <Input
+                          value={reserveXrpInput}
+                          onChange={(event) =>
+                            setReserveXrpInput(normalizeNumberInput(event.target.value))
+                          }
+                          placeholder="0"
+                        />
+                      </FormField>
+                      <div className={styles.reserveTokenBlock}>
+                        <div className={styles.metaLabel}>トークン留保</div>
+                        {availableTokens.length === 0 ? (
+                          <div className={styles.emptyText}>
+                            XRPL同期後に一覧から選択できます。
+                          </div>
+                        ) : (
+                          <div className={styles.reserveTokenList}>
+                            {availableTokens.map((token) => {
+                              const key = getReserveTokenKey(token);
+                              const selected = isReserveTokenSelected(token);
+                              const selectedToken = reserveTokens.find(
+                                (item) =>
+                                  item.currency === token.currency && item.issuer === token.issuer
+                              );
+                              return (
+                                <div key={key} className={styles.reserveTokenRow}>
+                                  <label className={styles.reserveTokenLabel}>
+                                    <input
+                                      type="checkbox"
+                                      className={styles.reserveTokenCheckbox}
+                                      checked={selected}
+                                      onChange={() => handleToggleReserveToken(token)}
+                                    />
+                                    <span className={styles.reserveTokenName}>
+                                      {token.currency}
+                                    </span>
+                                    <span className={styles.reserveTokenIssuer}>
+                                      {token.issuer ?? "native"}
+                                    </span>
+                                  </label>
+                                  {selected ? (
+                                    <Input
+                                      value={selectedToken?.reserveAmount ?? "0"}
+                                      onChange={(event) =>
+                                        handleReserveTokenAmountChange(token, event.target.value)
+                                      }
+                                      className={styles.reserveTokenInput}
+                                      placeholder="0"
+                                    />
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className={styles.reserveActions}>
+                        <Button size="sm" onClick={handleSaveReserve} disabled={reserveSaving}>
+                          {reserveSaving ? "保存中..." : "留保設定を保存"}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

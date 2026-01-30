@@ -95,9 +95,9 @@ describe("AssetDetailPage", () => {
     expect(html).toContain("rXXXX");
   });
 
-  it("shows reserve section", async () => {
+  it("shows combined inheritance and reserve section", async () => {
     const html = await render();
-    expect(html).toContain("留保設定");
+    expect(html).toContain("相続予定数・留保設定");
   });
 
   it("renders history tab", async () => {
