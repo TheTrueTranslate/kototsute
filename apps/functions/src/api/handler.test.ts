@@ -1066,7 +1066,7 @@ describe("createApiHandler", () => {
       }) as any,
       updateSharedRes as any
     );
-    expect(updateSharedRes.statusCode).toBe(200);
+    expect(updateSharedRes.statusCode).toBe(404);
 
     const updateMyRes = createRes();
     await handler(
@@ -1089,7 +1089,7 @@ describe("createApiHandler", () => {
     );
 
     expect(listRes.statusCode).toBe(200);
-    expect(listRes.body?.data?.sharedCompletedTaskIds).toEqual(["task-1", "task-2"]);
+    expect(listRes.body?.data?.sharedCompletedTaskIds).toBeUndefined();
     expect(listRes.body?.data?.userCompletedTaskIds).toEqual(["mine-1"]);
   });
 

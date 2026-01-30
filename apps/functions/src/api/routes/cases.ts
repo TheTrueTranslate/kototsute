@@ -360,48 +360,14 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const sharedRef = db.collection(`cases/${caseId}/taskProgress`).doc("shared");
     const userRef = db.collection(`cases/${caseId}/taskProgressUsers`).doc(auth.uid);
-    const [sharedSnap, userSnap] = await Promise.all([sharedRef.get(), userRef.get()]);
-
-    const shared = sharedSnap.data() ?? {};
+    const userSnap = await userRef.get();
     const user = userSnap.data() ?? {};
-    const sharedCompletedTaskIds = Array.isArray(shared.completedTaskIds)
-      ? shared.completedTaskIds
-      : [];
     const userCompletedTaskIds = Array.isArray(user.completedTaskIds)
       ? user.completedTaskIds
       : [];
 
-    return jsonOk(c, { sharedCompletedTaskIds, userCompletedTaskIds });
-  });
-
-  app.post(":caseId/task-progress/shared", async (c) => {
-    const auth = c.get("auth");
-    const caseId = c.req.param("caseId");
-    const body = await c.req.json().catch(() => ({}));
-    const completedTaskIds = Array.isArray(body?.completedTaskIds)
-      ? body.completedTaskIds.filter((id: any) => typeof id === "string" && id.trim().length > 0)
-      : [];
-    const uniqueIds = Array.from(new Set(completedTaskIds));
-
-    const db = getFirestore();
-    const caseRef = db.collection("cases").doc(caseId);
-    const caseSnap = await caseRef.get();
-    if (!caseSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Case not found");
-    }
-    const caseData = caseSnap.data() ?? {};
-    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
-    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-
-    await db.collection(`cases/${caseId}/taskProgress`).doc("shared").set(
-      { completedTaskIds: uniqueIds, updatedAt: c.get("deps").now() },
-      { merge: true }
-    );
-    return jsonOk(c);
+    return jsonOk(c, { userCompletedTaskIds });
   });
 
   app.post(":caseId/task-progress/me", async (c) => {
