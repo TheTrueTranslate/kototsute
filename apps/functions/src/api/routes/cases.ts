@@ -361,7 +361,7 @@ export const casesRoutes = () => {
     }
 
     const sharedRef = db.collection(`cases/${caseId}/taskProgress`).doc("shared");
-    const userRef = db.collection(`cases/${caseId}/taskProgress/users`).doc(auth.uid);
+    const userRef = db.collection(`cases/${caseId}/taskProgressUsers`).doc(auth.uid);
     const [sharedSnap, userSnap] = await Promise.all([sharedRef.get(), userRef.get()]);
 
     const shared = sharedSnap.data() ?? {};
@@ -425,7 +425,7 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    await db.collection(`cases/${caseId}/taskProgress/users`).doc(auth.uid).set(
+    await db.collection(`cases/${caseId}/taskProgressUsers`).doc(auth.uid).set(
       { completedTaskIds: uniqueIds, updatedAt: c.get("deps").now() },
       { merge: true }
     );

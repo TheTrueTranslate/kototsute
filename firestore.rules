@@ -53,7 +53,7 @@ service cloud.firestore {
          request.auth.uid in get(/databases/$(database)/documents/cases/$(caseId)).data.memberUids);
     }
 
-    match /cases/{caseId}/taskProgress/users/{uid} {
+    match /cases/{caseId}/taskProgressUsers/{uid} {
       allow read: if request.auth != null &&
         (request.auth.uid == get(/databases/$(database)/documents/cases/$(caseId)).data.ownerUid ||
          request.auth.uid in get(/databases/$(database)/documents/cases/$(caseId)).data.memberUids);
