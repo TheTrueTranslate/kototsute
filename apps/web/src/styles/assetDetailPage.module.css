@@ -162,6 +162,10 @@
   @apply text-meta text-muted-foreground;
 }
 
+.logActor {
+  @apply text-meta text-muted-foreground;
+}
+
 .logMeta {
   @apply text-meta text-muted-foreground;
 }

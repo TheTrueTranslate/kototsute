@@ -79,16 +79,22 @@ type RelatedPlan = {
 
 type AssetDetailPageProps = {
   initialAsset?: AssetDetail;
+  initialHistoryItems?: AssetHistoryItem[];
+  initialTab?: TabKey;
 };
 
-export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps = {}) {
+export default function AssetDetailPage({
+  initialAsset,
+  initialHistoryItems,
+  initialTab
+}: AssetDetailPageProps = {}) {
   const { caseId, assetId } = useParams();
   const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetDetail | null>(initialAsset ?? null);
   const [loading, setLoading] = useState(!initialAsset);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>(initialTab ?? "overview");
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
   const [txHash, setTxHash] = useState("");
@@ -108,7 +114,9 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [relatedPlans, setRelatedPlans] = useState<RelatedPlan[]>([]);
   const [deleting, setDeleting] = useState(false);
-  const [historyItems, setHistoryItems] = useState<AssetHistoryItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<AssetHistoryItem[]>(
+    initialHistoryItems ?? []
+  );
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [reserveXrpInput, setReserveXrpInput] = useState("0");
@@ -792,6 +800,7 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
                         item.meta && typeof item.meta.status === "string"
                           ? item.meta.status
                           : null;
+                      const actorLabel = item.actorEmail ?? item.actorUid;
                       const badgeClass =
                         status === "ok"
                           ? styles.logBadgeSuccess
@@ -816,6 +825,9 @@ export default function AssetDetailPage({ initialAsset }: AssetDetailPageProps =
                             <div className={styles.logMessage}>
                               {item.detail ?? "詳細はありません。"}
                             </div>
+                            {actorLabel ? (
+                              <div className={styles.logActor}>担当者: {actorLabel}</div>
+                            ) : null}
                           </div>
                           <div className={styles.logMeta}>{formatDate(item.createdAt)}</div>
                         </div>
