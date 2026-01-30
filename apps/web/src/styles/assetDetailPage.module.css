@@ -26,6 +26,10 @@
   @apply grid gap-6;
 }
 
+.tabs {
+  @apply mb-6;
+}
+
 .card {
   @apply grid gap-4 rounded-2xl border border-border bg-background px-6 py-5;
 }
@@ -74,12 +78,48 @@
   @apply flex items-center justify-between text-body-sm;
 }
 
+.tokenInfo {
+  @apply grid gap-1;
+}
+
 .tokenName {
   @apply font-medium text-foreground;
 }
 
 .tokenIssuer {
   @apply text-muted-foreground;
+}
+
+.tokenBalance {
+  @apply grid justify-items-end text-body-sm text-foreground;
+}
+
+.tokenBalanceLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.tokenMeta {
+  @apply text-meta text-muted-foreground;
+}
+
+.inheritanceGrid {
+  @apply grid gap-4;
+}
+
+.inheritanceBlock {
+  @apply grid gap-1;
+}
+
+.inheritanceValue {
+  @apply text-section text-foreground;
+}
+
+.inheritanceMeta {
+  @apply text-meta text-muted-foreground;
+}
+
+.inheritanceTokenBlock {
+  @apply grid gap-2;
 }
 
 .emptyText {

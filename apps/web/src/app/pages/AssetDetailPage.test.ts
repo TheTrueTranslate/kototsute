@@ -24,9 +24,22 @@ vi.mock("../api/assets", () => ({
     verificationAddress: "rVerify",
     reserveXrp: "0",
     reserveTokens: [],
-    xrpl: null,
+    xrpl: {
+      status: "ok",
+      balanceXrp: "10",
+      ledgerIndex: 100,
+      tokens: [
+        {
+          currency: "USD",
+          issuer: "rIssuer",
+          balance: "5"
+        }
+      ],
+      syncedAt: "2024-01-03T00:00:00.000Z"
+    },
     syncLogs: []
   }),
+  getAssetHistory: async () => [],
   requestVerifyChallenge: async () => ({
     challenge: "abc",
     address: "rVerify",
@@ -54,7 +67,19 @@ const render = async () => {
           verificationAddress: "rVerify",
           reserveXrp: "0",
           reserveTokens: [],
-          xrpl: null,
+          xrpl: {
+            status: "ok",
+            balanceXrp: "10",
+            ledgerIndex: 100,
+            tokens: [
+              {
+                currency: "USD",
+                issuer: "rIssuer",
+                balance: "5"
+              }
+            ],
+            syncedAt: "2024-01-03T00:00:00.000Z"
+          },
           syncLogs: []
         }
       })
@@ -72,5 +97,16 @@ describe("AssetDetailPage", () => {
   it("shows reserve section", async () => {
     const html = await render();
     expect(html).toContain("留保設定");
+  });
+
+  it("renders history tab", async () => {
+    const html = await render();
+    expect(html).toContain("履歴");
+  });
+
+  it("shows wallet info and inheritance section", async () => {
+    const html = await render();
+    expect(html).toContain("ウォレット情報");
+    expect(html).toContain("相続予定数");
   });
 });
