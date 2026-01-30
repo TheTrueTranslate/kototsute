@@ -492,7 +492,7 @@ export default function AssetLockPage({
         <div className={styles.headerRow}>
           <div>
             <div className={styles.headerMeta}>資産ロック</div>
-            <h1 className="text-title">資産ロックウィザード</h1>
+            <h1 className="text-title">資産ロック手続き</h1>
           </div>
           <div className={styles.stepChip}>
             <span className={styles.stepChipLabel}>STEP</span>

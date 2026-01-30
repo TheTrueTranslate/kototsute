@@ -17,6 +17,15 @@ it("renders asset lock wizard", async () => {
   expect(html).toContain("資産ロック");
 });
 
+it("uses formal service title", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const html = renderToString(
+    React.createElement(MemoryRouter, null, React.createElement(AssetLockPage))
+  );
+  expect(html).toContain("資産ロック手続き");
+  expect(html).not.toContain("資産ロックウィザード");
+});
+
 it("shows step label in header", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const html = renderToString(
