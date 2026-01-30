@@ -209,6 +209,11 @@ vi.mock("firebase-admin/auth", () => ({
   })
 }));
 
+vi.mock("./utils/xrpl-wallet.js", () => ({
+  sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
+  sendTokenPayment: async () => ({ txHash: "tx-token" })
+}));
+
 class InMemoryAssetRepository implements AssetRepository {
   private assets: Asset[] = [];
 
@@ -1541,6 +1546,69 @@ describe("createApiHandler", () => {
     );
 
     expect(verifyRes.statusCode).toBe(200);
+    const itemSnap = await itemRef.get();
+    expect(itemSnap.data()?.status).toBe("VERIFIED");
+  });
+
+  it("executes asset lock for method B", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "B",
+      wallet: {
+        address: "rDest",
+        seedEncrypted: {
+          cipherText: "s0VGcg==",
+          iv: "tasbbazBesggLHbW",
+          tag: "21JedH/zOM4g5O96O1GoLw==",
+          version: 1
+        }
+      }
+    });
+
+    const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+    await itemRef.set({
+      itemId: itemRef.id,
+      assetId: "asset-1",
+      assetLabel: "XRP",
+      assetAddress: "rFrom",
+      token: null,
+      plannedAmount: "1",
+      status: "PENDING",
+      txHash: null,
+      error: null
+    });
+
+    const execRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/execute`
+      }) as any,
+      execRes as any
+    );
+
+    expect(execRes.statusCode).toBe(200);
     const itemSnap = await itemRef.get();
     expect(itemSnap.data()?.status).toBe("VERIFIED");
   });

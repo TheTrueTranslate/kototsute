@@ -25,6 +25,8 @@ import {
   fetchXrplTx
 } from "../utils/xrpl.js";
 import { encryptPayload } from "../utils/encryption.js";
+import { decryptPayload } from "../utils/encryption.js";
+import { sendXrpPayment, sendTokenPayment } from "../utils/xrpl-wallet.js";
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -1358,6 +1360,63 @@ export const casesRoutes = () => {
     }
 
     await itemRef.set({ status: "VERIFIED", txHash, error: null }, { merge: true });
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/asset-lock/execute", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    if (lockData.method !== "B") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "B方式のみ実行できます");
+    }
+    const destination = lockData?.wallet?.address;
+    const seedEncrypted = lockData?.wallet?.seedEncrypted;
+    if (!destination || !seedEncrypted) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const seed = decryptPayload(seedEncrypted);
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+
+    for (const doc of itemsSnap.docs) {
+      const item = doc.data() ?? {};
+      if (item.token) {
+        const result = await sendTokenPayment({
+          fromSeed: seed,
+          to: destination,
+          token: item.token,
+          amount: String(item.plannedAmount ?? "")
+        });
+        await doc.ref.set(
+          { status: "VERIFIED", txHash: result.txHash ?? null, error: null },
+          { merge: true }
+        );
+      } else {
+        const result = await sendXrpPayment({
+          fromSeed: seed,
+          to: destination,
+          amountDrops: String(item.plannedAmount ?? "")
+        });
+        await doc.ref.set(
+          { status: "VERIFIED", txHash: result.txHash ?? null, error: null },
+          { merge: true }
+        );
+      }
+    }
+
+    await caseRef.set({ assetLockStatus: "LOCKED" }, { merge: true });
     return jsonOk(c);
   });
 
