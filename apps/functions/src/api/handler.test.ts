@@ -1413,6 +1413,76 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
   });
 
+  it("starts asset lock and creates items", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const db = getFirestore();
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "10",
+          ledgerIndex: 1,
+          tokens: [{ currency: "JPYC", issuer: "rIssuer", balance: "5" }],
+          syncedAt: new Date("2024-01-01T00:00:00.000Z")
+        },
+        reserveXrp: "1",
+        reserveTokens: [{ currency: "JPYC", issuer: "rIssuer", reserveAmount: "1" }]
+      },
+      { merge: true }
+    );
+
+    const startRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "A" }
+      }) as any,
+      startRes as any
+    );
+
+    expect(startRes.statusCode).toBe(200);
+    const lockSnap = await db
+      .collection("cases")
+      .doc(caseId)
+      .collection("assetLock")
+      .doc("state")
+      .get();
+    expect(lockSnap.exists).toBe(true);
+    const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
+    expect(itemsSnap.docs.length).toBe(2);
+  });
+
   it("returns empty heir wallet when not registered", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

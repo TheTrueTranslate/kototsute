@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
@@ -23,6 +24,50 @@ import {
   fetchXrplAccountLines,
   fetchXrplTx
 } from "../utils/xrpl.js";
+import { encryptPayload } from "../utils/encryption.js";
+
+const toNumber = (value: unknown) => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toDrops = (value: string) => {
+  const raw = String(value ?? "0").trim();
+  if (!raw) return "0";
+  const sign = raw.startsWith("-") ? -1n : 1n;
+  const normalized = raw.replace("-", "");
+  const [wholePart, fracPart = ""] = normalized.split(".");
+  const whole = BigInt(wholePart || "0");
+  const frac = BigInt((`${fracPart}000000`).slice(0, 6));
+  const drops = whole * 1_000_000n + frac;
+  return (drops * sign).toString();
+};
+
+const createXrplWallet = () => {
+  const seed = crypto.randomBytes(16).toString("hex");
+  const address = `r${crypto.randomBytes(20).toString("hex").slice(0, 25)}`;
+  return { address, seed };
+};
+
+const calcPlannedXrp = (asset: Record<string, any>) => {
+  const balance = toNumber(asset.xrplSummary?.balanceXrp ?? 0);
+  const reserve = toNumber(asset.reserveXrp ?? 0);
+  const planned = Math.max(0, balance - reserve);
+  return planned.toString();
+};
+
+const calcPlannedToken = (
+  token: { currency?: string; issuer?: string | null; balance?: string },
+  reserveTokens: Array<{ currency?: string; issuer?: string | null; reserveAmount?: string }>
+) => {
+  const reserveToken = reserveTokens.find(
+    (item) => item.currency === token.currency && item.issuer === token.issuer
+  );
+  const balance = toNumber(token.balance ?? 0);
+  const reserve = toNumber(reserveToken?.reserveAmount ?? 0);
+  const planned = Math.max(0, balance - reserve);
+  return planned.toString();
+};
 
 export const casesRoutes = () => {
   const app = new Hono<ApiBindings>();
@@ -1140,6 +1185,92 @@ export const casesRoutes = () => {
     });
 
     return jsonOk(c);
+  });
+
+  app.post(":caseId/asset-lock/start", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const method = body?.method === "B" ? "B" : "A";
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetsSnap = await db.collection(`cases/${caseId}/assets`).get();
+    const wallet = createXrplWallet();
+    const now = deps.now();
+    await caseRef.collection("assetLock").doc("state").set({
+      status: "READY",
+      method,
+      wallet: {
+        address: wallet.address,
+        seedEncrypted: encryptPayload(wallet.seed),
+        createdAt: now
+      },
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const items: Array<Record<string, any>> = [];
+    for (const doc of assetsSnap.docs) {
+      const asset = doc.data() ?? {};
+      const plannedXrp = calcPlannedXrp(asset);
+      const xrpItemRef = caseRef.collection("assetLockItems").doc();
+      const xrpItem = {
+        itemId: xrpItemRef.id,
+        assetId: doc.id,
+        assetLabel: asset.label ?? "",
+        assetAddress: asset.address ?? "",
+        token: null,
+        plannedAmount: toDrops(plannedXrp),
+        status: "PENDING",
+        txHash: null,
+        error: null,
+        createdAt: now
+      };
+      await xrpItemRef.set(xrpItem);
+      items.push(xrpItem);
+
+      const tokens = Array.isArray(asset.xrplSummary?.tokens) ? asset.xrplSummary.tokens : [];
+      const reserveTokens = Array.isArray(asset.reserveTokens) ? asset.reserveTokens : [];
+      for (const token of tokens) {
+        const planned = calcPlannedToken(token, reserveTokens);
+        const tokenItemRef = caseRef.collection("assetLockItems").doc();
+        const tokenItem = {
+          itemId: tokenItemRef.id,
+          assetId: doc.id,
+          assetLabel: asset.label ?? "",
+          assetAddress: asset.address ?? "",
+          token: {
+            currency: token.currency ?? "",
+            issuer: token.issuer ?? null,
+            isNative: false
+          },
+          plannedAmount: planned,
+          status: "PENDING",
+          txHash: null,
+          error: null,
+          createdAt: now
+        };
+        await tokenItemRef.set(tokenItem);
+        items.push(tokenItem);
+      }
+    }
+
+    return jsonOk(c, {
+      status: "READY",
+      method,
+      wallet: { address: wallet.address },
+      items
+    });
   });
 
   app.post(":caseId/plans", async (c) => {
