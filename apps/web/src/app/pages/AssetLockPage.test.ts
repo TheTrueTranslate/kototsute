@@ -462,7 +462,7 @@ it("shows return action when method step is AUTO_TRANSFER", async () => {
 it("shows verification results on the final step", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
-    status: "READY",
+    status: "LOCKED",
     method: "A",
     uiStep: 4,
     methodStep: null,
@@ -494,6 +494,7 @@ it("shows verification results on the final step", async () => {
   expect(html).toContain("送金検証の結果");
   expect(html).toContain("Test Wallet");
   expect(html).toContain("確認済み");
+  expect(html).toContain("資産ロックが完了しました");
 });
 
 it("shows complete action when all items are verified", async () => {

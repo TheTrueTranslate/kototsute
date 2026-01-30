@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import { useAuth } from "../../features/auth/auth-provider";
 import { Button } from "../../features/shared/components/ui/button";
@@ -69,6 +69,7 @@ export default function AssetLockPage({
   initialBalances = null
 }: AssetLockPageProps) {
   const { caseId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [stepIndex, setStepIndex] = useState(() =>
     resolveAssetLockStepIndex(initialLock?.uiStep, initialStep)
@@ -105,6 +106,7 @@ export default function AssetLockPage({
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
+  const [redirectSeconds, setRedirectSeconds] = useState<number | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const prevUiStepRef = useRef<number | null>(null);
   const current = steps[stepIndex];
@@ -137,6 +139,7 @@ export default function AssetLockPage({
     lockState?.method === "B" &&
     (lockState?.methodStep === "TRANSFER_DONE" ||
       lockState?.methodStep === "REGULAR_KEY_CLEARED");
+  const isLocked = lockState?.status === "LOCKED";
   const canComplete =
     (lockState?.items ?? []).length > 0 &&
     (lockState?.items ?? []).every((item) => item.status === "VERIFIED");
@@ -187,6 +190,26 @@ export default function AssetLockPage({
     if (!caseId || current?.id !== "verify") return;
     loadBalances();
   }, [caseId, current?.id]);
+
+  useEffect(() => {
+    if (!caseId || !isLocked) {
+      setRedirectSeconds(null);
+      return;
+    }
+    setRedirectSeconds(5);
+    const endAt = Date.now() + 5000;
+    const interval = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+      setRedirectSeconds(remaining);
+    }, 1000);
+    const timeout = window.setTimeout(() => {
+      navigate(`/cases/${caseId}`);
+    }, 5000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [caseId, isLocked, navigate]);
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -502,6 +525,11 @@ export default function AssetLockPage({
       </header>
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {isLocked ? (
+        <FormAlert variant="success">
+          資産ロックが完了しました。{redirectSeconds ?? 5}秒でケース詳細に戻ります。
+        </FormAlert>
+      ) : null}
 
       <div className={styles.stepCard}>
         <div className={styles.stepTitle}>{current.title}</div>
@@ -904,9 +932,9 @@ export default function AssetLockPage({
               <Button
                 type="button"
                 onClick={handleComplete}
-                disabled={!canComplete || completeLoading}
+                disabled={!canComplete || completeLoading || isLocked}
               >
-                {completeLoading ? "完了中..." : "完了する"}
+                {isLocked ? "完了済み" : completeLoading ? "完了中..." : "完了する"}
               </Button>
             </div>
           </div>
