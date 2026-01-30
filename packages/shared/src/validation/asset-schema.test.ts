@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assetCreateSchema } from "./asset-schema";
+import { assetCreateSchema, assetReserveSchema } from "./asset-schema";
 
 describe("assetCreateSchema", () => {
   it("accepts valid input", () => {
@@ -21,6 +21,27 @@ describe("assetCreateSchema", () => {
     const result = assetCreateSchema.safeParse({
       label: "X",
       address: "invalid"
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("assetReserveSchema", () => {
+  it("rejects negative reserve amounts", () => {
+    const result = assetReserveSchema.safeParse({
+      reserveXrp: "-1",
+      reserveTokens: []
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects duplicate tokens", () => {
+    const result = assetReserveSchema.safeParse({
+      reserveXrp: "0",
+      reserveTokens: [
+        { currency: "USD", issuer: "rIssuer", reserveAmount: "1" },
+        { currency: "USD", issuer: "rIssuer", reserveAmount: "2" }
+      ]
     });
     expect(result.success).toBe(false);
   });
