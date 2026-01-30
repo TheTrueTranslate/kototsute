@@ -9,6 +9,7 @@ let heirWalletData: { address: string | null; verificationStatus: string | null 
   address: null,
   verificationStatus: null
 };
+let caseHeirsData: Array<any> = [];
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -67,7 +68,7 @@ vi.mock("../api/heir-wallets", () => ({
 
 vi.mock("../api/invites", () => ({
   listInvitesByOwner: async () => [],
-  listCaseHeirs: async () => [],
+  listCaseHeirs: async () => caseHeirsData,
   createInvite: async () => ({ inviteId: "invite-1" })
 }));
 
@@ -87,6 +88,7 @@ describe("CaseDetailPage", () => {
     authUser = { uid: "owner" };
     searchParams = new URLSearchParams();
     heirWalletData = { address: null, verificationStatus: null };
+    caseHeirsData = [];
   });
 
   it("shows case detail header", async () => {
@@ -154,5 +156,44 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
     expect(html).not.toContain("ウォレット登録が必要です");
     expect(html).not.toContain("所有確認が必要です");
+  });
+
+  it("shows wallet tab for heir", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams();
+
+    const html = await render({ initialIsOwner: false });
+    expect(html).toContain("受取用ウォレット");
+  });
+
+  it("shows wallet status badge in heirs tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=heirs");
+    caseHeirsData = [
+      {
+        inviteId: "invite-1",
+        email: "heir1@example.com",
+        relationLabel: "長男",
+        relationOther: null,
+        acceptedByUid: "heir_1",
+        acceptedAt: "2024-01-02",
+        walletStatus: "PENDING"
+      }
+    ];
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirs: caseHeirsData,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "DRAFT",
+        assetLockStatus: "UNLOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("未確認");
   });
 });

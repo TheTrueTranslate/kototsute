@@ -50,6 +50,12 @@ const planStatusLabels: Record<string, string> = {
   INACTIVE: "無効"
 };
 
+const walletStatusLabels: Record<string, string> = {
+  UNREGISTERED: "未登録",
+  PENDING: "未確認",
+  VERIFIED: "確認済み"
+};
+
 type RelationOption = (typeof relationOptions)[number];
 
 type AssetRowProps = {
@@ -79,7 +85,7 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
   );
 };
 
-type TabKey = "assets" | "plans" | "tasks" | "heirs";
+type TabKey = "assets" | "plans" | "tasks" | "heirs" | "wallet";
 
 type CaseDetailPageProps = {
   initialTab?: TabKey;
@@ -87,24 +93,28 @@ type CaseDetailPageProps = {
   initialCaseData?: CaseSummary | null;
   initialHeirWallet?: HeirWallet | null;
   initialTaskIds?: string[];
+  initialHeirs?: CaseHeir[];
 };
 
-const tabItems: { key: TabKey; label: string }[] = [
+const baseTabItems: { key: TabKey; label: string }[] = [
   { key: "assets", label: "資産" },
   { key: "plans", label: "指図" },
   { key: "tasks", label: "タスク" },
   { key: "heirs", label: "相続人" }
 ];
 
+const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet"];
+
 const isTabKey = (value: string | null): value is TabKey =>
-  Boolean(value && tabItems.some((item) => item.key === value));
+  Boolean(value && allTabKeys.includes(value as TabKey));
 
 export default function CaseDetailPage({
   initialTab,
   initialIsOwner = null,
   initialCaseData = null,
   initialHeirWallet = null,
-  initialTaskIds = []
+  initialTaskIds = [],
+  initialHeirs = []
 }: CaseDetailPageProps) {
   const { caseId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -114,7 +124,7 @@ export default function CaseDetailPage({
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [plans, setPlans] = useState<PlanListItem[]>([]);
   const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
-  const [heirs, setHeirs] = useState<CaseHeir[]>([]);
+  const [heirs, setHeirs] = useState<CaseHeir[]>(initialHeirs);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRelation, setInviteRelation] = useState<RelationOption>(relationOptions[0]);
   const [inviteRelationOther, setInviteRelationOther] = useState("");
@@ -151,6 +161,19 @@ export default function CaseDetailPage({
   const [heirWalletAddressInput, setHeirWalletAddressInput] = useState(
     initialHeirWallet?.address ?? ""
   );
+  const tabItems = useMemo(() => {
+    if (isOwner === false) {
+      return [
+        baseTabItems[0],
+        baseTabItems[1],
+        baseTabItems[2],
+        { key: "wallet" as const, label: "受取用ウォレット" },
+        baseTabItems[3]
+      ];
+    }
+    return baseTabItems;
+  }, [isOwner]);
+  const availableTabKeys = useMemo(() => tabItems.map((item) => item.key), [tabItems]);
 
   const title = useMemo(
     () => caseData?.ownerDisplayName ?? "ケース詳細",
@@ -276,12 +299,18 @@ export default function CaseDetailPage({
   }, [caseId]);
 
   useEffect(() => {
-    if (isTabKey(queryTab) && queryTab !== tab) {
+    if (isTabKey(queryTab) && availableTabKeys.includes(queryTab) && queryTab !== tab) {
       setTab(queryTab);
-    } else if (queryTab && !isTabKey(queryTab)) {
-      setTab("assets");
+    } else if (queryTab && !availableTabKeys.includes(queryTab as TabKey)) {
+      setTab(availableTabKeys[0] ?? "assets");
     }
-  }, [queryTab, tab]);
+  }, [queryTab, tab, availableTabKeys]);
+
+  useEffect(() => {
+    if (!availableTabKeys.includes(tab)) {
+      setTab(availableTabKeys[0] ?? "assets");
+    }
+  }, [availableTabKeys, tab]);
 
   useEffect(() => {
     if (heirWallet?.address) {
@@ -618,7 +647,14 @@ export default function CaseDetailPage({
                     </div>
                   </div>
                   <div className={styles.rowSide}>
-                    <span className={styles.statusBadge}>承認済み</span>
+                    <div className={styles.rowBadgeStack}>
+                      <span className={styles.statusBadge}>承認済み</span>
+                      {heir.walletStatus ? (
+                        <span className={styles.statusBadge}>
+                          {walletStatusLabels[heir.walletStatus] ?? heir.walletStatus}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -627,14 +663,11 @@ export default function CaseDetailPage({
         </div>
       ) : null}
 
-      {tab === "tasks" ? (
+      {tab === "wallet" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>タスク</h2>
-            <span className={styles.badgeMuted}>進捗には影響しません</span>
+            <h2 className={styles.panelTitle}>受取用ウォレット</h2>
           </div>
-          {taskError ? <FormAlert variant="error">{taskError}</FormAlert> : null}
-          {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
           {isOwner === false ? (
             <div className={styles.walletSection}>
               <div className={styles.walletHeader}>
@@ -726,7 +759,25 @@ export default function CaseDetailPage({
                 </div>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>相続人のみ操作できます</div>
+              <div className={styles.emptyBody}>
+                受取用ウォレットの登録は相続人本人が行います。
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {tab === "tasks" ? (
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>タスク</h2>
+            <span className={styles.badgeMuted}>進捗には影響しません</span>
+          </div>
+          {taskError ? <FormAlert variant="error">{taskError}</FormAlert> : null}
+          {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
           <div className={styles.taskSection}>
             <div className={styles.taskSectionHeader}>
               <h3 className={styles.taskSectionTitle}>自分用タスク</h3>
