@@ -1260,6 +1260,66 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
   });
 
+  it("returns cached wallet info when includeXrpl is false", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const db = getFirestore();
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "10",
+          ledgerIndex: 1,
+          tokens: [{ currency: "USD", issuer: "rIssuer", balance: "5" }],
+          syncedAt: new Date("2024-01-02T00:00:00.000Z")
+        }
+      },
+      { merge: true }
+    );
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.xrpl?.balanceXrp).toBe("10");
+    expect(res.body?.data?.xrpl?.tokens?.[0]?.balance).toBe("5");
+    expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
+  });
+
   it("updates asset reserve settings", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

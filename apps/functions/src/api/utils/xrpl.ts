@@ -4,6 +4,7 @@ export type XrplToken = {
   currency: string;
   issuer: string | null;
   isNative: boolean;
+  balance: string;
 };
 
 export type XrplStatus =
@@ -77,7 +78,8 @@ export const fetchXrplAccountLines = async (
     const tokens = lines.map((line: any) => ({
       currency: String(line.currency ?? ""),
       issuer: typeof line.account === "string" ? line.account : null,
-      isNative: false
+      isNative: false,
+      balance: String(line.balance ?? "0")
     }));
     return { status: "ok", tokens };
   } catch (error: any) {

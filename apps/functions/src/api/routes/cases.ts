@@ -489,7 +489,35 @@ export const casesRoutes = () => {
       String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "false") === "true" ||
       String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "0") === "1";
 
-    let xrpl;
+    const toXrplSummaryResponse = (summary: any) => {
+      if (!summary || typeof summary !== "object") return null;
+      if (summary.status === "ok") {
+        const tokens = Array.isArray(summary.tokens)
+          ? summary.tokens.map((token: any) => ({
+              currency: String(token.currency ?? ""),
+              issuer: typeof token.issuer === "string" ? token.issuer : null,
+              balance: String(token.balance ?? "0")
+            }))
+          : [];
+        return {
+          status: "ok",
+          balanceXrp: typeof summary.balanceXrp === "string" ? summary.balanceXrp : "0",
+          ledgerIndex: summary.ledgerIndex ?? null,
+          tokens,
+          syncedAt: formatDate(summary.syncedAt)
+        };
+      }
+      if (summary.status === "error") {
+        return {
+          status: "error",
+          message: typeof summary.message === "string" ? summary.message : "XRPL error",
+          syncedAt: formatDate(summary.syncedAt)
+        };
+      }
+      return null;
+    };
+
+    let xrpl: any = null;
     const address = typeof assetData.address === "string" ? assetData.address : "";
     if (includeXrpl) {
       if (!address) {
@@ -504,6 +532,20 @@ export const casesRoutes = () => {
           xrpl = { status: "error", message: lines.message };
         }
       }
+      const syncedAt = deps.now();
+      const summaryToStore =
+        xrpl.status === "ok"
+          ? {
+              status: "ok",
+              balanceXrp: xrpl.balanceXrp,
+              ledgerIndex: xrpl.ledgerIndex ?? null,
+              tokens: xrpl.tokens ?? [],
+              syncedAt
+            }
+          : { status: "error", message: xrpl.message, syncedAt };
+      await assetRef.set({ xrplSummary: summaryToStore }, { merge: true });
+      xrpl = toXrplSummaryResponse(summaryToStore);
+
       const logRef = assetRef.collection("syncLogs").doc();
       await logRef.set({
         status: xrpl.status,
@@ -512,6 +554,8 @@ export const casesRoutes = () => {
         message: xrpl.status === "error" ? xrpl.message : null,
         createdAt: deps.now()
       });
+    } else {
+      xrpl = toXrplSummaryResponse(assetData.xrplSummary);
     }
 
     const logsSnapshot = await assetRef
