@@ -42,10 +42,8 @@ vi.mock("../api/plans", () => ({
 
 vi.mock("../api/tasks", () => ({
   getTaskProgress: async () => ({
-    sharedCompletedTaskIds: [],
     userCompletedTaskIds: []
   }),
-  updateSharedTaskProgress: async () => {},
   updateMyTaskProgress: async () => {}
 }));
 
@@ -99,5 +97,10 @@ describe("CaseDetailPage", () => {
     );
     expect(html).toContain("/cases/case-1/assets/asset-1");
     expect(html).toContain("XRP Wallet");
+  });
+
+  it("does not show shared tasks section", async () => {
+    const html = await render();
+    expect(html).not.toContain("共有タスク");
   });
 });

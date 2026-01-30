@@ -10,7 +10,7 @@ import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
-import { getTaskProgress, updateMyTaskProgress, updateSharedTaskProgress } from "../api/tasks";
+import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
 import {
   createInvite,
   listCaseHeirs,
@@ -105,7 +105,6 @@ export default function CaseDetailPage() {
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const [sharedCompletedTaskIds, setSharedCompletedTaskIds] = useState<string[]>([]);
   const [userCompletedTaskIds, setUserCompletedTaskIds] = useState<string[]>([]);
 
   const title = useMemo(
@@ -121,7 +120,6 @@ export default function CaseDetailPage() {
   const sortTasks = (tasks: TaskItem[]) =>
     [...tasks].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
-  const sharedTasks = useMemo(() => sortTasks(todoMaster.shared), []);
   const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
 
   useEffect(() => {
@@ -174,7 +172,6 @@ export default function CaseDetailPage() {
       try {
         const progress = await getTaskProgress(caseId);
         if (!active) return;
-        setSharedCompletedTaskIds(progress.sharedCompletedTaskIds ?? []);
         setUserCompletedTaskIds(progress.userCompletedTaskIds ?? []);
       } catch (err: any) {
         if (!active) return;
@@ -238,19 +235,6 @@ export default function CaseDetailPage() {
       return Array.from(new Set([...current, taskId]));
     }
     return current.filter((id) => id !== taskId);
-  };
-
-  const handleToggleSharedTask = async (taskId: string, checked: boolean) => {
-    if (!caseId) return;
-    const prev = sharedCompletedTaskIds;
-    const next = buildNextTaskIds(prev, taskId, checked);
-    setSharedCompletedTaskIds(next);
-    try {
-      await updateSharedTaskProgress(caseId, next);
-    } catch (err: any) {
-      setSharedCompletedTaskIds(prev);
-      setTaskError(err?.message ?? "タスクの更新に失敗しました");
-    }
   };
 
   const handleTogglePersonalTask = async (taskId: string, checked: boolean) => {
@@ -499,42 +483,6 @@ export default function CaseDetailPage() {
           {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
           <div className={styles.taskSection}>
             <div className={styles.taskSectionHeader}>
-              <h3 className={styles.taskSectionTitle}>共有タスク</h3>
-              <span className={styles.taskSectionMeta}>みんなで共有</span>
-            </div>
-            {sharedTasks.length === 0 ? (
-              <div className={styles.emptyState}>
-                <div className={styles.emptyTitle}>共有タスクはありません</div>
-                <div className={styles.emptyBody}>Todoマスターが更新されると表示されます。</div>
-              </div>
-            ) : (
-              <div className={styles.taskList}>
-                {sharedTasks.map((task) => {
-                  const checked = sharedCompletedTaskIds.includes(task.id);
-                  return (
-                    <label key={task.id} className={styles.taskItem}>
-                      <input
-                        type="checkbox"
-                        className={styles.taskCheckbox}
-                        checked={checked}
-                        onChange={(event) =>
-                          handleToggleSharedTask(task.id, event.target.checked)
-                        }
-                      />
-                      <span className={styles.taskContent}>
-                        <span className={styles.taskTitle}>{task.title}</span>
-                        {task.description ? (
-                          <span className={styles.taskDescription}>{task.description}</span>
-                        ) : null}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className={styles.taskSection}>
-            <div className={styles.taskSectionHeader}>
               <h3 className={styles.taskSectionTitle}>自分用タスク</h3>
               <span className={styles.taskSectionMeta}>
                 {isOwner ? "被相続人" : "相続人"}
@@ -560,10 +508,7 @@ export default function CaseDetailPage() {
                         }
                       />
                       <span className={styles.taskContent}>
-                        <span className={styles.taskTitle}>{task.title}</span>
-                        {task.description ? (
-                          <span className={styles.taskDescription}>{task.description}</span>
-                        ) : null}
+                        <span className={styles.taskDescription}>{task.description}</span>
                         {task.requiresWallet ? (
                           <span className={styles.taskBadge}>ウォレット登録が必要です</span>
                         ) : null}
