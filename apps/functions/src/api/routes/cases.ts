@@ -1273,6 +1273,94 @@ export const casesRoutes = () => {
     });
   });
 
+  app.post(":caseId/asset-lock/verify", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const itemId = body?.itemId;
+    const txHash = body?.txHash;
+    if (typeof itemId !== "string" || itemId.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "itemIdは必須です");
+    }
+    if (typeof txHash !== "string" || txHash.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const destination = lockData?.wallet?.address;
+    if (!destination) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const itemRef = caseRef.collection("assetLockItems").doc(itemId);
+    const itemSnap = await itemRef.get();
+    if (!itemSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Item not found");
+    }
+    const item = itemSnap.data() ?? {};
+
+    const result = await fetchXrplTx(txHash);
+    if (!result.ok) {
+      return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
+    }
+    const tx = result.tx as any;
+    const from = tx?.Account;
+    const to = tx?.Destination;
+
+    if (to !== destination) {
+      await itemRef.set({ status: "FAILED", error: "DESTINATION_MISMATCH", txHash }, { merge: true });
+      return jsonError(c, 400, "DESTINATION_MISMATCH", "送金先が一致しません");
+    }
+    if (item.assetAddress && from !== item.assetAddress) {
+      await itemRef.set({ status: "FAILED", error: "FROM_MISMATCH", txHash }, { merge: true });
+      return jsonError(c, 400, "FROM_MISMATCH", "送信元が一致しません");
+    }
+
+    if (item.token) {
+      const amount = tx?.Amount ?? {};
+      const amountCurrency = amount?.currency;
+      const amountIssuer = amount?.issuer;
+      const amountValue = String(amount?.value ?? "");
+      if (amountCurrency !== item.token.currency || amountIssuer !== item.token.issuer) {
+        await itemRef.set(
+          { status: "FAILED", error: "TOKEN_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "TOKEN_MISMATCH", "トークン情報が一致しません");
+      }
+      if (amountValue !== String(item.plannedAmount)) {
+        await itemRef.set(
+          { status: "FAILED", error: "AMOUNT_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "AMOUNT_MISMATCH", "送金額が一致しません");
+      }
+    } else {
+      const amount = String(tx?.Amount ?? "");
+      if (amount !== String(item.plannedAmount)) {
+        await itemRef.set(
+          { status: "FAILED", error: "AMOUNT_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "AMOUNT_MISMATCH", "送金額が一致しません");
+      }
+    }
+
+    await itemRef.set({ status: "VERIFIED", txHash, error: null }, { merge: true });
+    return jsonOk(c);
+  });
+
   app.post(":caseId/plans", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");

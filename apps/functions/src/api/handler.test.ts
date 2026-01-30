@@ -1483,6 +1483,68 @@ describe("createApiHandler", () => {
     expect(itemsSnap.docs.length).toBe(2);
   });
 
+  it("verifies asset lock tx", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: { Account: "rFrom", Destination: "rDest", Amount: "9", Memos: [] }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "A",
+      wallet: { address: "rDest" }
+    });
+    const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+    await itemRef.set({
+      itemId: itemRef.id,
+      assetId: "asset-1",
+      assetLabel: "XRP",
+      assetAddress: "rFrom",
+      token: null,
+      plannedAmount: "9",
+      status: "PENDING",
+      txHash: null,
+      error: null
+    });
+
+    const verifyRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/verify`,
+        body: { itemId: itemRef.id, txHash: "tx" }
+      }) as any,
+      verifyRes as any
+    );
+
+    expect(verifyRes.statusCode).toBe(200);
+    const itemSnap = await itemRef.get();
+    expect(itemSnap.data()?.status).toBe("VERIFIED");
+  });
+
   it("returns empty heir wallet when not registered", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
