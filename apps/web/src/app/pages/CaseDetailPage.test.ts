@@ -40,6 +40,13 @@ vi.mock("../api/plans", () => ({
   listPlans: async () => []
 }));
 
+vi.mock("../api/tasks", () => ({
+  getTaskProgress: async () => ({
+    userCompletedTaskIds: []
+  }),
+  updateMyTaskProgress: async () => {}
+}));
+
 vi.mock("../api/invites", () => ({
   listInvitesByOwner: async () => [],
   listCaseHeirs: async () => [],
@@ -67,6 +74,7 @@ describe("CaseDetailPage", () => {
     const html = await render();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
+    expect(html).toContain("タスク");
   });
 
   it("links to asset detail page", async () => {
@@ -89,5 +97,10 @@ describe("CaseDetailPage", () => {
     );
     expect(html).toContain("/cases/case-1/assets/asset-1");
     expect(html).toContain("XRP Wallet");
+  });
+
+  it("does not show shared tasks section", async () => {
+    const html = await render();
+    expect(html).not.toContain("共有タスク");
   });
 });

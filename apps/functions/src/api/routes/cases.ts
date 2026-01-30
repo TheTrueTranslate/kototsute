@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import {
   assetCreateSchema,
+  assetReserveSchema,
   displayNameSchema,
   inviteCreateSchema,
   planAllocationSchema,
@@ -13,6 +14,7 @@ import { jsonError, jsonOk } from "../utils/response.js";
 import { normalizeEmail } from "../utils/email.js";
 import { formatDate } from "../utils/date.js";
 import { appendPlanHistory, normalizePlanAllocations } from "../utils/plan.js";
+import { appendAssetHistory } from "../utils/asset-history.js";
 import {
   XRPL_VERIFY_ADDRESS,
   createChallenge,
@@ -345,6 +347,59 @@ export const casesRoutes = () => {
     return jsonOk(c, data);
   });
 
+  app.get(":caseId/task-progress", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const userRef = db.collection(`cases/${caseId}/taskProgressUsers`).doc(auth.uid);
+    const userSnap = await userRef.get();
+    const user = userSnap.data() ?? {};
+    const userCompletedTaskIds = Array.isArray(user.completedTaskIds)
+      ? user.completedTaskIds
+      : [];
+
+    return jsonOk(c, { userCompletedTaskIds });
+  });
+
+  app.post(":caseId/task-progress/me", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const completedTaskIds = Array.isArray(body?.completedTaskIds)
+      ? body.completedTaskIds.filter((id: any) => typeof id === "string" && id.trim().length > 0)
+      : [];
+    const uniqueIds = Array.from(new Set(completedTaskIds));
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    await db.collection(`cases/${caseId}/taskProgressUsers`).doc(auth.uid).set(
+      { completedTaskIds: uniqueIds, updatedAt: c.get("deps").now() },
+      { merge: true }
+    );
+    return jsonOk(c);
+  });
+
   app.post(":caseId/assets", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
@@ -375,8 +430,18 @@ export const casesRoutes = () => {
       label: parsed.data.label,
       address: parsed.data.address,
       verificationStatus: "UNVERIFIED",
+      reserveXrp: "0",
+      reserveTokens: [],
       createdAt: now,
       updatedAt: now
+    });
+    await appendAssetHistory(assetRef, {
+      type: "ASSET_CREATED",
+      title: "資産を登録しました",
+      detail: parsed.data.label,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      createdAt: now
     });
 
     return jsonOk(c, { assetId: assetRef.id, label: parsed.data.label });
@@ -433,7 +498,35 @@ export const casesRoutes = () => {
       String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "false") === "true" ||
       String(c.req.query("includeXrpl") ?? c.req.query("sync") ?? "0") === "1";
 
-    let xrpl;
+    const toXrplSummaryResponse = (summary: any) => {
+      if (!summary || typeof summary !== "object") return null;
+      if (summary.status === "ok") {
+        const tokens = Array.isArray(summary.tokens)
+          ? summary.tokens.map((token: any) => ({
+              currency: String(token.currency ?? ""),
+              issuer: typeof token.issuer === "string" ? token.issuer : null,
+              balance: String(token.balance ?? "0")
+            }))
+          : [];
+        return {
+          status: "ok",
+          balanceXrp: typeof summary.balanceXrp === "string" ? summary.balanceXrp : "0",
+          ledgerIndex: summary.ledgerIndex ?? null,
+          tokens,
+          syncedAt: formatDate(summary.syncedAt)
+        };
+      }
+      if (summary.status === "error") {
+        return {
+          status: "error",
+          message: typeof summary.message === "string" ? summary.message : "XRPL error",
+          syncedAt: formatDate(summary.syncedAt)
+        };
+      }
+      return null;
+    };
+
+    let xrpl: any = null;
     const address = typeof assetData.address === "string" ? assetData.address : "";
     if (includeXrpl) {
       if (!address) {
@@ -448,6 +541,20 @@ export const casesRoutes = () => {
           xrpl = { status: "error", message: lines.message };
         }
       }
+      const syncedAt = deps.now();
+      const summaryToStore =
+        xrpl.status === "ok"
+          ? {
+              status: "ok",
+              balanceXrp: xrpl.balanceXrp,
+              ledgerIndex: xrpl.ledgerIndex ?? null,
+              tokens: xrpl.tokens ?? [],
+              syncedAt
+            }
+          : { status: "error", message: xrpl.message, syncedAt };
+      await assetRef.set({ xrplSummary: summaryToStore }, { merge: true });
+      xrpl = toXrplSummaryResponse(summaryToStore);
+
       const logRef = assetRef.collection("syncLogs").doc();
       await logRef.set({
         status: xrpl.status,
@@ -456,6 +563,15 @@ export const casesRoutes = () => {
         message: xrpl.status === "error" ? xrpl.message : null,
         createdAt: deps.now()
       });
+      await appendAssetHistory(assetRef, {
+        type: "ASSET_SYNCED",
+        title: "ウォレット情報を同期しました",
+        detail: xrpl.status === "ok" ? `残高 ${xrpl.balanceXrp} XRP` : xrpl.message,
+        actorUid: auth.uid,
+        actorEmail: auth.email ?? null
+      });
+    } else {
+      xrpl = toXrplSummaryResponse(assetData.xrplSummary);
     }
 
     const logsSnapshot = await assetRef
@@ -484,9 +600,146 @@ export const casesRoutes = () => {
       verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
       verificationChallenge: assetData.verificationChallenge ?? null,
       verificationAddress: XRPL_VERIFY_ADDRESS,
+      reserveXrp: typeof assetData.reserveXrp === "string" ? assetData.reserveXrp : "0",
+      reserveTokens: Array.isArray(assetData.reserveTokens) ? assetData.reserveTokens : [],
       xrpl: xrpl ?? null,
       syncLogs
     });
+  });
+
+  app.get(":caseId/assets/:assetId/history", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    const toMillis = (value: any) => {
+      if (!value) return 0;
+      if (value instanceof Date) return value.getTime();
+      if (typeof value.toDate === "function") return value.toDate().getTime();
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    };
+
+    const historySnapshot = await assetRef
+      .collection("history")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+    const historyEntries = historySnapshot.docs.map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        historyId: data.historyId ?? doc.id,
+        type: data.type ?? "",
+        title: data.title ?? "",
+        detail: data.detail ?? null,
+        actorUid: data.actorUid ?? null,
+        actorEmail: data.actorEmail ?? null,
+        createdAt: data.createdAt,
+        meta: data.meta ?? null
+      };
+    });
+
+    const syncSnapshot = await assetRef
+      .collection("syncLogs")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+    const syncEntries = syncSnapshot.docs.map((doc) => {
+      const data = doc.data() ?? {};
+      const detail =
+        data.status === "ok"
+          ? `Ledger ${data.ledgerIndex ?? "-"} / 残高 ${data.balanceXrp ?? "-"} XRP`
+          : data.message ?? null;
+      return {
+        historyId: doc.id,
+        type: "SYNC_LOG",
+        title: data.status === "ok" ? "同期成功" : "同期失敗",
+        detail,
+        actorUid: null,
+        actorEmail: null,
+        createdAt: data.createdAt,
+        meta: {
+          status: data.status ?? null,
+          ledgerIndex: data.ledgerIndex ?? null,
+          balanceXrp: data.balanceXrp ?? null
+        }
+      };
+    });
+
+    const merged = [...historyEntries, ...syncEntries]
+      .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+      .slice(0, 50)
+      .map((entry) => ({ ...entry, createdAt: formatDate(entry.createdAt) }));
+
+    return jsonOk(c, merged);
+  });
+
+  app.patch(":caseId/assets/:assetId/reserve", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = assetReserveSchema.safeParse({
+      reserveXrp: body?.reserveXrp,
+      reserveTokens: body?.reserveTokens ?? []
+    });
+    if (!parsed.success) {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        parsed.error.issues[0]?.message ?? "入力が不正です"
+      );
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    await assetRef.set(
+      {
+        reserveXrp: parsed.data.reserveXrp,
+        reserveTokens: parsed.data.reserveTokens,
+        updatedAt: deps.now()
+      },
+      { merge: true }
+    );
+    await appendAssetHistory(assetRef, {
+      type: "ASSET_RESERVE_UPDATED",
+      title: "留保設定を更新しました",
+      detail: `XRP ${parsed.data.reserveXrp}`,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
+    return jsonOk(c);
   });
 
   app.delete(":caseId/assets/:assetId", async (c) => {
@@ -531,7 +784,19 @@ export const casesRoutes = () => {
       );
     }
 
-    await db.collection(`cases/${caseId}/assets`).doc(assetId).delete();
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (assetSnap.exists) {
+      const assetData = assetSnap.data() ?? {};
+      await appendAssetHistory(assetRef, {
+        type: "ASSET_DELETED",
+        title: "資産を削除しました",
+        detail: typeof assetData.label === "string" ? assetData.label : null,
+        actorUid: auth.uid,
+        actorEmail: auth.email ?? null
+      });
+    }
+    await assetRef.delete();
     return jsonOk(c);
   });
 
@@ -565,6 +830,12 @@ export const casesRoutes = () => {
       },
       { merge: true }
     );
+    await appendAssetHistory(assetRef, {
+      type: "ASSET_VERIFY_REQUESTED",
+      title: "所有権検証を開始しました",
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
     return jsonOk(c, {
       challenge,
       address: XRPL_VERIFY_ADDRESS,
@@ -644,6 +915,12 @@ export const casesRoutes = () => {
       },
       { merge: true }
     );
+    await appendAssetHistory(assetRef, {
+      type: "ASSET_VERIFY_CONFIRMED",
+      title: "所有権検証を完了しました",
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
 
     return jsonOk(c);
   });

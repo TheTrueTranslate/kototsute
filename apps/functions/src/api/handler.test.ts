@@ -1036,6 +1036,63 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.[0]?.email).toBe("heir@example.com");
   });
 
+  it("stores and returns task progress", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const updateSharedRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/task-progress/shared`,
+        body: { completedTaskIds: ["task-1", "task-2", "task-1", ""] }
+      }) as any,
+      updateSharedRes as any
+    );
+    expect(updateSharedRes.statusCode).toBe(404);
+
+    const updateMyRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/task-progress/me`,
+        body: { completedTaskIds: ["mine-1"] }
+      }) as any,
+      updateMyRes as any
+    );
+    expect(updateMyRes.statusCode).toBe(200);
+
+    const listRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/task-progress`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.body?.data?.sharedCompletedTaskIds).toBeUndefined();
+    expect(listRes.body?.data?.userCompletedTaskIds).toEqual(["mine-1"]);
+  });
+
   it("lists received case invites", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({
@@ -1201,6 +1258,167 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
+  });
+
+  it("returns cached wallet info when includeXrpl is false", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const db = getFirestore();
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "10",
+          ledgerIndex: 1,
+          tokens: [{ currency: "USD", issuer: "rIssuer", balance: "5" }],
+          syncedAt: new Date("2024-01-02T00:00:00.000Z")
+        }
+      },
+      { merge: true }
+    );
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.xrpl?.balanceXrp).toBe("10");
+    expect(res.body?.data?.xrpl?.tokens?.[0]?.balance).toBe("5");
+    expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
+  });
+
+  it("lists asset history with sync logs", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}/history`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.body?.data)).toBe(true);
+  });
+
+  it("updates asset reserve settings", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const updateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "PATCH",
+        path: `/v1/cases/${caseId}/assets/${assetId}/reserve`,
+        body: {
+          reserveXrp: "1.5",
+          reserveTokens: [{ currency: "USD", issuer: "rIssuer", reserveAmount: "10" }]
+        }
+      }) as any,
+      updateRes as any
+    );
+    expect(updateRes.statusCode).toBe(200);
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.reserveXrp).toBe("1.5");
+    expect(detailRes.body?.data?.reserveTokens?.length).toBe(1);
   });
 
   it("rejects case asset deletion when related plan exists", async () => {

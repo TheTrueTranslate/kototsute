@@ -56,6 +56,9 @@ importers:
       '@kototsute/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@kototsute/tasks':
+        specifier: workspace:*
+        version: link:../../packages/tasks
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -222,6 +225,15 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@25.0.10)
+
+  packages/tasks:
     devDependencies:
       typescript:
         specifier: ^5.5.2

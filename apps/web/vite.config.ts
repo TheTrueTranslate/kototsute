@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": resolve(__dirname, "./src")
+      "@": resolve(__dirname, "./src"),
+      "@kototsute/shared": resolve(__dirname, "../../packages/shared/src"),
+      "@kototsute/tasks": resolve(__dirname, "../../packages/tasks/src")
     }
   },
   server: {

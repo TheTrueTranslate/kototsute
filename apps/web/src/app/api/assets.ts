@@ -6,6 +6,8 @@ export type AssetListItem = {
   address: string;
   createdAt: string;
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
+  reserveXrp?: string;
+  reserveTokens?: AssetReserveToken[];
 };
 
 export type AssetCreateResponse = {
@@ -23,6 +25,23 @@ export type AssetSyncLog = {
   createdAt: string;
 };
 
+export type AssetReserveToken = {
+  currency: string;
+  issuer: string | null;
+  reserveAmount: string;
+};
+
+export type AssetHistoryItem = {
+  historyId: string;
+  type: string;
+  title: string;
+  detail: string | null;
+  actorUid: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+  meta: Record<string, unknown> | null;
+};
+
 export type AssetDetail = {
   assetId: string;
   label: string;
@@ -32,14 +51,17 @@ export type AssetDetail = {
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
   verificationChallenge: string | null;
   verificationAddress: string;
+  reserveXrp: string;
+  reserveTokens: AssetReserveToken[];
   xrpl:
     | {
         status: "ok";
         balanceXrp: string;
-        ledgerIndex?: number;
-        tokens?: Array<{ currency: string; issuer: string | null; isNative: boolean }>;
+        ledgerIndex?: number | null;
+        tokens?: Array<{ currency: string; issuer: string | null; balance: string }>;
+        syncedAt?: string;
       }
-    | { status: "error"; message: string }
+    | { status: "error"; message: string; syncedAt?: string }
     | null;
   syncLogs: AssetSyncLog[];
 };
@@ -83,4 +105,22 @@ export const confirmVerify = async (caseId: string, assetId: string, txHash: str
     method: "POST",
     body: JSON.stringify({ txHash })
   });
+};
+
+export const updateAssetReserve = async (
+  caseId: string,
+  assetId: string,
+  input: { reserveXrp: string; reserveTokens: AssetReserveToken[] }
+) => {
+  await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/reserve`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+};
+
+export const getAssetHistory = async (caseId: string, assetId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/history`, {
+    method: "GET"
+  });
+  return result.data as AssetHistoryItem[];
 };

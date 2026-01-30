@@ -22,9 +22,24 @@ vi.mock("../api/assets", () => ({
     verificationStatus: "UNVERIFIED",
     verificationChallenge: null,
     verificationAddress: "rVerify",
-    xrpl: null,
+    reserveXrp: "0",
+    reserveTokens: [],
+    xrpl: {
+      status: "ok",
+      balanceXrp: "10",
+      ledgerIndex: 100,
+      tokens: [
+        {
+          currency: "USD",
+          issuer: "rIssuer",
+          balance: "5"
+        }
+      ],
+      syncedAt: "2024-01-03T00:00:00.000Z"
+    },
     syncLogs: []
   }),
+  getAssetHistory: async () => [],
   requestVerifyChallenge: async () => ({
     challenge: "abc",
     address: "rVerify",
@@ -34,13 +49,13 @@ vi.mock("../api/assets", () => ({
   deleteAsset: async () => ({})
 }));
 
-const render = async () => {
+const render = async (props?: Record<string, unknown>) => {
   const { default: AssetDetailPage } = await import("./AssetDetailPage");
   return renderToString(
     React.createElement(
       MemoryRouter,
       null,
-      React.createElement(AssetDetailPage, {
+      React.createElement(AssetDetailPage as any, {
         initialAsset: {
           assetId: "asset-1",
           label: "XRP Wallet",
@@ -50,9 +65,24 @@ const render = async () => {
           verificationStatus: "UNVERIFIED",
           verificationChallenge: null,
           verificationAddress: "rVerify",
-          xrpl: null,
+          reserveXrp: "0",
+          reserveTokens: [],
+          xrpl: {
+            status: "ok",
+            balanceXrp: "10",
+            ledgerIndex: 100,
+            tokens: [
+              {
+                currency: "USD",
+                issuer: "rIssuer",
+                balance: "5"
+              }
+            ],
+            syncedAt: "2024-01-03T00:00:00.000Z"
+          },
           syncLogs: []
-        }
+        },
+        ...(props ?? {})
       })
     )
   );
@@ -63,5 +93,41 @@ describe("AssetDetailPage", () => {
     const html = await render();
     expect(html).toContain("XRP Wallet");
     expect(html).toContain("rXXXX");
+  });
+
+  it("shows combined inheritance and reserve section", async () => {
+    const html = await render();
+    expect(html).toContain("相続予定数・留保設定");
+  });
+
+  it("renders history tab", async () => {
+    const html = await render();
+    expect(html).toContain("履歴");
+  });
+
+  it("shows wallet info and inheritance section", async () => {
+    const html = await render();
+    expect(html).toContain("ウォレット情報");
+    expect(html).toContain("相続予定数");
+  });
+
+  it("shows actor in history items", async () => {
+    const html = await render({
+      initialTab: "history",
+      initialHistoryItems: [
+        {
+          historyId: "history-1",
+          type: "ASSET_CREATED",
+          title: "資産を登録しました",
+          detail: "登録済み",
+          actorUid: "owner_1",
+          actorEmail: "owner@example.com",
+          createdAt: "2024-01-04T00:00:00.000Z",
+          meta: null
+        }
+      ]
+    });
+    expect(html).toContain("担当者");
+    expect(html).toContain("owner@example.com");
   });
 });
