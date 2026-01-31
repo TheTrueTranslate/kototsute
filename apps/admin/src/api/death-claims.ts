@@ -9,7 +9,23 @@ export type AdminDeathClaim = {
 
 export type AdminDeathClaimDetail = {
   claim: { claimId: string; status: string; submittedByUid: string };
-  files: Array<{ fileId: string; fileName: string; contentType: string; size: number }>;
+  case: {
+    caseId: string;
+    ownerDisplayName: string | null;
+    stage: string | null;
+    assetLockStatus: string | null;
+    memberCount: number;
+    createdAt: string | null;
+  } | null;
+  files: Array<{
+    fileId: string;
+    fileName: string;
+    contentType: string;
+    size: number;
+    storagePath?: string;
+    uploadedByUid?: string;
+    createdAt?: string;
+  }>;
 };
 
 export const listPendingDeathClaims = async () => {

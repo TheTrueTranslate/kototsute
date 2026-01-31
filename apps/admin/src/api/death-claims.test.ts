@@ -14,4 +14,37 @@ describe("admin death-claims api", () => {
       body: JSON.stringify({ note: "NG" })
     });
   });
+
+  it("returns detail with case and file metadata", async () => {
+    const { getDeathClaimDetail } = await import("./death-claims");
+    const { apiFetch } = await import("../lib/api");
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      data: {
+        claim: { claimId: "claim_1", status: "SUBMITTED", submittedByUid: "u1" },
+        case: {
+          caseId: "case_1",
+          ownerDisplayName: "山田",
+          stage: "WAITING",
+          assetLockStatus: "LOCKED",
+          memberCount: 2,
+          createdAt: "2024-01-01T00:00:00.000Z"
+        },
+        files: [
+          {
+            fileId: "file_1",
+            fileName: "doc.pdf",
+            contentType: "application/pdf",
+            size: 1000,
+            storagePath: "cases/case_1/death-claims/claim_1/file_1",
+            uploadedByUid: "u1",
+            createdAt: "2024-01-02T00:00:00.000Z"
+          }
+        ]
+      }
+    });
+
+    const result = await getDeathClaimDetail("case_1", "claim_1");
+    expect(result.case.ownerDisplayName).toBe("山田");
+    expect(result.files[0].storagePath).toContain("cases/");
+  });
 });
