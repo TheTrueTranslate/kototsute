@@ -57,12 +57,26 @@ export const adminRoutes = () => {
       return jsonError(c, 404, "NOT_FOUND", "Claim not found");
     }
 
+    const caseSnap = await db.collection("cases").doc(caseId).get();
+    const caseData = caseSnap.exists ? caseSnap.data() ?? {} : {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+
     const filesSnap = await claimRef.collection("files").get();
     const files = filesSnap.docs.map((doc) => ({
       fileId: doc.id,
       ...doc.data()
     }));
-    return jsonOk(c, { claim: { claimId, ...claimSnap.data() }, files });
+    const caseSummary = caseSnap.exists
+      ? {
+          caseId,
+          ownerDisplayName: caseData.ownerDisplayName ?? null,
+          stage: caseData.stage ?? null,
+          assetLockStatus: caseData.assetLockStatus ?? null,
+          memberCount: memberUids.length,
+          createdAt: caseData.createdAt ?? null
+        }
+      : null;
+    return jsonOk(c, { claim: { claimId, ...claimSnap.data() }, case: caseSummary, files });
   });
 
   return app;

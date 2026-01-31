@@ -3686,7 +3686,14 @@ describe("createApiHandler", () => {
     });
 
     const db = getFirestore();
-    await db.collection("cases").doc("case_1").set({ caseId: "case_1" });
+    await db.collection("cases").doc("case_1").set({
+      caseId: "case_1",
+      ownerDisplayName: "山田",
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      memberUids: ["heir_1", "heir_2"],
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
     await db.collection("cases/case_1/deathClaims").doc("claim_1").set({
       submittedByUid: "heir_1",
       status: "SUBMITTED",
@@ -3698,7 +3705,10 @@ describe("createApiHandler", () => {
       .set({
         fileName: "death.pdf",
         contentType: "application/pdf",
-        size: 1024
+        size: 1024,
+        storagePath: "cases/case_1/death-claims/claim_1/file_1",
+        uploadedByUid: "heir_1",
+        createdAt: new Date("2024-01-02T00:00:00.000Z")
       });
 
     const req = authedReq("admin_1", "admin@example.com", {
@@ -3714,5 +3724,9 @@ describe("createApiHandler", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body?.data?.claim?.claimId).toBe("claim_1");
     expect(res.body?.data?.files?.length).toBe(1);
+    expect(res.body?.data?.case?.ownerDisplayName).toBe("山田");
+    expect(res.body?.data?.case?.memberCount).toBe(2);
+    expect(res.body?.data?.files?.[0]?.storagePath).toContain("cases/case_1");
+    expect(res.body?.data?.files?.[0]?.uploadedByUid).toBe("heir_1");
   });
 });
