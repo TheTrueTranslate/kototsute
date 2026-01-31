@@ -21,6 +21,21 @@ const formatDate = (value?: string | null) => {
   return parsed.toLocaleString("ja-JP");
 };
 
+export const toClaimStatusLabel = (status: string) => {
+  switch (status) {
+    case "SUBMITTED":
+      return "提出済み";
+    case "ADMIN_APPROVED":
+      return "運営承認済み";
+    case "ADMIN_REJECTED":
+      return "差し戻し";
+    case "CONFIRMED":
+      return "死亡確定";
+    default:
+      return status;
+  }
+};
+
 export default function ClaimDetailPage() {
   const { caseId, claimId } = useParams();
   const [detail, setDetail] = useState<AdminDeathClaimDetail | null>(null);
@@ -83,8 +98,6 @@ export default function ClaimDetailPage() {
   return (
     <div className="card">
       <div className="card-title">申請詳細</div>
-      <div className="muted">Case: {caseId}</div>
-      <div className="muted">Claim: {claimId}</div>
       {error ? <div className="alert">{error}</div> : null}
       {loading ? (
         <div className="muted">読み込み中...</div>
@@ -92,7 +105,7 @@ export default function ClaimDetailPage() {
         <>
           <div className="section">
             <div className="section-title">ステータス</div>
-            <div className="badge">{detail.claim.status}</div>
+            <div className="badge">{toClaimStatusLabel(detail.claim.status)}</div>
           </div>
           <div className="section">
             <div className="section-title">ケース概要</div>
