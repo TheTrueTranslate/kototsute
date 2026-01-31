@@ -40,4 +40,42 @@ describe("asset-lock api", () => {
       method: "POST"
     });
   });
+
+  it("calls regular key verify endpoint", async () => {
+    const { verifyAssetLockRegularKey } = await import("./asset-lock");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await verifyAssetLockRegularKey("case-1");
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/v1/cases/case-1/asset-lock/regular-key/verify",
+      { method: "POST" }
+    );
+  });
+
+  it("calls update state endpoint", async () => {
+    const { updateAssetLockState } = await import("./asset-lock");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await updateAssetLockState("case-1", { uiStep: 2, methodStep: "AUTO_TRANSFER" });
+    expect(apiFetch).toHaveBeenCalledWith("/v1/cases/case-1/asset-lock/state", {
+      method: "PATCH",
+      body: JSON.stringify({ uiStep: 2, methodStep: "AUTO_TRANSFER" })
+    });
+  });
+
+  it("calls balances endpoint", async () => {
+    const { getAssetLockBalances } = await import("./asset-lock");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await getAssetLockBalances("case-1");
+    expect(apiFetch).toHaveBeenCalledWith("/v1/cases/case-1/asset-lock/balances", {
+      method: "GET"
+    });
+  });
+
+  it("calls complete endpoint", async () => {
+    const { completeAssetLock } = await import("./asset-lock");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await completeAssetLock("case-1");
+    expect(apiFetch).toHaveBeenCalledWith("/v1/cases/case-1/asset-lock/complete", {
+      method: "POST"
+    });
+  });
 });

@@ -16,8 +16,31 @@ export type AssetLockItem = {
 export type AssetLockState = {
   status: "DRAFT" | "READY" | "LOCKING" | "LOCKED" | "FAILED";
   method: AssetLockMethod | null;
+  uiStep: number | null;
+  methodStep: string | null;
   wallet: { address: string } | null;
   items: AssetLockItem[];
+  regularKeyStatuses?: {
+    assetId: string;
+    assetLabel: string;
+    address: string;
+    status: "VERIFIED" | "UNVERIFIED" | "ERROR";
+    message: string | null;
+  }[];
+};
+
+export type AssetLockBalanceEntry = {
+  assetId?: string;
+  assetLabel?: string;
+  address: string;
+  status: "ok" | "error";
+  balanceXrp: string | null;
+  message: string | null;
+};
+
+export type AssetLockBalances = {
+  destination: AssetLockBalanceEntry;
+  sources: AssetLockBalanceEntry[];
 };
 
 export const getAssetLock = async (caseId: string) => {
@@ -46,6 +69,36 @@ export const verifyAssetLockItem = async (
 
 export const executeAssetLock = async (caseId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/asset-lock/execute`, {
+    method: "POST"
+  });
+  return result.data as AssetLockState;
+};
+
+export const verifyAssetLockRegularKey = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/asset-lock/regular-key/verify`, {
+    method: "POST"
+  });
+  return result.data as AssetLockState;
+};
+
+export const updateAssetLockState = async (
+  caseId: string,
+  input: { uiStep?: number | null; methodStep?: string | null }
+) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/asset-lock/state`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+  return result.data as AssetLockState;
+};
+
+export const getAssetLockBalances = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/asset-lock/balances`, { method: "GET" });
+  return result.data as AssetLockBalances;
+};
+
+export const completeAssetLock = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/asset-lock/complete`, {
     method: "POST"
   });
   return result.data as AssetLockState;

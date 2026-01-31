@@ -15,7 +15,15 @@
 }
 
 .stepChip {
-  @apply rounded-full border border-border bg-background px-3 py-1 text-meta text-muted-foreground;
+  @apply flex flex-col items-center gap-1 rounded-2xl border-2 border-foreground/20 bg-foreground/5 px-4 py-2 text-foreground shadow-sm;
+}
+
+.stepChipLabel {
+  @apply text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground;
+}
+
+.stepChipValue {
+  @apply text-[20px] font-semibold leading-none text-foreground;
 }
 
 .stepCard {
@@ -30,20 +38,227 @@
   @apply mt-2 text-body-sm text-muted-foreground;
 }
 
+.transferHint {
+  @apply text-body-sm text-muted-foreground;
+}
+
 .stepActions {
-  @apply flex items-center justify-between gap-2;
+  @apply mt-4 flex items-center justify-start gap-2;
+}
+
+.backButton {
+  @apply text-foreground;
 }
 
 .methodSelect {
-  @apply mt-2 grid gap-2;
+  @apply mt-2 grid gap-3;
 }
 
-.methodOption {
-  @apply flex items-center gap-2 text-body-sm text-foreground;
+.methodCard {
+  @apply flex flex-col gap-3 rounded-xl border border-border/60 bg-background px-4 py-3 text-left transition;
+}
+
+.methodCardActive {
+  @apply border-foreground/30 bg-muted/20;
+}
+
+.methodHeader {
+  @apply flex items-start gap-3;
+}
+
+.methodRadio {
+  @apply mt-1;
+}
+
+.methodHeading {
+  @apply flex-1;
+}
+
+.methodTitleRow {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.methodTitle {
+  @apply text-body text-foreground;
+}
+
+.methodSummary {
+  @apply mt-1 text-meta text-muted-foreground;
+}
+
+.methodBadge {
+  @apply rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary;
+}
+
+.methodList {
+  @apply grid gap-1 text-meta text-muted-foreground;
+}
+
+.methodListItem {
+  @apply pl-3 text-meta text-muted-foreground;
+  position: relative;
+}
+
+.methodListItem::before {
+  content: "・";
+  position: absolute;
+  left: 0;
 }
 
 .methodActions {
   @apply mt-3 flex items-center gap-2;
+}
+
+.autoTransferNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeyCard {
+  @apply mt-3 grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.regularKeyTitle {
+  @apply text-body text-foreground;
+}
+
+.regularKeyBody {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeySummary {
+  @apply flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2;
+}
+
+.regularKeySummaryLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeySummaryValue {
+  @apply text-body text-foreground;
+}
+
+.regularKeyNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeyStatusCard {
+  @apply mt-3 grid gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-3;
+}
+
+.regularKeyStatusTitle {
+  @apply text-body text-foreground;
+}
+
+.regularKeyStatusList {
+  @apply grid gap-2;
+}
+
+.regularKeyStatusItem {
+  @apply grid gap-1 rounded-lg border border-border/60 bg-background px-3 py-2;
+}
+
+.regularKeyStatusRow {
+  @apply flex items-center justify-between gap-2;
+}
+
+.regularKeyStatusLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeyStatusValue {
+  @apply text-body text-foreground;
+}
+
+.regularKeyStatusMessage {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeyInfo {
+  @apply mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3;
+}
+
+.regularKeyRow {
+  @apply flex items-center justify-between gap-2;
+}
+
+.regularKeyLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.regularKeyValue {
+  @apply text-body text-foreground;
+}
+
+.copyButton {
+  @apply text-muted-foreground;
+}
+
+.planSection {
+  @apply mt-4 grid gap-2;
+}
+
+.planSectionTitle {
+  @apply text-body text-foreground;
+}
+
+.planHint {
+  @apply text-meta text-muted-foreground;
+}
+
+.planList {
+  @apply grid gap-2;
+}
+
+.planCard {
+  @apply rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.planTitle {
+  @apply text-body text-foreground;
+}
+
+.planMeta {
+  @apply text-meta text-muted-foreground;
+}
+
+.planRuleTitle {
+  @apply mt-3 text-meta font-semibold text-foreground;
+}
+
+.ruleList {
+  @apply mt-2 grid gap-2;
+}
+
+.ruleItem {
+  @apply rounded-lg border border-border/50 bg-muted/20 px-3 py-2;
+}
+
+.ruleHeader {
+  @apply flex items-center justify-between text-meta text-foreground;
+}
+
+.ruleAsset {
+  @apply font-semibold text-foreground;
+}
+
+.ruleUnit {
+  @apply text-[11px] text-muted-foreground;
+}
+
+.ruleAllocations {
+  @apply mt-2 grid gap-1;
+}
+
+.ruleRow {
+  @apply flex items-center justify-between text-meta text-muted-foreground;
+}
+
+.ruleHeir {
+  @apply text-foreground/80;
+}
+
+.ruleValue {
+  @apply font-semibold text-foreground;
 }
 
 .transferList {
@@ -58,6 +273,105 @@
   @apply text-body text-foreground;
 }
 
+.transferType {
+  @apply text-meta font-semibold text-foreground/80;
+}
+
 .transferMeta {
   @apply text-meta text-muted-foreground;
+}
+
+.balanceBlock {
+  @apply mt-3 grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.balanceHeader {
+  @apply flex items-center justify-between gap-2;
+}
+
+.balanceTitle {
+  @apply text-body font-semibold text-foreground;
+}
+
+.balanceNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.balanceGrid {
+  @apply mt-2 grid gap-2;
+}
+
+.balanceItem {
+  @apply grid gap-1 rounded-lg border border-border/50 bg-muted/20 px-3 py-2;
+}
+
+.balanceLabel {
+  @apply text-meta text-foreground/80;
+}
+
+.balanceValue {
+  @apply text-body font-semibold text-foreground;
+}
+
+.balanceMeta {
+  @apply text-[11px] text-muted-foreground;
+  word-break: break-all;
+}
+
+.balanceLink {
+  @apply text-[11px] text-primary;
+  word-break: break-all;
+}
+
+.balanceLink:hover {
+  @apply underline;
+}
+
+.balanceError {
+  @apply text-[11px] text-destructive;
+}
+
+.emptyState {
+  @apply rounded-xl border border-dashed border-border/60 bg-background px-4 py-3 text-meta text-muted-foreground;
+}
+
+.methodProgress {
+  @apply mt-3 grid gap-3;
+}
+
+.methodStep {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+  grid-template-columns: auto 1fr;
+}
+
+.methodStepIndicator {
+  @apply flex h-7 w-7 items-center justify-center rounded-full border border-border/60 text-[12px] font-semibold text-muted-foreground;
+}
+
+.methodStepContent {
+  @apply grid gap-1;
+}
+
+.methodStepTitle {
+  @apply text-body text-foreground;
+}
+
+.methodStepDescription {
+  @apply text-meta text-muted-foreground;
+}
+
+.methodStepTag {
+  @apply mt-1 w-fit rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary;
+}
+
+.methodStepPending {
+  @apply opacity-70;
+}
+
+.methodStepCurrent {
+  @apply border-foreground/30 bg-muted/20;
+}
+
+.methodStepDone {
+  @apply border-foreground/20 bg-muted/10;
 }
