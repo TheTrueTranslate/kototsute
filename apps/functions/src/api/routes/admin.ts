@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
 
@@ -62,10 +63,31 @@ export const adminRoutes = () => {
     const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
 
     const filesSnap = await claimRef.collection("files").get();
-    const files = filesSnap.docs.map((doc) => ({
-      fileId: doc.id,
-      ...doc.data()
-    }));
+    const storageBucket = process.env.STORAGE_BUCKET;
+    const files = await Promise.all(
+      filesSnap.docs.map(async (doc) => {
+        const data = doc.data() ?? {};
+        let downloadUrl: string | null = null;
+        const storagePath = typeof data.storagePath === "string" ? data.storagePath : null;
+        if (storageBucket && storagePath) {
+          try {
+            const bucket = getStorage().bucket(storageBucket);
+            const [signedUrl] = await bucket.file(storagePath).getSignedUrl({
+              action: "read",
+              expires: Date.now() + 15 * 60 * 1000
+            });
+            downloadUrl = signedUrl;
+          } catch {
+            downloadUrl = null;
+          }
+        }
+        return {
+          fileId: doc.id,
+          ...data,
+          downloadUrl
+        };
+      })
+    );
     const caseSummary = caseSnap.exists
       ? {
           caseId,

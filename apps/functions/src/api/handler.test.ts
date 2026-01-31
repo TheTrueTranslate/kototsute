@@ -16,6 +16,12 @@ const authState = {
   users: new Map<string, { email?: string | null }>()
 };
 const authTokens = new Map<string, { uid: string; email?: string | null; admin?: boolean }>();
+const storageMocks = vi.hoisted(() => {
+  const getSignedUrl = vi.fn(async () => ["https://storage.example.com/signed"]);
+  const file = vi.fn(() => ({ getSignedUrl }));
+  const bucket = vi.fn(() => ({ file }));
+  return { getSignedUrl, file, bucket };
+});
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -208,6 +214,12 @@ vi.mock("firebase-admin/auth", () => ({
       }
       return { uid, email: user.email ?? null };
     }
+  })
+}));
+
+vi.mock("firebase-admin/storage", () => ({
+  getStorage: () => ({
+    bucket: storageMocks.bucket
   })
 }));
 
@@ -3710,6 +3722,7 @@ describe("createApiHandler", () => {
         uploadedByUid: "heir_1",
         createdAt: new Date("2024-01-02T00:00:00.000Z")
       });
+    process.env.STORAGE_BUCKET = "kototsute.appspot.com";
 
     const req = authedReq("admin_1", "admin@example.com", {
       method: "GET",
@@ -3728,5 +3741,9 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.case?.memberCount).toBe(2);
     expect(res.body?.data?.files?.[0]?.storagePath).toContain("cases/case_1");
     expect(res.body?.data?.files?.[0]?.uploadedByUid).toBe("heir_1");
+    expect(res.body?.data?.files?.[0]?.downloadUrl).toBe(
+      "https://storage.example.com/signed"
+    );
+    delete process.env.STORAGE_BUCKET;
   });
 });
