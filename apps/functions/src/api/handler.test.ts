@@ -18,9 +18,10 @@ const authState = {
 const authTokens = new Map<string, { uid: string; email?: string | null; admin?: boolean }>();
 const storageMocks = vi.hoisted(() => {
   const getSignedUrl = vi.fn(async () => ["https://storage.example.com/signed"]);
-  const file = vi.fn(() => ({ getSignedUrl }));
+  const download = vi.fn(async () => [Buffer.from("dummy-file")]);
+  const file = vi.fn(() => ({ getSignedUrl, download }));
   const bucket = vi.fn(() => ({ file }));
-  return { getSignedUrl, file, bucket };
+  return { getSignedUrl, download, file, bucket };
 });
 
 type StoredDoc = Record<string, any>;
@@ -291,6 +292,16 @@ const createRes = (): MockRes => {
       return this;
     },
     json(body: any) {
+      this.body = body;
+      return this;
+    }
+  };
+};
+
+const createResWithSend = (): MockRes & { send: (body: any) => MockRes } => {
+  return {
+    ...createRes(),
+    send(body: any) {
       this.body = body;
       return this;
     }
@@ -3746,6 +3757,56 @@ describe("createApiHandler", () => {
       "http://127.0.0.1:9199/v0/b/kototsute.firebasestorage.app/o/cases%2Fcase_1%2Fdeath-claims%2Fclaim_1%2Ffile_1?alt=media"
     );
     delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    delete process.env.STORAGE_BUCKET;
+  });
+
+  it("returns base64 file data for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      ownerUid: "owner_1",
+      memberUids: ["heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      status: "SUBMITTED",
+      submittedByUid: "heir_1"
+    });
+    await db
+      .collection(`cases/${caseId}/deathClaims/${claimId}/files`)
+      .doc(fileId)
+      .set({
+        storagePath: `cases/${caseId}/death-claims/${claimId}/req_1`,
+        fileName: "report.pdf",
+        contentType: "application/pdf"
+      });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: `/v1/admin/death-claims/${caseId}/${claimId}/files/${fileId}/download`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.fileName).toBe("report.pdf");
+    expect(res.body?.data?.contentType).toBe("application/pdf");
+    expect(res.body?.data?.dataBase64).toBe("ZHVtbXktZmlsZQ==");
+
     delete process.env.STORAGE_BUCKET;
   });
 });

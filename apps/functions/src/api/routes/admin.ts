@@ -116,5 +116,36 @@ export const adminRoutes = () => {
     return jsonOk(c, { claim: { claimId, ...claimSnap.data() }, case: caseSummary, files });
   });
 
+  app.get("/death-claims/:caseId/:claimId/files/:fileId/download", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const fileId = c.req.param("fileId");
+    const db = getFirestore();
+    const fileSnap = await db
+      .collection(`cases/${caseId}/deathClaims/${claimId}/files`)
+      .doc(fileId)
+      .get();
+    if (!fileSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "File not found");
+    }
+    const fileData = fileSnap.data() ?? {};
+    const storagePath = typeof fileData.storagePath === "string" ? fileData.storagePath : null;
+    const storageBucket = process.env.STORAGE_BUCKET;
+    if (!storagePath || !storageBucket) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "storagePathがありません");
+    }
+    const [buffer] = await getStorage().bucket(storageBucket).file(storagePath).download();
+    const dataBase64 = Buffer.from(buffer).toString("base64");
+    return jsonOk(c, {
+      fileName: fileData.fileName ?? null,
+      contentType: fileData.contentType ?? "application/octet-stream",
+      dataBase64
+    });
+  });
+
   return app;
 };
