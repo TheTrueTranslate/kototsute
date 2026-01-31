@@ -46,6 +46,8 @@ export const toClaimStatusLabel = (status: string) => {
   }
 };
 
+export const profileLabel = "被相続人プロフィール";
+
 export default function ClaimDetailPage() {
   const { caseId, claimId } = useParams();
   const [detail, setDetail] = useState<AdminDeathClaimDetail | null>(null);
@@ -136,14 +138,9 @@ export default function ClaimDetailPage() {
             </label>
           </div>
           <div className="section">
-            <div className="section-title">ケース概要</div>
+            <div className="section-title">{profileLabel}</div>
             {detail.case ? (
-              <div className="muted">
-                ケースID: {detail.case.caseId} / 被相続人: {detail.case.ownerDisplayName ?? "-"} /
-                ステージ: {detail.case.stage ?? "-"} / ロックステータス:{" "}
-                {detail.case.assetLockStatus ?? "-"} / 相続人数: {detail.case.memberCount} / 作成日時:{" "}
-                {formatDate(detail.case.createdAt)}
-              </div>
+              <div className="muted">{detail.case.ownerDisplayName ?? "-"}</div>
             ) : (
               <div className="muted">ケース情報が取得できません。</div>
             )}
