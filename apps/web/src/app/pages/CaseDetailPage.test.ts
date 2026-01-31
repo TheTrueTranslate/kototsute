@@ -10,6 +10,15 @@ let heirWalletData: { address: string | null; verificationStatus: string | null 
   verificationStatus: null
 };
 let caseHeirsData: Array<any> = [];
+let caseData = {
+  caseId: "case-1",
+  ownerUid: "owner",
+  ownerDisplayName: "山田",
+  stage: "DRAFT",
+  assetLockStatus: "UNLOCKED",
+  createdAt: "2024-01-01",
+  updatedAt: "2024-01-01"
+};
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -21,15 +30,7 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("../api/cases", () => ({
-  getCase: async () => ({
-    caseId: "case-1",
-    ownerUid: "owner",
-    ownerDisplayName: "山田",
-    stage: "DRAFT",
-    assetLockStatus: "UNLOCKED",
-    createdAt: "2024-01-01",
-    updatedAt: "2024-01-01"
-  })
+  getCase: async () => caseData
 }));
 
 vi.mock("../api/assets", () => ({
@@ -106,6 +107,15 @@ describe("CaseDetailPage", () => {
     searchParams = new URLSearchParams();
     heirWalletData = { address: null, verificationStatus: null };
     caseHeirsData = [];
+    caseData = {
+      caseId: "case-1",
+      ownerUid: "owner",
+      ownerDisplayName: "山田",
+      stage: "DRAFT",
+      assetLockStatus: "UNLOCKED",
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-01"
+    };
   });
 
   it("shows case detail header", async () => {
@@ -118,6 +128,19 @@ describe("CaseDetailPage", () => {
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
     expect(html).toContain("タスク");
+  });
+
+  it("hides edit actions when asset lock is locked", async () => {
+    caseData = {
+      ...caseData,
+      stage: "WAITING",
+      assetLockStatus: "LOCKED"
+    };
+    const html = await render();
+    expect(html).not.toContain("資産を追加");
+    expect(html).not.toContain("資産をロックする");
+    expect(html).not.toContain("指図を作成");
+    expect(html).not.toContain("招待を送る");
   });
 
   it("links to asset detail page", async () => {
@@ -230,6 +253,35 @@ describe("CaseDetailPage", () => {
 
     const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
     expect(html).not.toContain(">所有確認<");
+  });
+
+  it("hides register button when heir wallet is verified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "VERIFIED" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).not.toContain("登録/変更");
+  });
+
+  it("shows registered wallet address in wallet tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("ウォレットアドレス");
+    expect(html).toContain("rHeir");
+  });
+
+  it("shows wallet status label in wallet tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("ステータス");
+    expect(html).toContain("未確認");
   });
 
   it("shows copyable verification fields for heir wallet", async () => {

@@ -8,7 +8,18 @@ export type XrplToken = {
 };
 
 export type XrplStatus =
-  | { status: "ok"; balanceXrp: string; ledgerIndex?: number; tokens?: XrplToken[] }
+  | {
+      status: "ok";
+      balanceXrp: string;
+      ledgerIndex?: number;
+      tokens?: XrplToken[];
+      regularKey?: string | null;
+      ownerCount?: number;
+    }
+  | { status: "error"; message: string };
+
+export type XrplReserve =
+  | { status: "ok"; reserveBaseDrops: string; reserveIncDrops: string }
   | { status: "error"; message: string };
 
 export const XRPL_URL = process.env.XRPL_URL ?? "https://s.altnet.rippletest.net:51234";
@@ -44,10 +55,55 @@ export const fetchXrplAccountInfo = async (address: string): Promise<XrplStatus>
     }
     const balanceDrops = payload?.result?.account_data?.Balance;
     const ledgerIndex = payload?.result?.ledger_index;
+    const regularKey =
+      typeof payload?.result?.account_data?.RegularKey === "string"
+        ? payload.result.account_data.RegularKey
+        : null;
+    const ownerCountRaw = payload?.result?.account_data?.OwnerCount;
+    const ownerCount =
+      typeof ownerCountRaw === "number" && Number.isFinite(ownerCountRaw)
+        ? ownerCountRaw
+        : undefined;
     if (typeof balanceDrops !== "string") {
       return { status: "error", message: "XRPL balance is unavailable" };
     }
-    return { status: "ok", balanceXrp: formatXrp(balanceDrops), ledgerIndex };
+    return {
+      status: "ok",
+      balanceXrp: formatXrp(balanceDrops),
+      ledgerIndex,
+      regularKey,
+      ownerCount
+    };
+  } catch (error: any) {
+    return { status: "error", message: error?.message ?? "XRPL request failed" };
+  }
+};
+
+export const fetchXrplReserve = async (): Promise<XrplReserve> => {
+  try {
+    const res = await fetch(XRPL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "server_state", params: [{}] })
+    });
+    const payload = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok || payload?.result?.error) {
+      return {
+        status: "error",
+        message: payload?.result?.error_message ?? payload?.error_message ?? "XRPL error"
+      };
+    }
+    const ledger = payload?.result?.state?.validated_ledger;
+    const reserveBase = ledger?.reserve_base;
+    const reserveInc = ledger?.reserve_inc;
+    if (reserveBase == null || reserveInc == null) {
+      return { status: "error", message: "XRPL reserve is unavailable" };
+    }
+    return {
+      status: "ok",
+      reserveBaseDrops: String(reserveBase),
+      reserveIncDrops: String(reserveInc)
+    };
   } catch (error: any) {
     return { status: "error", message: error?.message ?? "XRPL request failed" };
   }

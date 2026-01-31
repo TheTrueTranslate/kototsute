@@ -218,6 +218,7 @@ export default function CaseDetailPage({
 
   const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
   const isHeir = isOwner === false;
+  const isLocked = caseData?.assetLockStatus === "LOCKED";
   const hasHeirWallet = Boolean(heirWallet?.address);
   const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
   const needsHeirWalletRegistration = isHeir && !hasHeirWallet;
@@ -471,6 +472,7 @@ export default function CaseDetailPage({
 
   const handleInviteSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isLocked) return;
     if (!caseId) {
       setError("ケースIDが取得できません");
       return;
@@ -505,6 +507,7 @@ export default function CaseDetailPage({
   };
 
   const handleTogglePersonalTask = async (taskId: string, checked: boolean) => {
+    if (isLocked) return;
     if (!caseId) return;
     const prev = userCompletedTaskIds;
     const next = buildNextTaskIds(prev, taskId, checked);
@@ -549,10 +552,15 @@ export default function CaseDetailPage({
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>資産</h2>
-            {caseId && isOwner ? (
-              <Button asChild size="sm">
-                <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
-              </Button>
+            {caseId && isOwner && !isLocked ? (
+              <div className={styles.panelActions}>
+                <Button asChild size="sm" variant="secondary">
+                  <Link to={`/cases/${caseId}/asset-lock`}>資産をロックする</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
+                </Button>
+              </div>
             ) : null}
           </div>
           {loading ? null : isOwner === false ? (
@@ -581,7 +589,7 @@ export default function CaseDetailPage({
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>指図</h2>
-            {caseId && isOwner ? (
+            {caseId && isOwner && !isLocked ? (
               <Button asChild size="sm">
                 <Link to={`/cases/${caseId}/plans/new`}>指図を作成</Link>
               </Button>
@@ -634,7 +642,7 @@ export default function CaseDetailPage({
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>相続人</h2>
           </div>
-          {isOwner ? (
+          {isOwner && !isLocked ? (
             <form className={styles.form} onSubmit={handleInviteSubmit}>
               <FormField label="メールアドレス">
                 <Input
@@ -679,6 +687,11 @@ export default function CaseDetailPage({
                 </Button>
               </div>
             </form>
+          ) : isOwner && isLocked ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>資産ロック後は閲覧のみです</div>
+              <div className={styles.emptyBody}>相続人の追加や編集はできません。</div>
+            </div>
           ) : null}
           {loading ? null : isOwner ? (
             ownerInvites.length === 0 ? (
@@ -754,11 +767,8 @@ export default function CaseDetailPage({
           </div>
           {isOwner === false ? (
             <div className={styles.walletSection}>
-              <div className={styles.walletHeader}>
-                <div>
-                  <h3 className={styles.walletTitle}>受取用ウォレット</h3>
-                  <p className={styles.walletMeta}>相続人本人が登録・所有確認を行います。</p>
-                </div>
+              <div className={styles.walletRow}>
+                <span className={styles.walletLabel}>ステータス</span>
                 <span className={styles.walletStatus}>
                   {isHeirWalletVerified
                     ? "所有確認済み"
@@ -771,10 +781,18 @@ export default function CaseDetailPage({
               {heirWalletLoading ? (
                 <div className={styles.badgeMuted}>ウォレット情報を読み込み中...</div>
               ) : null}
+              {hasHeirWallet ? (
+                <div className={styles.walletAddress}>
+                  <div className={styles.walletAddressLabel}>ウォレットアドレス</div>
+                  <div className={styles.walletAddressValue}>{heirWallet?.address}</div>
+                </div>
+              ) : null}
               <div className={styles.walletActions}>
-                <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
-                  登録/変更
-                </Button>
+                {isHeirWalletVerified ? null : (
+                  <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
+                    登録/変更
+                  </Button>
+                )}
                 {isHeirWalletVerified ? null : (
                   <Button
                     type="button"
@@ -983,6 +1001,9 @@ export default function CaseDetailPage({
             <h2 className={styles.panelTitle}>タスク</h2>
             <span className={styles.badgeMuted}>進捗には影響しません</span>
           </div>
+          {isLocked ? (
+            <div className={styles.badgeMuted}>資産ロック後は閲覧のみです。</div>
+          ) : null}
           {taskError ? <FormAlert variant="error">{taskError}</FormAlert> : null}
           {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
           <div className={styles.taskSection}>
@@ -1008,6 +1029,7 @@ export default function CaseDetailPage({
                         type="checkbox"
                         className={styles.taskCheckbox}
                         checked={checked}
+                        disabled={isLocked}
                         onChange={(event) =>
                           handleTogglePersonalTask(task.id, event.target.checked)
                         }

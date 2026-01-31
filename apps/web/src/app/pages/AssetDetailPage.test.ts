@@ -3,6 +3,16 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 
+let caseData = {
+  caseId: "case-1",
+  ownerUid: "owner",
+  ownerDisplayName: "山田",
+  stage: "DRAFT",
+  assetLockStatus: "UNLOCKED",
+  createdAt: "2024-01-01",
+  updatedAt: "2024-01-01"
+};
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
@@ -11,6 +21,10 @@ vi.mock("react-router-dom", async () => {
     useNavigate: () => vi.fn()
   };
 });
+
+vi.mock("../api/cases", () => ({
+  getCase: async () => caseData
+}));
 
 vi.mock("../api/assets", () => ({
   getAsset: async () => ({
@@ -89,6 +103,15 @@ const render = async (props?: Record<string, unknown>) => {
 };
 
 describe("AssetDetailPage", () => {
+  it("hides edit actions when locked", async () => {
+    caseData = { ...caseData, stage: "WAITING", assetLockStatus: "LOCKED" };
+    const html = await render({
+      initialCaseData: caseData
+    });
+    expect(html).toContain("留保設定を保存");
+    expect(html).not.toContain("資産を削除");
+  });
+
   it("renders asset detail", async () => {
     const html = await render();
     expect(html).toContain("XRP Wallet");

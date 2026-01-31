@@ -16,13 +16,94 @@ import { formatDate } from "../utils/date.js";
 import { appendPlanHistory, normalizePlanAllocations } from "../utils/plan.js";
 import { appendAssetHistory } from "../utils/asset-history.js";
 import {
+  XRPL_URL,
   XRPL_VERIFY_ADDRESS,
   createChallenge,
   decodeHex,
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
+  fetchXrplReserve,
   fetchXrplTx
 } from "../utils/xrpl.js";
+import { encryptPayload } from "../utils/encryption.js";
+import { decryptPayload } from "../utils/encryption.js";
+import {
+  createLocalXrplWallet,
+  getWalletAddressFromSeed,
+  sendXrpPayment,
+  sendTokenPayment
+} from "../utils/xrpl-wallet.js";
+
+const toNumber = (value: unknown) => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toDrops = (value: string) => {
+  const raw = String(value ?? "0").trim();
+  if (!raw) return "0";
+  const sign = raw.startsWith("-") ? -1n : 1n;
+  const normalized = raw.replace("-", "");
+  const [wholePart, fracPart = ""] = normalized.split(".");
+  const whole = BigInt(wholePart || "0");
+  const frac = BigInt((`${fracPart}000000`).slice(0, 6));
+  const drops = whole * 1_000_000n + frac;
+  return (drops * sign).toString();
+};
+
+const isValidXrplClassicAddress = (address: string) =>
+  /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address);
+
+const createLocalXrplWalletFallback = () => {
+  return createLocalXrplWallet();
+};
+
+const createXrplWallet = async () => {
+  try {
+    const res = await fetch(XRPL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "wallet_propose", params: [{}] })
+    });
+    const payload = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok || payload?.result?.error) {
+      throw new Error(
+        payload?.result?.error_message ?? payload?.error_message ?? "XRPL wallet propose failed"
+      );
+    }
+    const address = payload?.result?.account_id;
+    const seed = payload?.result?.master_seed ?? payload?.result?.seed;
+    if (typeof address !== "string" || typeof seed !== "string") {
+      throw new Error("XRPL wallet propose failed");
+    }
+    if (!isValidXrplClassicAddress(address)) {
+      throw new Error("XRPL wallet address is invalid");
+    }
+    return { address, seed };
+  } catch {
+    return createLocalXrplWalletFallback();
+  }
+};
+
+const calcPlannedXrp = (asset: Record<string, any>) => {
+  const balance = toNumber(asset.xrplSummary?.balanceXrp ?? 0);
+  const reserve = toNumber(asset.reserveXrp ?? 0);
+  const planned = Math.max(0, balance - reserve);
+  return planned.toString();
+};
+
+const calcPlannedToken = (
+  token: { currency?: string; issuer?: string | null; balance?: string },
+  reserveTokens: Array<{ currency?: string; issuer?: string | null; reserveAmount?: string }>
+) => {
+  const reserveToken = reserveTokens.find(
+    (item) => item.currency === token.currency && item.issuer === token.issuer
+  );
+  const balance = toNumber(token.balance ?? 0);
+  const reserve = toNumber(reserveToken?.reserveAmount ?? 0);
+  const planned = Math.max(0, balance - reserve);
+  return planned.toString();
+};
 
 export const casesRoutes = () => {
   const app = new Hono<ApiBindings>();
@@ -1140,6 +1221,923 @@ export const casesRoutes = () => {
     });
 
     return jsonOk(c);
+  });
+
+  app.post(":caseId/asset-lock/start", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const method = body?.method === "B" ? "B" : "A";
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetsSnap = await db.collection(`cases/${caseId}/assets`).get();
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    if (!itemsSnap.empty) {
+      await Promise.all(itemsSnap.docs.map((doc) => doc.ref.delete()));
+    }
+    let wallet: { address: string; seed: string };
+    try {
+      wallet = await createXrplWallet();
+    } catch (error: any) {
+      return jsonError(
+        c,
+        500,
+        "XRPL_ERROR",
+        error?.message ?? "XRPL wallet propose failed"
+      );
+    }
+    const now = deps.now();
+    const uiStep = 3;
+    const methodStep = method === "B" ? "REGULAR_KEY_SET" : null;
+    await caseRef.collection("assetLock").doc("state").set({
+      status: "READY",
+      method,
+      uiStep,
+      methodStep,
+      wallet: {
+        address: wallet.address,
+        seedEncrypted: encryptPayload(wallet.seed),
+        createdAt: now
+      },
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const items: Array<Record<string, any>> = [];
+    for (const doc of assetsSnap.docs) {
+      const asset = doc.data() ?? {};
+      const plannedXrp = calcPlannedXrp(asset);
+      if (toNumber(plannedXrp) > 0) {
+        const xrpItemRef = caseRef.collection("assetLockItems").doc();
+        const xrpItem = {
+          itemId: xrpItemRef.id,
+          assetId: doc.id,
+          assetLabel: asset.label ?? "",
+          assetAddress: asset.address ?? "",
+          token: null,
+          plannedAmount: toDrops(plannedXrp),
+          status: "PENDING",
+          txHash: null,
+          error: null,
+          createdAt: now
+        };
+        await xrpItemRef.set(xrpItem);
+        items.push(xrpItem);
+      }
+
+      const tokens = Array.isArray(asset.xrplSummary?.tokens) ? asset.xrplSummary.tokens : [];
+      const reserveTokens = Array.isArray(asset.reserveTokens) ? asset.reserveTokens : [];
+      for (const token of tokens) {
+        const planned = calcPlannedToken(token, reserveTokens);
+        if (toNumber(planned) <= 0) {
+          continue;
+        }
+        const tokenItemRef = caseRef.collection("assetLockItems").doc();
+        const tokenItem = {
+          itemId: tokenItemRef.id,
+          assetId: doc.id,
+          assetLabel: asset.label ?? "",
+          assetAddress: asset.address ?? "",
+          token: {
+            currency: token.currency ?? "",
+            issuer: token.issuer ?? null,
+            isNative: false
+          },
+          plannedAmount: planned,
+          status: "PENDING",
+          txHash: null,
+          error: null,
+          createdAt: now
+        };
+        await tokenItemRef.set(tokenItem);
+        items.push(tokenItem);
+      }
+    }
+
+    return jsonOk(c, {
+      status: "READY",
+      method,
+      uiStep,
+      methodStep,
+      wallet: { address: wallet.address },
+      items,
+      regularKeyStatuses: []
+    });
+  });
+
+  app.post(":caseId/asset-lock/verify", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const itemId = body?.itemId;
+    const txHash = body?.txHash;
+    if (typeof itemId !== "string" || itemId.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "itemIdは必須です");
+    }
+    if (typeof txHash !== "string" || txHash.trim().length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const destination = lockData?.wallet?.address;
+    if (!destination) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const itemRef = caseRef.collection("assetLockItems").doc(itemId);
+    const itemSnap = await itemRef.get();
+    if (!itemSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Item not found");
+    }
+    const item = itemSnap.data() ?? {};
+
+    const result = await fetchXrplTx(txHash);
+    if (!result.ok) {
+      return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
+    }
+    const tx = result.tx as any;
+    const from = tx?.Account;
+    const to = tx?.Destination;
+
+    if (to !== destination) {
+      await itemRef.set({ status: "FAILED", error: "DESTINATION_MISMATCH", txHash }, { merge: true });
+      return jsonError(c, 400, "DESTINATION_MISMATCH", "送金先が一致しません");
+    }
+    if (item.assetAddress && from !== item.assetAddress) {
+      await itemRef.set({ status: "FAILED", error: "FROM_MISMATCH", txHash }, { merge: true });
+      return jsonError(c, 400, "FROM_MISMATCH", "送信元が一致しません");
+    }
+
+    if (item.token) {
+      const amount = tx?.Amount ?? {};
+      const amountCurrency = amount?.currency;
+      const amountIssuer = amount?.issuer;
+      const amountValue = String(amount?.value ?? "");
+      if (amountCurrency !== item.token.currency || amountIssuer !== item.token.issuer) {
+        await itemRef.set(
+          { status: "FAILED", error: "TOKEN_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "TOKEN_MISMATCH", "トークン情報が一致しません");
+      }
+      if (amountValue !== String(item.plannedAmount)) {
+        await itemRef.set(
+          { status: "FAILED", error: "AMOUNT_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "AMOUNT_MISMATCH", "送金額が一致しません");
+      }
+    } else {
+      const amount = String(tx?.Amount ?? "");
+      if (amount !== String(item.plannedAmount)) {
+        await itemRef.set(
+          { status: "FAILED", error: "AMOUNT_MISMATCH", txHash },
+          { merge: true }
+        );
+        return jsonError(c, 400, "AMOUNT_MISMATCH", "送金額が一致しません");
+      }
+    }
+
+    await itemRef.set({ status: "VERIFIED", txHash, error: null }, { merge: true });
+
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const items = itemsSnap.docs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+
+    return jsonOk(c, {
+      status: lockData.status ?? "READY",
+      method: lockData.method ?? null,
+      uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : null,
+      methodStep: lockData.methodStep ?? null,
+      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
+        ? lockData.regularKeyStatuses
+        : []
+    });
+  });
+
+  app.get(":caseId/asset-lock", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const items = itemsSnap.docs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+
+    return jsonOk(c, {
+      status: lockData.status ?? "DRAFT",
+      method: lockData.method ?? null,
+      uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : null,
+      methodStep: lockData.methodStep ?? null,
+      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
+        ? lockData.regularKeyStatuses
+        : []
+    });
+  });
+
+  app.get(":caseId/asset-lock/balances", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const destination = lockData?.wallet?.address;
+    if (!destination) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const items = itemsSnap.docs.map((doc) => doc.data() ?? {});
+    const assetIds = Array.from(
+      new Set(
+        items
+          .map((item) => String(item.assetId ?? ""))
+          .filter((assetId) => assetId.length > 0)
+      )
+    );
+    if (assetIds.length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
+    }
+
+    const assetSnaps = await Promise.all(
+      assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
+    );
+    const sources: Array<{
+      assetId: string;
+      assetLabel: string;
+      address: string;
+      status: "ok" | "error";
+      balanceXrp: string | null;
+      message: string | null;
+    }> = [];
+    for (const assetSnap of assetSnaps) {
+      if (!assetSnap.exists) {
+        sources.push({
+          assetId: assetSnap.id,
+          assetLabel: "",
+          address: "",
+          status: "error",
+          balanceXrp: null,
+          message: "Asset not found"
+        });
+        continue;
+      }
+      const assetData = assetSnap.data() ?? {};
+      const assetLabel = typeof assetData.label === "string" ? assetData.label : "";
+      const addressFromItem =
+        items.find((item) => String(item.assetId ?? "") === assetSnap.id)?.assetAddress ?? "";
+      const address =
+        typeof addressFromItem === "string" && addressFromItem.length > 0
+          ? addressFromItem
+          : typeof assetData.address === "string"
+            ? assetData.address
+            : "";
+      if (!address) {
+        sources.push({
+          assetId: assetSnap.id,
+          assetLabel,
+          address: "",
+          status: "error",
+          balanceXrp: null,
+          message: "アドレスがありません"
+        });
+        continue;
+      }
+      const info = await fetchXrplAccountInfo(address);
+      if (info.status !== "ok") {
+        sources.push({
+          assetId: assetSnap.id,
+          assetLabel,
+          address,
+          status: "error",
+          balanceXrp: null,
+          message: info.message
+        });
+        continue;
+      }
+      sources.push({
+        assetId: assetSnap.id,
+        assetLabel,
+        address,
+        status: "ok",
+        balanceXrp: info.balanceXrp,
+        message: null
+      });
+    }
+
+    const destinationInfo = await fetchXrplAccountInfo(destination);
+    const destinationStatus =
+      destinationInfo.status === "ok"
+        ? {
+            status: "ok" as const,
+            balanceXrp: destinationInfo.balanceXrp,
+            message: null
+          }
+        : {
+            status: "error" as const,
+            balanceXrp: null,
+            message: destinationInfo.message
+          };
+
+    return jsonOk(c, {
+      destination: {
+        address: destination,
+        ...destinationStatus
+      },
+      sources
+    });
+  });
+
+  app.post(":caseId/asset-lock/complete", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const itemsDocs = itemsSnap.docs;
+    if (
+      itemsDocs.length === 0 ||
+      itemsDocs.some((doc) => (doc.data()?.status ?? "PENDING") !== "VERIFIED")
+    ) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金確認が完了していません");
+    }
+
+    const lockRef = caseRef.collection("assetLock").doc("state");
+    await lockRef.set(
+      { status: "LOCKED", uiStep: 4, updatedAt: c.get("deps").now() },
+      { merge: true }
+    );
+    await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
+
+    const lockSnap = await lockRef.get();
+    const lockData = lockSnap.data() ?? {};
+    const items = itemsDocs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+
+    return jsonOk(c, {
+      status: lockData.status ?? "LOCKED",
+      method: lockData.method ?? null,
+      uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : 4,
+      methodStep: lockData.methodStep ?? null,
+      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
+        ? lockData.regularKeyStatuses
+        : []
+    });
+  });
+
+  app.patch(":caseId/asset-lock/state", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const hasUiStep = Object.prototype.hasOwnProperty.call(body, "uiStep");
+    const hasMethodStep = Object.prototype.hasOwnProperty.call(body, "methodStep");
+    const methodSteps = new Set([
+      "REGULAR_KEY_SET",
+      "AUTO_TRANSFER",
+      "TRANSFER_DONE",
+      "REGULAR_KEY_CLEARED"
+    ]);
+
+    let uiStep: number | null = null;
+    if (hasUiStep) {
+      if (body.uiStep === null) {
+        uiStep = null;
+      } else if (!Number.isInteger(body.uiStep) || body.uiStep < 1 || body.uiStep > 4) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "uiStepは1〜4の整数です");
+      } else {
+        uiStep = body.uiStep;
+      }
+    }
+
+    let methodStep: string | null = null;
+    if (hasMethodStep) {
+      if (body.methodStep === null) {
+        methodStep = null;
+      } else if (typeof body.methodStep !== "string" || !methodSteps.has(body.methodStep)) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "methodStepが不正です");
+      } else {
+        methodStep = body.methodStep;
+      }
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockRef = caseRef.collection("assetLock").doc("state");
+    const lockSnap = await lockRef.get();
+    const lockData = lockSnap.data() ?? {};
+    if (hasMethodStep && methodStep === "AUTO_TRANSFER" && lockData.method === "B") {
+      const statuses = Array.isArray(lockData.regularKeyStatuses)
+        ? lockData.regularKeyStatuses
+        : [];
+      const allVerified =
+        statuses.length > 0 &&
+        statuses.every((status) => status?.status === "VERIFIED");
+      if (!allVerified) {
+        return jsonError(c, 400, "REGULAR_KEY_UNVERIFIED", "RegularKeyの確認が必要です");
+      }
+    }
+    const now = deps.now();
+    const updateData: Record<string, any> = {
+      updatedAt: now
+    };
+    if (!lockSnap.exists) {
+      updateData.status = "DRAFT";
+      updateData.method = null;
+      updateData.createdAt = now;
+    }
+    if (hasUiStep) {
+      updateData.uiStep = uiStep;
+    }
+    if (hasMethodStep) {
+      updateData.methodStep = methodStep;
+    }
+    await lockRef.set(updateData, { merge: true });
+
+    const latestSnap = await lockRef.get();
+    const latest = latestSnap.data() ?? {};
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const items = itemsSnap.docs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+
+    return jsonOk(c, {
+      status: latest.status ?? "DRAFT",
+      method: latest.method ?? null,
+      uiStep: typeof latest.uiStep === "number" ? latest.uiStep : null,
+      methodStep: latest.methodStep ?? null,
+      wallet: latest.wallet?.address ? { address: latest.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(latest.regularKeyStatuses)
+        ? latest.regularKeyStatuses
+        : []
+    });
+  });
+
+  app.post(":caseId/asset-lock/regular-key/verify", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockRef = caseRef.collection("assetLock").doc("state");
+    const lockSnap = await lockRef.get();
+    const lockData = lockSnap.data() ?? {};
+    if (lockData.method !== "B") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "B方式のみ実行できます");
+    }
+    const destination = lockData?.wallet?.address;
+    if (!destination) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const assetIds = Array.from(
+      new Set(
+        itemsSnap.docs
+          .map((doc) => doc.data()?.assetId)
+          .filter((assetId) => typeof assetId === "string" && assetId.length > 0)
+      )
+    );
+    if (assetIds.length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
+    }
+
+    const assetSnaps = await Promise.all(
+      assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
+    );
+    const statuses = [];
+    for (const assetSnap of assetSnaps) {
+      if (!assetSnap.exists) {
+        statuses.push({
+          assetId: assetSnap.id,
+          assetLabel: "",
+          address: "",
+          status: "ERROR",
+          message: "Asset not found"
+        });
+        continue;
+      }
+      const assetData = assetSnap.data() ?? {};
+      const address = typeof assetData.address === "string" ? assetData.address : "";
+      const assetLabel = typeof assetData.label === "string" ? assetData.label : "";
+      if (!address) {
+        statuses.push({
+          assetId: assetSnap.id,
+          assetLabel,
+          address: "",
+          status: "UNVERIFIED",
+          message: "アドレスがありません"
+        });
+        continue;
+      }
+      const info = await fetchXrplAccountInfo(address);
+      if (info.status !== "ok") {
+        statuses.push({
+          assetId: assetSnap.id,
+          assetLabel,
+          address,
+          status: "ERROR",
+          message: info.message
+        });
+        continue;
+      }
+      if (info.regularKey !== destination) {
+        statuses.push({
+          assetId: assetSnap.id,
+          assetLabel,
+          address,
+          status: "UNVERIFIED",
+          message: "RegularKeyが一致しません"
+        });
+        continue;
+      }
+      statuses.push({
+        assetId: assetSnap.id,
+        assetLabel,
+        address,
+        status: "VERIFIED",
+        message: null
+      });
+    }
+
+    const allVerified = statuses.every((status) => status.status === "VERIFIED");
+    const now = deps.now();
+    await lockRef.set(
+      {
+        regularKeyStatuses: statuses,
+        regularKeyCheckedAt: now,
+        methodStep: allVerified ? "AUTO_TRANSFER" : "REGULAR_KEY_SET",
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    const latestSnap = await lockRef.get();
+    const latest = latestSnap.data() ?? {};
+    const items = itemsSnap.docs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+
+    return jsonOk(c, {
+      status: latest.status ?? "DRAFT",
+      method: latest.method ?? null,
+      uiStep: typeof latest.uiStep === "number" ? latest.uiStep : null,
+      methodStep: latest.methodStep ?? null,
+      wallet: latest.wallet?.address ? { address: latest.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(latest.regularKeyStatuses)
+        ? latest.regularKeyStatuses
+        : []
+    });
+  });
+
+  app.post(":caseId/asset-lock/execute", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    if (lockData.method !== "B") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "B方式のみ実行できます");
+    }
+    const statuses = Array.isArray(lockData.regularKeyStatuses)
+      ? lockData.regularKeyStatuses
+      : [];
+    const allVerified =
+      statuses.length > 0 && statuses.every((status) => status?.status === "VERIFIED");
+    if (!allVerified) {
+      return jsonError(c, 400, "REGULAR_KEY_UNVERIFIED", "RegularKeyの確認が必要です");
+    }
+    const destination = lockData?.wallet?.address;
+    const seedEncrypted = lockData?.wallet?.seedEncrypted;
+    if (!destination || !seedEncrypted) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
+    }
+
+    const seed = decryptPayload(seedEncrypted);
+    const signingAddress = getWalletAddressFromSeed(seed);
+    if (signingAddress !== destination) {
+      return jsonError(
+        c,
+        400,
+        "REGULAR_KEY_SEED_MISMATCH",
+        "分配用Walletの鍵が一致しません"
+      );
+    }
+    const itemsSnap = await caseRef.collection("assetLockItems").get();
+    const itemEntries = itemsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ref: doc.ref,
+      data: doc.data() ?? {}
+    }));
+    const assetIds = Array.from(
+      new Set(
+        itemEntries
+          .map((entry) => String(entry.data?.assetId ?? ""))
+          .filter((assetId) => assetId.length > 0)
+      )
+    );
+    if (assetIds.length === 0) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
+    }
+    const assetSnaps = await Promise.all(
+      assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
+    );
+    const assetMap = new Map<
+      string,
+      { address: string; reserveXrp: string; label: string }
+    >();
+    for (const assetSnap of assetSnaps) {
+      if (!assetSnap.exists) {
+        return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+      }
+      const assetData = assetSnap.data() ?? {};
+      const address = typeof assetData.address === "string" ? assetData.address : "";
+      const reserveXrp = String(assetData.reserveXrp ?? "0");
+      const label = typeof assetData.label === "string" ? assetData.label : "";
+      if (!address) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "資産ウォレットのアドレスが取得できません");
+      }
+      assetMap.set(assetSnap.id, { address, reserveXrp, label });
+    }
+
+    const feePerTxDrops = 12n;
+    const reserveInfo = await fetchXrplReserve();
+    const reserveBaseDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveBaseDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_BASE_XRP ?? "10"));
+    const reserveIncDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveIncDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
+    const plannedOverrides = new Map<string, string>();
+    for (const assetId of assetIds) {
+      const asset = assetMap.get(assetId);
+      if (!asset) continue;
+      const itemsForAsset = itemEntries.filter(
+        (entry) => String(entry.data?.assetId ?? "") === assetId
+      );
+      const txCount = BigInt(itemsForAsset.length);
+      const info = await fetchXrplAccountInfo(asset.address);
+      if (info.status !== "ok") {
+        return jsonError(c, 400, "XRPL_ACCOUNT_INFO_FAILED", info.message);
+      }
+      const balanceDrops = BigInt(toDrops(info.balanceXrp));
+      const ownerCount =
+        typeof info.ownerCount === "number" && Number.isFinite(info.ownerCount)
+          ? info.ownerCount
+          : 0;
+      const requiredReserveDrops = reserveBaseDrops + reserveIncDrops * BigInt(ownerCount);
+      const reserveDrops = BigInt(toDrops(asset.reserveXrp));
+      const totalReserveDrops = requiredReserveDrops + reserveDrops;
+      const feeDrops = txCount * feePerTxDrops;
+      const availableDrops = balanceDrops - totalReserveDrops - feeDrops;
+      // DEBUG
+      // console.log("adjust", { assetId, txCount: txCount.toString(), balanceDrops: balanceDrops.toString(), reserveDrops: reserveDrops.toString(), feeDrops: feeDrops.toString(), availableDrops: availableDrops.toString() });
+      if (availableDrops <= 0n) {
+        const labelSuffix = asset.label ? `「${asset.label}」` : "";
+        return jsonError(
+          c,
+          400,
+          "INSUFFICIENT_BALANCE",
+          `資産ウォレット${labelSuffix}の残高が不足しています。資産ウォレットにXRPを追加してください。`
+        );
+      }
+      const xrpEntry = itemsForAsset.find((entry) => !entry.data?.token);
+      if (xrpEntry) {
+        const plannedDrops = BigInt(String(xrpEntry.data?.plannedAmount ?? "0"));
+        const adjustedDrops = plannedDrops > availableDrops ? availableDrops : plannedDrops;
+        if (adjustedDrops !== plannedDrops) {
+          plannedOverrides.set(xrpEntry.id, adjustedDrops.toString());
+        }
+      }
+    }
+
+    for (const entry of itemEntries) {
+      const override = plannedOverrides.get(entry.id);
+      if (override) {
+        entry.data.plannedAmount = override;
+        await entry.ref.set({ plannedAmount: override }, { merge: true });
+      }
+    }
+
+    await caseRef
+      .collection("assetLock")
+      .doc("state")
+      .set({ methodStep: "AUTO_TRANSFER", updatedAt: c.get("deps").now() }, { merge: true });
+
+    for (const entry of itemEntries) {
+      const item = entry.data ?? {};
+      const plannedAmount = plannedOverrides.get(entry.id) ?? item.plannedAmount ?? "";
+      const assetId = typeof item.assetId === "string" ? item.assetId : "";
+      const asset = assetId ? assetMap.get(assetId) : null;
+      const fromAddress =
+        typeof item.assetAddress === "string" && item.assetAddress.length > 0
+          ? item.assetAddress
+          : asset?.address ?? "";
+      if (!fromAddress) {
+        return jsonError(c, 400, "VALIDATION_ERROR", "送金元アドレスが取得できません");
+      }
+      if (item.token) {
+        const result = await sendTokenPayment({
+          fromSeed: seed,
+          fromAddress,
+          to: destination,
+          token: item.token,
+          amount: String(plannedAmount)
+        });
+        await entry.ref.set(
+          { status: "VERIFIED", txHash: result.txHash ?? null, error: null },
+          { merge: true }
+        );
+      } else {
+        const result = await sendXrpPayment({
+          fromSeed: seed,
+          fromAddress,
+          to: destination,
+          amountDrops: String(plannedAmount)
+        });
+        await entry.ref.set(
+          { status: "VERIFIED", txHash: result.txHash ?? null, error: null },
+          { merge: true }
+        );
+      }
+    }
+
+    await caseRef
+      .collection("assetLock")
+      .doc("state")
+      .set({ methodStep: "TRANSFER_DONE", updatedAt: c.get("deps").now() }, { merge: true });
+    await caseRef
+      .collection("assetLock")
+      .doc("state")
+      .set(
+        { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
+        { merge: true }
+      );
+    await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
+
+    const finalLockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const finalLockData = finalLockSnap.data() ?? {};
+    const finalItemsSnap = await caseRef.collection("assetLockItems").get();
+    const items = finalItemsSnap.docs.map((doc) => {
+      const item = doc.data() ?? {};
+      return {
+        itemId: item.itemId ?? doc.id,
+        assetId: item.assetId ?? "",
+        assetLabel: item.assetLabel ?? "",
+        token: item.token ?? null,
+        plannedAmount: item.plannedAmount ?? "0",
+        status: item.status ?? "PENDING",
+        txHash: item.txHash ?? null,
+        error: item.error ?? null
+      };
+    });
+    return jsonOk(c, {
+      status: finalLockData.status ?? "READY",
+      method: finalLockData.method ?? null,
+      uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
+      methodStep: finalLockData.methodStep ?? null,
+      wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
+      items,
+      regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
+        ? finalLockData.regularKeyStatuses
+        : []
+    });
   });
 
   app.post(":caseId/plans", async (c) => {

@@ -28,6 +28,7 @@ import {
   type AssetHistoryItem,
   type AssetReserveToken
 } from "../api/assets";
+import { getCase, type CaseSummary } from "../api/cases";
 import { copyText } from "../../features/shared/lib/copy-text";
 import {
   dropsToXrpInput,
@@ -87,18 +88,21 @@ type AssetDetailPageProps = {
   initialAsset?: AssetDetail;
   initialHistoryItems?: AssetHistoryItem[];
   initialTab?: TabKey;
+  initialCaseData?: CaseSummary | null;
 };
 
 export default function AssetDetailPage({
   initialAsset,
   initialHistoryItems,
-  initialTab
+  initialTab,
+  initialCaseData = null
 }: AssetDetailPageProps = {}) {
   const { caseId, assetId } = useParams();
   const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetDetail | null>(initialAsset ?? null);
   const [loading, setLoading] = useState(!initialAsset);
   const [error, setError] = useState<string | null>(null);
+  const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<TabKey>(initialTab ?? "overview");
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -132,6 +136,14 @@ export default function AssetDetailPage({
   const [reserveSuccess, setReserveSuccess] = useState<string | null>(null);
 
   const title = useMemo(() => asset?.label ?? "資産詳細", [asset?.label]);
+  const isLocked = caseData?.assetLockStatus === "LOCKED";
+
+  useEffect(() => {
+    if (!caseId || initialCaseData) return;
+    getCase(caseId)
+      .then((data) => setCaseData(data))
+      .catch(() => setCaseData(null));
+  }, [caseId, initialCaseData]);
   const availableTokens = useMemo(() => {
     if (asset?.xrpl?.status === "ok") {
       return asset.xrpl.tokens ?? [];
@@ -400,7 +412,7 @@ export default function AssetDetailPage({
             {asset ? <div className={styles.address}>{asset.address}</div> : null}
           </div>
           <div className={styles.headerActions}>
-            <Button size="sm" variant="ghost" onClick={handleSync} disabled={syncing}>
+            <Button size="sm" variant="ghost" onClick={handleSync} disabled={syncing || isLocked}>
               <RefreshCw />
               {syncing ? "同期中..." : "最新の情報を同期"}
             </Button>
@@ -446,6 +458,7 @@ export default function AssetDetailPage({
                             size="sm"
                             variant="secondary"
                             onClick={() => setVerifyOpen(true)}
+                            disabled={isLocked}
                           >
                             所有権を検証
                           </Button>
@@ -584,6 +597,7 @@ export default function AssetDetailPage({
                             setReserveXrpInput(normalizeNumberInput(event.target.value))
                           }
                           placeholder="0"
+                          disabled={isLocked}
                         />
                       </FormField>
                       <div className={styles.reserveTokenBlock}>
@@ -609,6 +623,7 @@ export default function AssetDetailPage({
                                       className={styles.reserveTokenCheckbox}
                                       checked={selected}
                                       onChange={() => handleToggleReserveToken(token)}
+                                      disabled={isLocked}
                                     />
                                     <span className={styles.reserveTokenName}>
                                       {token.currency}
@@ -625,6 +640,7 @@ export default function AssetDetailPage({
                                       }
                                       className={styles.reserveTokenInput}
                                       placeholder="0"
+                                      disabled={isLocked}
                                     />
                                   ) : null}
                                 </div>
@@ -634,7 +650,11 @@ export default function AssetDetailPage({
                         )}
                       </div>
                       <div className={styles.reserveActions}>
-                        <Button size="sm" onClick={handleSaveReserve} disabled={reserveSaving}>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveReserve}
+                          disabled={reserveSaving || isLocked}
+                        >
                           {reserveSaving ? "保存中..." : "留保設定を保存"}
                         </Button>
                       </div>
@@ -684,6 +704,7 @@ export default function AssetDetailPage({
                           className={styles.iconButton}
                           onClick={handleRequestChallenge}
                           aria-label="検証コードを発行"
+                          disabled={isLocked}
                         >
                           <RefreshCw />
                         </Button>
@@ -711,6 +732,7 @@ export default function AssetDetailPage({
                             value={dropsInput}
                             onChange={(event) => handleDropsChange(event.target.value)}
                             placeholder="例: 1"
+                            disabled={isLocked}
                           />
                         </FormField>
                         <Button
@@ -729,6 +751,7 @@ export default function AssetDetailPage({
                             value={xrpInput}
                             onChange={(event) => handleXrpChange(event.target.value)}
                             placeholder="例: 0.000001"
+                            disabled={isLocked}
                           />
                         </FormField>
                         <Button
@@ -749,13 +772,18 @@ export default function AssetDetailPage({
                       value={txHash}
                       onChange={(event) => setTxHash(event.target.value)}
                       placeholder="例: 7F3A..."
+                      disabled={isLocked}
                     />
                   </FormField>
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="ghost">閉じる</Button>
                     </DialogClose>
-                    <Button size="sm" onClick={handleConfirm} disabled={!txHash.trim()}>
+                    <Button
+                      size="sm"
+                      onClick={handleConfirm}
+                      disabled={!txHash.trim() || isLocked}
+                    >
                       検証を完了
                     </Button>
                   </DialogFooter>
@@ -826,43 +854,45 @@ export default function AssetDetailPage({
       ) : null}
 
       <div className={styles.footerActions}>
-        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <DialogTrigger asChild>
-            <Button variant="destructive">資産を削除</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>資産を削除しますか？</DialogTitle>
-              <DialogDescription>関連する指図がある場合は削除できません。</DialogDescription>
-            </DialogHeader>
-            {deleteError ? <FormAlert variant="error">{deleteError}</FormAlert> : null}
-            {relatedPlans.length > 0 ? (
-              <div className={styles.relatedList}>
-                {relatedPlans.map((plan) => (
-                  <Link
-                    key={plan.planId}
-                    to={`/cases/${caseId}/plans/${plan.planId}/edit`}
-                    className={styles.relatedLink}
-                  >
-                    {plan.title ?? "指図"}
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="ghost">キャンセル</Button>
-              </DialogClose>
-              <Button
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={deleting || relatedPlans.length > 0}
-              >
-                {deleting ? "削除中..." : "削除する"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {!isLocked ? (
+          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <DialogTrigger asChild>
+              <Button variant="destructive">資産を削除</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>資産を削除しますか？</DialogTitle>
+                <DialogDescription>関連する指図がある場合は削除できません。</DialogDescription>
+              </DialogHeader>
+              {deleteError ? <FormAlert variant="error">{deleteError}</FormAlert> : null}
+              {relatedPlans.length > 0 ? (
+                <div className={styles.relatedList}>
+                  {relatedPlans.map((plan) => (
+                    <Link
+                      key={plan.planId}
+                      to={`/cases/${caseId}/plans/${plan.planId}/edit`}
+                      className={styles.relatedLink}
+                    >
+                      {plan.title ?? "指図"}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="ghost">キャンセル</Button>
+                </DialogClose>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={deleting || relatedPlans.length > 0}
+                >
+                  {deleting ? "削除中..." : "削除する"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
     </section>
   );
