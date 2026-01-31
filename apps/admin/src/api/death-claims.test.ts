@@ -37,7 +37,8 @@ describe("admin death-claims api", () => {
             size: 1000,
             storagePath: "cases/case_1/death-claims/claim_1/file_1",
             uploadedByUid: "u1",
-            createdAt: "2024-01-02T00:00:00.000Z"
+            createdAt: "2024-01-02T00:00:00.000Z",
+            downloadUrl: "https://storage.example.com/signed"
           }
         ]
       }
@@ -46,5 +47,6 @@ describe("admin death-claims api", () => {
     const result = await getDeathClaimDetail("case_1", "claim_1");
     expect(result.case.ownerDisplayName).toBe("山田");
     expect(result.files[0].storagePath).toContain("cases/");
+    expect(result.files[0].downloadUrl).toBe("https://storage.example.com/signed");
   });
 });

@@ -21,16 +21,6 @@ const formatDate = (value?: string | null) => {
   return parsed.toLocaleString("ja-JP");
 };
 
-const toStorageDownloadUrl = (path?: string | null) => {
-  if (!path) return null;
-  if (!path.startsWith("cases/")) {
-    return null;
-  }
-  return `https://firebasestorage.googleapis.com/v0/b/kototsute.appspot.com/o/${encodeURIComponent(
-    path
-  )}?alt=media`;
-};
-
 export const toClaimStatusLabel = (status: string) => {
   switch (status) {
     case "SUBMITTED":
@@ -156,10 +146,10 @@ export default function ClaimDetailPage() {
                 {detail.files.map((file) => (
                   <div key={file.fileId} className="file-row">
                     <div className="row-title">{file.fileName}</div>
-                    {toStorageDownloadUrl(file.storagePath) ? (
+                    {file.downloadUrl ? (
                       <a
                         className="row-meta"
-                        href={toStorageDownloadUrl(file.storagePath)!}
+                        href={file.downloadUrl}
                         target="_blank"
                         rel="noreferrer"
                       >

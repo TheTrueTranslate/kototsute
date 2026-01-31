@@ -25,6 +25,7 @@ export type AdminDeathClaimDetail = {
     storagePath?: string;
     uploadedByUid?: string;
     createdAt?: string;
+    downloadUrl?: string | null;
   }>;
 };
 
