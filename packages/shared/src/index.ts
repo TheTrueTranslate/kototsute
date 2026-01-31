@@ -4,6 +4,7 @@ export * from "./value/tx-id.js";
 export * from "./time/time.js";
 export * from "./xrpl/xrpl-anchor-port.js";
 export * from "./xrpl/xrpl-anchor-stub.js";
+export * from "./xrpl/xrpl-wallet.js";
 export * from "./util/result.js";
 export * from "./util/guard.js";
 export * from "./validation/xrp-address.js";

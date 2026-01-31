@@ -211,16 +211,22 @@ vi.mock("firebase-admin/auth", () => ({
   })
 }));
 
-vi.mock("./utils/xrpl-wallet.js", () => ({
-  sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
-  sendTokenPayment: async () => ({ txHash: "tx-token" }),
-  sendSignerListSet: async () => ({ txHash: "tx-signer" }),
-  getWalletAddressFromSeed: vi.fn(() => "rDest"),
-  createLocalXrplWallet: vi.fn(() => ({
-    address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-    seed: "sLocal"
-  }))
-}));
+vi.mock("@kototsute/shared", async () => {
+  const actual = await vi.importActual<typeof import("@kototsute/shared")>(
+    "@kototsute/shared"
+  );
+  return {
+    ...actual,
+    sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
+    sendTokenPayment: async () => ({ txHash: "tx-token" }),
+    sendSignerListSet: async () => ({ txHash: "tx-signer" }),
+    getWalletAddressFromSeed: vi.fn(() => "rDest"),
+    createLocalXrplWallet: vi.fn(() => ({
+      address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+      seed: "sLocal"
+    }))
+  };
+});
 
 class InMemoryAssetRepository implements AssetRepository {
   private assets: Asset[] = [];
@@ -2447,7 +2453,7 @@ describe("createApiHandler", () => {
   it("rejects execute when regular key seed does not match wallet address", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     vi.mocked(
-      await import("./utils/xrpl-wallet.js")
+      await import("@kototsute/shared")
     ).getWalletAddressFromSeed.mockReturnValueOnce("rOther");
 
     const handler = createApiHandler({

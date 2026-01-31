@@ -1,5 +1,6 @@
 import { Client, Wallet } from "xrpl";
-import { XRPL_URL } from "./xrpl.js";
+
+const DEFAULT_XRPL_URL = "https://s.altnet.rippletest.net:51234";
 
 export const resolveXrplWsUrl = (url: string) => {
   if (url.startsWith("wss://") || url.startsWith("ws://")) {
@@ -16,7 +17,8 @@ export const resolveXrplWsUrl = (url: string) => {
   return url;
 };
 
-const getXrplWsUrl = () => resolveXrplWsUrl(process.env.XRPL_WS_URL ?? XRPL_URL);
+const getXrplWsUrl = () =>
+  resolveXrplWsUrl(process.env.XRPL_WS_URL ?? process.env.XRPL_URL ?? DEFAULT_XRPL_URL);
 
 export const getWalletAddressFromSeed = (seed: string) => {
   return Wallet.fromSeed(seed).classicAddress;
