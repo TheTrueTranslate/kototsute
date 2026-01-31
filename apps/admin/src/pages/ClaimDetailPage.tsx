@@ -128,43 +128,11 @@ export default function ClaimDetailPage() {
           <div className="section">
             <div className="section-title">ケース概要</div>
             {detail.case ? (
-              <div className="file-list">
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">ケースID</div>
-                    <div className="row-meta">{detail.case.caseId}</div>
-                  </div>
-                </div>
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">被相続人</div>
-                    <div className="row-meta">{detail.case.ownerDisplayName ?? "-"}</div>
-                  </div>
-                </div>
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">ステージ</div>
-                    <div className="row-meta">{detail.case.stage ?? "-"}</div>
-                  </div>
-                </div>
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">ロックステータス</div>
-                    <div className="row-meta">{detail.case.assetLockStatus ?? "-"}</div>
-                  </div>
-                </div>
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">相続人数</div>
-                    <div className="row-meta">{detail.case.memberCount}</div>
-                  </div>
-                </div>
-                <div className="file-row">
-                  <div>
-                    <div className="row-title">作成日時</div>
-                    <div className="row-meta">{formatDate(detail.case.createdAt)}</div>
-                  </div>
-                </div>
+              <div className="muted">
+                ケースID: {detail.case.caseId} / 被相続人: {detail.case.ownerDisplayName ?? "-"} /
+                ステージ: {detail.case.stage ?? "-"} / ロックステータス:{" "}
+                {detail.case.assetLockStatus ?? "-"} / 相続人数: {detail.case.memberCount} / 作成日時:{" "}
+                {formatDate(detail.case.createdAt)}
               </div>
             ) : (
               <div className="muted">ケース情報が取得できません。</div>
