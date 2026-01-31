@@ -14,6 +14,13 @@ const formatBytes = (value: number) => {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString("ja-JP");
+};
+
 export default function ClaimDetailPage() {
   const { caseId, claimId } = useParams();
   const [detail, setDetail] = useState<AdminDeathClaimDetail | null>(null);
@@ -88,6 +95,51 @@ export default function ClaimDetailPage() {
             <div className="badge">{detail.claim.status}</div>
           </div>
           <div className="section">
+            <div className="section-title">ケース概要</div>
+            {detail.case ? (
+              <div className="file-list">
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">ケースID</div>
+                    <div className="row-meta">{detail.case.caseId}</div>
+                  </div>
+                </div>
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">被相続人</div>
+                    <div className="row-meta">{detail.case.ownerDisplayName ?? "-"}</div>
+                  </div>
+                </div>
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">ステージ</div>
+                    <div className="row-meta">{detail.case.stage ?? "-"}</div>
+                  </div>
+                </div>
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">ロックステータス</div>
+                    <div className="row-meta">{detail.case.assetLockStatus ?? "-"}</div>
+                  </div>
+                </div>
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">相続人数</div>
+                    <div className="row-meta">{detail.case.memberCount}</div>
+                  </div>
+                </div>
+                <div className="file-row">
+                  <div>
+                    <div className="row-title">作成日時</div>
+                    <div className="row-meta">{formatDate(detail.case.createdAt)}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="muted">ケース情報が取得できません。</div>
+            )}
+          </div>
+          <div className="section">
             <div className="section-title">提出ファイル</div>
             {detail.files.length === 0 ? (
               <div className="muted">ファイルがありません。</div>
@@ -100,6 +152,13 @@ export default function ClaimDetailPage() {
                       <div className="row-meta">
                         {file.contentType} ・ {formatBytes(file.size)}
                       </div>
+                      <div className="row-meta">
+                        作成日時 {formatDate(file.createdAt)} ・ 提出者{" "}
+                        {file.uploadedByUid ?? "-"}
+                      </div>
+                      {file.storagePath ? (
+                        <div className="row-meta">保存パス {file.storagePath}</div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
