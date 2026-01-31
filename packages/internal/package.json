@@ -22,6 +22,7 @@
     "xrpl": "^4.5.0"
   },
   "devDependencies": {
+    "@types/prompts": "^2.4.9",
     "typescript": "^5.5.2",
     "vitest": "^2.0.5"
   }

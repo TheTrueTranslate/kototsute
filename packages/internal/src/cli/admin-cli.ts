@@ -1,8 +1,10 @@
-import prompts from "prompts";
+import prompts, { type PromptObject } from "prompts";
 import { grantAdminByEmail } from "./admin-actions.js";
 
+type PromptLike = (questions: PromptObject | PromptObject[]) => Promise<Record<string, any>>;
+
 export const runAdminCli = async (input?: {
-  prompt?: typeof prompts;
+  prompt?: PromptLike;
   projectId?: string;
 }) => {
   const prompt = input?.prompt ?? prompts;
@@ -11,7 +13,7 @@ export const runAdminCli = async (input?: {
     type: "text",
     name: "email",
     message: "管理者にするユーザーのメールアドレス",
-    validate: (value) => (value?.trim() ? true : "メールアドレスを入力してください")
+    validate: (value: string) => (value?.trim() ? true : "メールアドレスを入力してください")
   });
 
   const email = response?.email?.trim();

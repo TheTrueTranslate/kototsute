@@ -1,7 +1,12 @@
-import prompts from "prompts";
+import prompts, { type PromptObject } from "prompts";
 import { runNftMintSend, runTokenIssueSend, runXrpTransfer } from "./xrpl-actions.js";
 
-export const runXrplCli = async (input?: { prompt?: typeof prompts }) => {
+export type XrplCliResult = { txHash: string } | { skipped: true };
+type PromptLike = (questions: PromptObject | PromptObject[]) => Promise<Record<string, any>>;
+
+export const runXrplCli = async (
+  input?: { prompt?: PromptLike }
+): Promise<XrplCliResult> => {
   const prompt = input?.prompt ?? prompts;
   const actionAnswer = await prompt({
     type: "select",

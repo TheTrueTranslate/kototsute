@@ -2,11 +2,11 @@ import { runXrplCli } from "./xrpl-cli.js";
 
 const run = async () => {
   const result = await runXrplCli();
-  if ("skipped" in result && result.skipped) {
-    console.log("キャンセルしました。");
+  if ("txHash" in result) {
+    console.log(`送信完了: ${result.txHash}`);
     return;
   }
-  console.log(`送信完了: ${result.txHash}`);
+  console.log("キャンセルしました。");
 };
 
 run().catch((error) => {
