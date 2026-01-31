@@ -46,6 +46,18 @@ tasks:
     cmds:
       - pnpm -C {{.ADMIN_DIR}} dev
 
+  tools:admin:
+    desc: "Run admin grant tool"
+    cmds:
+      - pnpm -C packages/internal build
+      - node packages/internal/dist/cli/admin.js
+
+  tools:xrpl:
+    desc: "Run XRPL tool"
+    cmds:
+      - pnpm -C packages/internal build
+      - node packages/internal/dist/cli/xrpl.js
+
   build:
     desc: "Build shared, functions, and web"
     cmds:
