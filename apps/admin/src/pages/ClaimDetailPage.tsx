@@ -106,6 +106,24 @@ export default function ClaimDetailPage() {
           <div className="section">
             <div className="section-title">ステータス</div>
             <div className="badge">{toClaimStatusLabel(detail.claim.status)}</div>
+            <div className="actions">
+              <button className="button" onClick={handleApprove} disabled={approving}>
+                {approving ? "承認中..." : "運営承認"}
+              </button>
+              <button className="button button-secondary" onClick={handleReject} disabled={rejecting}>
+                {rejecting ? "差し戻し中..." : "差し戻し"}
+              </button>
+            </div>
+            <label className="label">
+              差し戻し理由
+              <textarea
+                className="input"
+                rows={3}
+                value={rejectNote}
+                onChange={(event) => setRejectNote(event.target.value)}
+                placeholder="差し戻し理由を入力してください"
+              />
+            </label>
           </div>
           <div className="section">
             <div className="section-title">ケース概要</div>
@@ -178,24 +196,6 @@ export default function ClaimDetailPage() {
               </div>
             )}
           </div>
-          <div className="actions">
-            <button className="button" onClick={handleApprove} disabled={approving}>
-              {approving ? "承認中..." : "運営承認"}
-            </button>
-            <button className="button button-secondary" onClick={handleReject} disabled={rejecting}>
-              {rejecting ? "差し戻し中..." : "差し戻し"}
-            </button>
-          </div>
-          <label className="label">
-            差し戻し理由
-            <textarea
-              className="input"
-              rows={3}
-              value={rejectNote}
-              onChange={(event) => setRejectNote(event.target.value)}
-              placeholder="差し戻し理由を入力してください"
-            />
-          </label>
         </>
       ) : (
         <div className="muted">詳細が見つかりません。</div>
