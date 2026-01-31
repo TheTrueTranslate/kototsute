@@ -21,6 +21,7 @@ import {
   createLocalXrplWallet,
   getWalletAddressFromSeed,
   resolveXrplWsUrl,
+  sendSignerListSet,
   sendTokenPayment,
   sendXrpPayment
 } from "./xrpl-wallet.js";
@@ -67,6 +68,25 @@ describe("xrpl-wallet", () => {
         Account: "rFrom",
         Destination: "rDest",
         Amount: { currency: "USD", issuer: "rIssuer", value: "9" }
+      })
+    );
+    expect(result.txHash).toBe("SIGNED_HASH");
+  });
+
+  it("submits signer list set", async () => {
+    const result = await sendSignerListSet({
+      fromSeed: "seed",
+      fromAddress: "rFrom",
+      signerEntries: [{ account: "rSigner", weight: 1 }],
+      quorum: 2
+    });
+
+    expect(mocks.autofill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TransactionType: "SignerListSet",
+        Account: "rFrom",
+        SignerQuorum: 2,
+        SignerEntries: [{ SignerEntry: { Account: "rSigner", SignerWeight: 1 } }]
       })
     );
     expect(result.txHash).toBe("SIGNED_HASH");

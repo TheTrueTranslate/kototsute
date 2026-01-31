@@ -30,6 +30,7 @@ import { decryptPayload } from "../utils/encryption.js";
 import {
   createLocalXrplWallet,
   getWalletAddressFromSeed,
+  sendSignerListSet,
   sendXrpPayment,
   sendTokenPayment
 } from "../utils/xrpl-wallet.js";
@@ -1583,8 +1584,27 @@ export const casesRoutes = () => {
     if (!caseSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Case not found");
     }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
+    const caseData = caseSnap.data() ?? {};
+    if (caseData.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (caseData.stage === "IN_PROGRESS") {
+      const walletSnaps = await Promise.all(
+        heirUids.map((uid) => db.collection(`cases/${caseId}/heirWallets`).doc(uid).get())
+      );
+      const heirWallets = walletSnaps.map((snap) => {
+        const data = snap.data() ?? {};
+        const address = typeof data.address === "string" ? data.address : "";
+        const verified = data.verificationStatus === "VERIFIED" && address.length > 0;
+        return { address, verified };
+      });
+      const hasUnverified = heirWallets.some((wallet) => !wallet.verified);
+      if (hasUnverified) {
+        return jsonError(c, 400, "WALLET_NOT_VERIFIED", "相続人ウォレットが未検証です");
+      }
     }
 
     const assetsSnap = await db.collection(`cases/${caseId}/assets`).get();
@@ -1619,6 +1639,49 @@ export const casesRoutes = () => {
       createdAt: now,
       updatedAt: now
     });
+
+    if (caseData.stage === "IN_PROGRESS") {
+      const systemSigner = process.env.XRPL_SYSTEM_SIGNER_ADDRESS ?? "";
+      if (!systemSigner) {
+        return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
+      }
+      const walletSnaps = await Promise.all(
+        heirUids.map((uid) => db.collection(`cases/${caseId}/heirWallets`).doc(uid).get())
+      );
+      const heirAddresses = walletSnaps
+        .map((snap) => (typeof snap.data()?.address === "string" ? snap.data()?.address : ""))
+        .filter((address) => address);
+      const quorum = heirAddresses.length + (Math.floor(heirAddresses.length / 2) + 1);
+      const signerEntries = [
+        { account: systemSigner, weight: heirAddresses.length },
+        ...heirAddresses.map((address) => ({ account: address, weight: 1 }))
+      ];
+      try {
+        await sendSignerListSet({
+          fromSeed: wallet.seed,
+          fromAddress: wallet.address,
+          signerEntries,
+          quorum
+        });
+        await caseRef.collection("signerList").doc("state").set({
+          status: "SET",
+          quorum,
+          entries: signerEntries,
+          createdAt: now,
+          updatedAt: now
+        });
+      } catch (error: any) {
+        await caseRef.collection("signerList").doc("state").set({
+          status: "FAILED",
+          quorum,
+          entries: signerEntries,
+          error: error?.message ?? "SignerListSet failed",
+          createdAt: now,
+          updatedAt: now
+        });
+        return jsonError(c, 500, "SIGNER_LIST_FAILED", "SignerListSetに失敗しました");
+      }
+    }
 
     const items: Array<Record<string, any>> = [];
     for (const doc of assetsSnap.docs) {

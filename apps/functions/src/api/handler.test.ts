@@ -214,6 +214,7 @@ vi.mock("firebase-admin/auth", () => ({
 vi.mock("./utils/xrpl-wallet.js", () => ({
   sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
   sendTokenPayment: async () => ({ txHash: "tx-token" }),
+  sendSignerListSet: async () => ({ txHash: "tx-signer" }),
   getWalletAddressFromSeed: vi.fn(() => "rDest"),
   createLocalXrplWallet: vi.fn(() => ({
     address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
@@ -1552,6 +1553,46 @@ describe("createApiHandler", () => {
     const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
     expect(itemsSnap.docs.length).toBe(2);
     (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("blocks asset lock start when heir wallet not verified after death confirmed", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rAddr1",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_2").set({
+      address: "rAddr2",
+      verificationStatus: null
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "B" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("WALLET_NOT_VERIFIED");
   });
 
   it("falls back when wallet propose returns invalid address", async () => {

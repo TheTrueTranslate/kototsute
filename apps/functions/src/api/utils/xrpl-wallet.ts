@@ -98,3 +98,35 @@ export const sendTokenPayment = async (input: {
     await client.disconnect();
   }
 };
+
+export const sendSignerListSet = async (input: {
+  fromSeed: string;
+  fromAddress: string;
+  signerEntries: Array<{ account: string; weight: number }>;
+  quorum: number;
+}) => {
+  const client = new Client(getXrplWsUrl());
+  await client.connect();
+  try {
+    const wallet = Wallet.fromSeed(input.fromSeed);
+    const prepared = await client.autofill({
+      TransactionType: "SignerListSet",
+      Account: input.fromAddress,
+      SignerQuorum: input.quorum,
+      SignerEntries: input.signerEntries.map((entry) => ({
+        SignerEntry: { Account: entry.account, SignerWeight: entry.weight }
+      }))
+    });
+    const signed = wallet.sign(prepared);
+    const result = await client.submit(signed.tx_blob);
+    const engineResult = result?.result?.engine_result;
+    if (engineResult && !["tesSUCCESS", "terQUEUED"].includes(engineResult)) {
+      throw new Error(`XRPL submit failed: ${engineResult}`);
+    }
+    return {
+      txHash: signed.hash ?? result?.result?.tx_json?.hash ?? ""
+    };
+  } finally {
+    await client.disconnect();
+  }
+};
