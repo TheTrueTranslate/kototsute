@@ -253,7 +253,8 @@ export const mintAndSendNft = async (input: {
       TransactionType: "NFTokenMint",
       Account: input.minterAddress,
       URI: encodeUriToHex(input.uri),
-      Flags: 8
+      Flags: 8,
+      NFTokenTaxon: 0
     });
     const mintSigned = minterWallet.sign(mintPrepared);
     const submitAndWait = (client as any).submitAndWait?.bind(client);

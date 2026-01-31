@@ -129,7 +129,7 @@ describe("xrpl-wallet", () => {
     mocks.walletFromSeed.mockReturnValueOnce({
       sign: mocks.sign,
       classicAddress: "rClassic"
-    });
+    } as any);
     expect(getWalletAddressFromSeed("seed")).toBe("rClassic");
   });
 
@@ -137,7 +137,7 @@ describe("xrpl-wallet", () => {
     mocks.walletFromSeed.mockReturnValueOnce({
       sign: mocks.sign,
       classicAddress: "rLocal"
-    });
+    } as any);
     const wallet = createLocalXrplWallet();
     expect(mocks.generate).toHaveBeenCalled();
     expect(wallet).toEqual({ address: "rLocal", seed: "sLocal" });
