@@ -117,7 +117,9 @@ export default function ClaimDetailPage() {
         <>
           <div className="section">
             <div className="section-title">ステータス</div>
-            <div className="badge">{toClaimStatusLabel(detail.claim.status)}</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <div className="badge">{toClaimStatusLabel(detail.claim.status)}</div>
+            </div>
             <div className="actions">
               <button className="button" onClick={handleApprove} disabled={approving}>
                 {approving ? "承認中..." : "運営承認"}
