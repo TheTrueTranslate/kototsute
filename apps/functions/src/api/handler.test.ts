@@ -3407,6 +3407,95 @@ describe("createApiHandler", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("allows admin to reject death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/admin-reject`,
+      body: { note: "差し戻し理由" }
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("ADMIN_REJECTED");
+    expect(claimSnap.data()?.adminReview?.status).toBe("REJECTED");
+    expect(claimSnap.data()?.adminReview?.note).toBe("差し戻し理由");
+  });
+
+  it("allows heir to resubmit rejected death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_REJECTED",
+      adminReview: {
+        status: "REJECTED",
+        note: "差し戻し",
+        reviewedByUid: "admin_1",
+        reviewedAt: new Date("2024-01-01T00:00:00.000Z")
+      },
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db.collection(`cases/${caseId}/deathClaims/claim_1/confirmations`).doc("heir_2").set({
+      uid: "heir_2",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/resubmit`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("SUBMITTED");
+    expect(claimSnap.data()?.adminReview ?? null).toBeNull();
+    const confirmationsSnap = await db
+      .collection(`cases/${caseId}/deathClaims/claim_1/confirmations`)
+      .get();
+    expect(confirmationsSnap.docs.length).toBe(0);
+  });
+
   it("confirms death after admin approve and majority consent", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

@@ -914,6 +914,81 @@ export const casesRoutes = () => {
     return jsonOk(c);
   });
 
+  app.post(":caseId/death-claims/:claimId/admin-reject", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const note = typeof body?.note === "string" ? body.note.trim() : null;
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "ADMIN_REJECTED",
+        adminReview: {
+          status: "REJECTED",
+          note,
+          reviewedByUid: auth.uid,
+          reviewedAt: now
+        },
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/death-claims/:claimId/resubmit", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    if (claimSnap.data()?.status !== "ADMIN_REJECTED") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "差し戻し中のみ再提出できます");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "SUBMITTED",
+        adminReview: null,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    const confirmationsSnap = await claimRef.collection("confirmations").get();
+    await Promise.all(confirmationsSnap.docs.map((doc) => doc.ref.delete()));
+
+    return jsonOk(c);
+  });
+
   app.post(":caseId/death-claims/:claimId/confirm", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
