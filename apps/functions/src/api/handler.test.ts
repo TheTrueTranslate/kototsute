@@ -3457,4 +3457,83 @@ describe("createApiHandler", () => {
     const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
     expect(claimSnap.data()?.status).toBe("CONFIRMED");
   });
+
+  it("lists submitted death claims for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    await db.collection("cases").doc("case_1").set({ caseId: "case_1" });
+    await db.collection("cases").doc("case_2").set({ caseId: "case_2" });
+    await db.collection("cases/case_1/deathClaims").doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db.collection("cases/case_2/deathClaims").doc("claim_2").set({
+      submittedByUid: "heir_2",
+      status: "ADMIN_APPROVED",
+      createdAt: new Date("2024-01-02T00:00:00.000Z")
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: "/v1/admin/death-claims",
+      query: { status: "SUBMITTED" }
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.length).toBe(1);
+    expect(res.body?.data?.[0]?.claimId).toBe("claim_1");
+  });
+
+  it("returns death claim detail for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    await db.collection("cases").doc("case_1").set({ caseId: "case_1" });
+    await db.collection("cases/case_1/deathClaims").doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db
+      .collection("cases/case_1/deathClaims/claim_1/files")
+      .doc("file_1")
+      .set({
+        fileName: "death.pdf",
+        contentType: "application/pdf",
+        size: 1024
+      });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: "/v1/admin/death-claims/case_1/claim_1"
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.claim?.claimId).toBe("claim_1");
+    expect(res.body?.data?.files?.length).toBe(1);
+  });
 });

@@ -10,6 +10,7 @@ import { casesRoutes } from "./routes/cases.js";
 import { invitesRoutes } from "./routes/invites.js";
 import { plansRoutes } from "./routes/plans.js";
 import { notificationsRoutes } from "./routes/notifications.js";
+import { adminRoutes } from "./routes/admin.js";
 import { jsonError } from "./utils/response.js";
 
 export const createApp = (deps: ApiDeps) => {
@@ -55,6 +56,11 @@ export const createApp = (deps: ApiDeps) => {
   notifications.use("*", authMiddleware);
   notifications.route("/", notificationsRoutes());
   app.route("/notifications", notifications);
+
+  const admin = new Hono<ApiBindings>();
+  admin.use("*", authMiddleware);
+  admin.route("/", adminRoutes());
+  app.route("/admin", admin);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
