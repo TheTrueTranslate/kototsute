@@ -886,6 +886,34 @@ export const casesRoutes = () => {
     return jsonOk(c, { fileId: fileRef.id });
   });
 
+  app.post(":caseId/death-claims/:claimId/admin-approve", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "ADMIN_APPROVED",
+        adminApprovedByUid: auth.uid,
+        adminApprovedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c);
+  });
+
   app.post(":caseId/assets", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");

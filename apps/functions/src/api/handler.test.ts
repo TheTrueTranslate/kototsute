@@ -15,7 +15,7 @@ const authState = {
   existingEmails: new Set<string>(),
   users: new Map<string, { email?: string | null }>()
 };
-const authTokens = new Map<string, { uid: string; email?: string | null }>();
+const authTokens = new Map<string, { uid: string; email?: string | null; admin?: boolean }>();
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -3365,5 +3365,45 @@ describe("createApiHandler", () => {
     );
 
     expect(fileRes.statusCode).toBe(200);
+  });
+
+  it("allows admin to approve death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/admin-approve`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
   });
 });

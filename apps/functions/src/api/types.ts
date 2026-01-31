@@ -1,4 +1,4 @@
-export type AuthState = { uid: string; email?: string | null };
+export type AuthState = { uid: string; email?: string | null; admin?: boolean };
 
 export type ErrorResponse = { ok: false; code: string; message: string };
 export type OkResponse<T> = { ok: true; data: T } | { ok: true };
