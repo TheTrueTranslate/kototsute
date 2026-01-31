@@ -11,4 +11,13 @@ describe("death claims api", () => {
       method: "POST"
     });
   });
+
+  it("calls resubmit", async () => {
+    const { resubmitDeathClaim } = await import("./death-claims");
+    await resubmitDeathClaim("case-1", "claim-1");
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      "/v1/cases/case-1/death-claims/claim-1/resubmit",
+      { method: "POST" }
+    );
+  });
 });

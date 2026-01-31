@@ -10,8 +10,12 @@ export type DeathClaimFile = {
 
 export type DeathClaimData = {
   claimId: string;
-  status: "SUBMITTED" | "ADMIN_APPROVED" | "CONFIRMED";
+  status: "SUBMITTED" | "ADMIN_APPROVED" | "ADMIN_REJECTED" | "CONFIRMED";
   submittedByUid: string;
+  adminReview?: {
+    status: "APPROVED" | "REJECTED";
+    note?: string | null;
+  } | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -63,4 +67,11 @@ export const confirmDeathClaim = async (caseId: string, claimId: string) => {
     method: "POST"
   });
   return result.data as { confirmationsCount: number; requiredCount: number };
+};
+
+export const resubmitDeathClaim = async (caseId: string, claimId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/death-claims/${claimId}/resubmit`, {
+    method: "POST"
+  });
+  return result.data as { ok?: boolean };
 };

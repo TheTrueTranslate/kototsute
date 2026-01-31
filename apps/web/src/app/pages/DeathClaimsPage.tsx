@@ -13,6 +13,7 @@ import {
   createDeathClaimUploadRequest,
   finalizeDeathClaimFile,
   getDeathClaim,
+  resubmitDeathClaim,
   submitDeathClaim,
   type DeathClaimSummary
 } from "../api/death-claims";
@@ -21,6 +22,7 @@ import styles from "../../styles/deathClaimsPage.module.css";
 const statusLabels: Record<string, string> = {
   SUBMITTED: "提出済み",
   ADMIN_APPROVED: "運営承認済み",
+  ADMIN_REJECTED: "差し戻し",
   CONFIRMED: "確定済み"
 };
 
@@ -31,15 +33,24 @@ const formatBytes = (value: number) => {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export default function DeathClaimsPage() {
+type DeathClaimsPageProps = {
+  initialClaim?: DeathClaimSummary | null;
+  initialLoading?: boolean;
+};
+
+export default function DeathClaimsPage({
+  initialClaim = null,
+  initialLoading
+}: DeathClaimsPageProps) {
   const { caseId } = useParams();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialLoading ?? !initialClaim);
   const [error, setError] = useState<string | null>(null);
-  const [claim, setClaim] = useState<DeathClaimSummary | null>(null);
+  const [claim, setClaim] = useState<DeathClaimSummary | null>(initialClaim);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const fetchClaim = useCallback(async () => {
@@ -57,9 +68,9 @@ export default function DeathClaimsPage() {
   }, [caseId]);
 
   useEffect(() => {
-    if (!user || !caseId) return;
+    if (!user || !caseId || initialClaim) return;
     void fetchClaim();
-  }, [user, caseId, fetchClaim]);
+  }, [user, caseId, fetchClaim, initialClaim]);
 
   const handleSubmit = async () => {
     if (!caseId) return;
@@ -120,9 +131,39 @@ export default function DeathClaimsPage() {
     }
   };
 
+  const handleResubmit = async () => {
+    if (!caseId || !claim?.claim?.claimId) return;
+    setResubmitting(true);
+    setError(null);
+    try {
+      await resubmitDeathClaim(caseId, claim.claim.claimId);
+      await fetchClaim();
+    } catch (err: any) {
+      setError(err?.message ?? "再提出に失敗しました");
+    } finally {
+      setResubmitting(false);
+    }
+  };
+
   const hasClaim = Boolean(claim?.claim);
   const canUpload = claim?.claim?.status === "SUBMITTED";
   const canConfirm = claim?.claim?.status === "ADMIN_APPROVED" && !claim?.confirmedByMe;
+  const isRejected = claim?.claim?.status === "ADMIN_REJECTED";
+
+  const stepItems = [
+    { id: "submit", label: "提出・ファイル追加" },
+    { id: "review", label: "運営確認" },
+    { id: "consent", label: "相続人同意" },
+    { id: "confirmed", label: "確定" }
+  ];
+  const activeStepIndex = (() => {
+    if (!claim?.claim) return 0;
+    const status = claim.claim.status;
+    if (status === "SUBMITTED" || status === "ADMIN_REJECTED") return 1;
+    if (status === "ADMIN_APPROVED") return 2;
+    if (status === "CONFIRMED") return 3;
+    return 0;
+  })();
 
   return (
     <section className={styles.page}>
@@ -157,6 +198,23 @@ export default function DeathClaimsPage() {
             </span>
           ) : null}
         </div>
+        <div className={styles.steps}>
+          {stepItems.map((step, index) => {
+            const isActive = index === activeStepIndex;
+            const isDone = index < activeStepIndex;
+            return (
+              <div
+                key={step.id}
+                className={`${styles.stepItem} ${isActive ? styles.stepActive : ""} ${
+                  isDone ? styles.stepDone : ""
+                }`}
+              >
+                <div className={styles.stepIndex}>{index + 1}</div>
+                <div className={styles.stepLabel}>{step.label}</div>
+              </div>
+            );
+          })}
+        </div>
         {loading ? (
           <div className={styles.muted}>読み込み中...</div>
         ) : !hasClaim ? (
@@ -185,6 +243,16 @@ export default function DeathClaimsPage() {
               <Button type="button" onClick={handleConfirm} disabled={confirming}>
                 {confirming ? "同意中..." : "同意する"}
               </Button>
+            ) : isRejected ? (
+              <div className={styles.rejected}>
+                <div className={styles.rejectedTitle}>差し戻し</div>
+                <div className={styles.rejectedBody}>
+                  {claim?.claim?.adminReview?.note ?? "運営から差し戻しされました。"}
+                </div>
+                <Button type="button" onClick={handleResubmit} disabled={resubmitting}>
+                  {resubmitting ? "再提出中..." : "再提出"}
+                </Button>
+              </div>
             ) : (
               <div className={styles.muted}>運営の承認後に同意できます。</div>
             )}
