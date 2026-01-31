@@ -5,6 +5,7 @@ import RegisterPage from "./pages/RegisterPage";
 import ResetPage from "./pages/ResetPage";
 import CasesPage from "./pages/CasesPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
+import DeathClaimsPage from "./pages/DeathClaimsPage";
 import AssetLockPage from "./pages/AssetLockPage";
 import AssetNewPage from "./pages/AssetNewPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
@@ -142,6 +143,14 @@ function AppShell() {
           element={
             <RequireAuth>
               <CaseDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/cases/:caseId/death-claims"
+          element={
+            <RequireAuth>
+              <DeathClaimsPage />
             </RequireAuth>
           }
         />

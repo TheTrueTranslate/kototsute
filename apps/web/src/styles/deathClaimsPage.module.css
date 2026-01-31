@@ -1,0 +1,91 @@
+.page {
+  @apply mx-auto w-full max-w-[960px] px-6 py-10;
+}
+
+.header {
+  @apply mb-6 grid gap-4;
+}
+
+.headerRow {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.lead {
+  @apply text-body text-muted-foreground;
+}
+
+.panel {
+  @apply mt-6 rounded-2xl border border-border bg-surface p-6;
+}
+
+.panelHeader {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.panelTitle {
+  @apply text-section text-foreground;
+}
+
+.statusBadge {
+  @apply rounded-full border border-border bg-muted/40 px-3 py-1 text-meta font-medium text-foreground;
+}
+
+.statusBody {
+  @apply mt-4 grid gap-3;
+}
+
+.statusRow {
+  @apply flex items-center justify-between;
+}
+
+.statusLabel {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.statusValue {
+  @apply text-body font-semibold text-foreground;
+}
+
+.note {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.fileList {
+  @apply mt-4 grid gap-3;
+}
+
+.fileRow {
+  @apply flex items-center justify-between rounded-xl border border-border/60 px-4 py-3;
+}
+
+.fileName {
+  @apply text-body font-medium text-foreground;
+}
+
+.fileMeta {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.form {
+  @apply mt-4 grid gap-4;
+}
+
+.actions {
+  @apply mt-2 flex flex-wrap items-center gap-2;
+}
+
+.emptyState {
+  @apply mt-4 rounded-2xl border border-dashed border-border px-6 py-6;
+}
+
+.emptyTitle {
+  @apply text-section text-foreground;
+}
+
+.emptyBody {
+  @apply mt-2 text-body text-muted-foreground;
+}
+
+.muted {
+  @apply text-body-sm text-muted-foreground;
+}

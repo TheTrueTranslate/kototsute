@@ -541,6 +541,13 @@ export default function CaseDetailPage({
               </div>
             ) : null}
           </div>
+          {caseId && isOwner === false ? (
+            <div className={styles.headerActions}>
+              <Button asChild size="sm" variant="secondary">
+                <Link to={`/cases/${caseId}/death-claims`}>死亡診断書</Link>
+              </Button>
+            </div>
+          ) : null}
         </div>
       </header>
 
