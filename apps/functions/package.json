@@ -17,9 +17,11 @@
     "@kototsute/shared": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
-    "hono": "^4.6.0",
     "firebase-admin": "^11.11.1",
-    "firebase-functions": "^4.4.1"
+    "firebase-functions": "^4.4.1",
+    "hono": "^4.6.0",
+    "ripple-keypairs": "^2.0.0",
+    "xrpl": "^4.5.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
