@@ -986,6 +986,49 @@ describe("createApiHandler", () => {
     expect(caseSnap.data()?.memberUids ?? []).toContain("heir_1");
   });
 
+  it("rejects case invite when heir limit exceeded", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const invitesRef = getFirestore().collection(`cases/${caseId}/invites`);
+    for (let i = 0; i < 30; i++) {
+      await invitesRef.doc(`invite_${i}`).set({
+        email: `heir${i}@example.com`,
+        status: "pending"
+      });
+    }
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites`,
+        body: { email: "extra@example.com", relationLabel: "長男" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("HEIR_LIMIT_REACHED");
+  });
+
   it("lists case heirs", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({

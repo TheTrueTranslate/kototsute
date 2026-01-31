@@ -220,6 +220,14 @@ export const casesRoutes = () => {
     const normalizedEmail = normalizeEmail(parsed.data.email);
     const now = c.get("deps").now();
     const invitesCollection = db.collection(`cases/${caseId}/invites`);
+    const countSnap = await invitesCollection.get();
+    const activeCount = countSnap.docs.filter((doc) => {
+      const status = doc.data()?.status;
+      return status === "pending" || status === "accepted";
+    }).length;
+    if (activeCount >= 30) {
+      return jsonError(c, 400, "HEIR_LIMIT_REACHED", "相続人は30人までです");
+    }
     const resolveInviteReceiver = async (): Promise<string | null> => {
       try {
         const user = await getAuth().getUserByEmail(normalizedEmail);
