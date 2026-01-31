@@ -914,6 +914,54 @@ export const casesRoutes = () => {
     return jsonOk(c);
   });
 
+  app.post(":caseId/death-claims/:claimId/confirm", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    if (claimSnap.data()?.status !== "ADMIN_APPROVED") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "運営承認が必要です");
+    }
+
+    const confirmationRef = claimRef.collection("confirmations").doc(auth.uid);
+    const confirmationSnap = await confirmationRef.get();
+    if (!confirmationSnap.exists) {
+      await confirmationRef.set({ uid: auth.uid, createdAt: c.get("deps").now() });
+    }
+
+    const confirmationsSnap = await claimRef.collection("confirmations").get();
+    const confirmationsCount = confirmationsSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    if (confirmationsCount >= requiredCount) {
+      const now = c.get("deps").now();
+      await claimRef.set(
+        { status: "CONFIRMED", confirmedAt: now, updatedAt: now },
+        { merge: true }
+      );
+      await caseRef.set({ stage: "IN_PROGRESS", updatedAt: now }, { merge: true });
+    }
+
+    return jsonOk(c, { confirmationsCount, requiredCount });
+  });
+
   app.post(":caseId/assets", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");

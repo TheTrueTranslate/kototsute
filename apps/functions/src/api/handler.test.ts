@@ -3406,4 +3406,55 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(200);
   });
+
+  it("confirms death after admin approve and majority consent", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2", "heir_3"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_APPROVED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const res1 = createRes();
+    await handler(
+      authedReq("heir_1", "heir1@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/confirm`
+      }) as any,
+      res1 as any
+    );
+    expect(res1.statusCode).toBe(200);
+
+    const res2 = createRes();
+    await handler(
+      authedReq("heir_2", "heir2@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/confirm`
+      }) as any,
+      res2 as any
+    );
+    expect(res2.statusCode).toBe(200);
+
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("CONFIRMED");
+  });
 });
