@@ -49,4 +49,26 @@ describe("admin death-claims api", () => {
     expect(result.files[0].storagePath).toContain("cases/");
     expect(result.files[0].downloadUrl).toBe("https://storage.example.com/signed");
   });
+
+  it("downloads death claim file", async () => {
+    const { apiFetch } = await import("../lib/api");
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      data: {
+        fileName: "report.pdf",
+        contentType: "application/pdf",
+        dataBase64: "SGVsbG8="
+      }
+    });
+
+    const { downloadDeathClaimFile } = await import("./death-claims");
+    const result = await downloadDeathClaimFile("case-1", "claim-1", "file-1");
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/v1/admin/death-claims/case-1/claim-1/files/file-1/download",
+      { method: "GET" }
+    );
+    expect(result.fileName).toBe("report.pdf");
+    expect(result.contentType).toBe("application/pdf");
+    expect(result.dataBase64).toBe("SGVsbG8=");
+  });
 });

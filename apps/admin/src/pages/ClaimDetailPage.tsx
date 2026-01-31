@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   approveDeathClaim,
+  downloadDeathClaimFile,
   getDeathClaimDetail,
   rejectDeathClaim,
   type AdminDeathClaimDetail
@@ -19,6 +20,18 @@ const formatDate = (value?: string | null) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleString("ja-JP");
+};
+
+export const decodeBase64ToBytes = (dataBase64: string) => {
+  if (typeof Buffer !== "undefined") {
+    return Uint8Array.from(Buffer.from(dataBase64, "base64"));
+  }
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 };
 
 export const toClaimStatusLabel = (status: string) => {
@@ -46,6 +59,7 @@ export default function ClaimDetailPage() {
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
+  const [openingFileId, setOpeningFileId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!caseId || !claimId) return;
@@ -90,6 +104,29 @@ export default function ClaimDetailPage() {
       setError(err?.message ?? "差し戻しに失敗しました");
     } finally {
       setRejecting(false);
+    }
+  };
+
+  const handleOpenFile = async (fileId: string) => {
+    if (!caseId || !claimId) return;
+    setOpeningFileId(fileId);
+    setError(null);
+    try {
+      const file = await downloadDeathClaimFile(caseId, claimId, fileId);
+      if (!file.dataBase64) {
+        throw new Error("ファイルの取得に失敗しました");
+      }
+      const bytes = decodeBase64ToBytes(file.dataBase64);
+      const blob = new Blob([bytes], {
+        type: file.contentType ?? "application/octet-stream"
+      });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      setError(err?.message ?? "ファイルの取得に失敗しました");
+    } finally {
+      setOpeningFileId(null);
     }
   };
 
@@ -146,17 +183,25 @@ export default function ClaimDetailPage() {
                 {detail.files.map((file) => (
                   <div key={file.fileId} className="file-row">
                     <div className="row-title">{file.fileName}</div>
-                    {file.downloadUrl ? (
-                      <a
+                    {file.fileId ? (
+                      <button
                         className="row-meta"
-                        href={file.downloadUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                        type="button"
+                        onClick={() => handleOpenFile(file.fileId)}
+                        disabled={openingFileId === file.fileId}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          color: "#2563eb",
+                          cursor: "pointer",
+                          font: "inherit"
+                        }}
                       >
-                        ファイルを開く
-                      </a>
+                        {openingFileId === file.fileId ? "取得中..." : "ファイルを開く"}
+                      </button>
                     ) : (
-                      <div className="row-meta">閲覧リンクがありません。</div>
+                      <div className="row-meta">閲覧できません。</div>
                     )}
                   </div>
                 ))}

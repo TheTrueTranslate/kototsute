@@ -29,6 +29,12 @@ export type AdminDeathClaimDetail = {
   }>;
 };
 
+export type AdminDeathClaimFileDownload = {
+  fileName: string | null;
+  contentType: string | null;
+  dataBase64: string;
+};
+
 export const listPendingDeathClaims = async () => {
   const result = await apiFetch("/v1/admin/death-claims?status=SUBMITTED", { method: "GET" });
   return result.data as AdminDeathClaim[];
@@ -52,4 +58,16 @@ export const rejectDeathClaim = async (
     method: "POST",
     body: JSON.stringify({ note: input.note ?? null })
   });
+};
+
+export const downloadDeathClaimFile = async (
+  caseId: string,
+  claimId: string,
+  fileId: string
+) => {
+  const result = await apiFetch(
+    `/v1/admin/death-claims/${caseId}/${claimId}/files/${fileId}/download`,
+    { method: "GET" }
+  );
+  return result.data as AdminDeathClaimFileDownload;
 };
