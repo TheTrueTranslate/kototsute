@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import {
   approveDeathClaim,
   getDeathClaimDetail,
+  rejectDeathClaim,
   type AdminDeathClaimDetail
 } from "../api/death-claims";
 
@@ -19,6 +20,8 @@ export default function ClaimDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
 
   const load = useCallback(async () => {
     if (!caseId || !claimId) return;
@@ -49,6 +52,20 @@ export default function ClaimDetailPage() {
       setError(err?.message ?? "承認に失敗しました");
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!caseId || !claimId) return;
+    setRejecting(true);
+    setError(null);
+    try {
+      await rejectDeathClaim(caseId, claimId, { note: rejectNote.trim() || null });
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "差し戻しに失敗しました");
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -93,7 +110,20 @@ export default function ClaimDetailPage() {
             <button className="button" onClick={handleApprove} disabled={approving}>
               {approving ? "承認中..." : "運営承認"}
             </button>
+            <button className="button button-secondary" onClick={handleReject} disabled={rejecting}>
+              {rejecting ? "差し戻し中..." : "差し戻し"}
+            </button>
           </div>
+          <label className="label">
+            差し戻し理由
+            <textarea
+              className="input"
+              rows={3}
+              value={rejectNote}
+              onChange={(event) => setRejectNote(event.target.value)}
+              placeholder="差し戻し理由を入力してください"
+            />
+          </label>
         </>
       ) : (
         <div className="muted">詳細が見つかりません。</div>

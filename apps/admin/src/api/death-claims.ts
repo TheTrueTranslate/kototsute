@@ -25,3 +25,14 @@ export const getDeathClaimDetail = async (caseId: string, claimId: string) => {
 export const approveDeathClaim = async (caseId: string, claimId: string) => {
   await apiFetch(`/v1/cases/${caseId}/death-claims/${claimId}/admin-approve`, { method: "POST" });
 };
+
+export const rejectDeathClaim = async (
+  caseId: string,
+  claimId: string,
+  input: { note?: string | null }
+) => {
+  await apiFetch(`/v1/cases/${caseId}/death-claims/${claimId}/admin-reject`, {
+    method: "POST",
+    body: JSON.stringify({ note: input.note ?? null })
+  });
+};
