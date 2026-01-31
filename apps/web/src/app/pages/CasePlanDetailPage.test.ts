@@ -3,6 +3,20 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+let caseData = {
+  caseId: "case-1",
+  ownerUid: "owner",
+  ownerDisplayName: "山田",
+  stage: "DRAFT",
+  assetLockStatus: "UNLOCKED",
+  createdAt: "2024-01-01",
+  updatedAt: "2024-01-01"
+};
+
+vi.mock("../api/cases", () => ({
+  getCase: async () => caseData
+}));
+
 vi.mock("../api/plans", () => ({
   getPlan: async () => ({
     planId: "plan-1",
@@ -24,7 +38,7 @@ vi.mock("../../features/auth/auth-provider", () => ({
   useAuth: () => ({ user: { uid: "owner" }, loading: false })
 }));
 
-const render = async () => {
+const render = async (props?: Record<string, unknown>) => {
   const { default: CasePlanDetailPage } = await import("./CasePlanDetailPage");
   return renderToString(
     React.createElement(
@@ -35,7 +49,7 @@ const render = async () => {
         null,
         React.createElement(Route, {
           path: "/cases/:caseId/plans/:planId",
-          element: React.createElement(CasePlanDetailPage)
+          element: React.createElement(CasePlanDetailPage, props ?? {})
         })
       )
     )
@@ -46,5 +60,11 @@ describe("CasePlanDetailPage", () => {
   it("renders plan title", async () => {
     const html = await render();
     expect(html).toContain("指図詳細");
+  });
+
+  it("hides edit button when locked", async () => {
+    caseData = { ...caseData, stage: "WAITING", assetLockStatus: "LOCKED" };
+    const html = await render({ initialCaseData: caseData });
+    expect(html).not.toContain("編集する");
   });
 });

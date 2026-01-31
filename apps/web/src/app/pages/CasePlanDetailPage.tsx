@@ -12,6 +12,7 @@ import {
   type PlanDetail,
   type PlanHistoryEntry
 } from "../api/plans";
+import { getCase, type CaseSummary } from "../api/cases";
 import { listCaseHeirs, type CaseHeir } from "../api/invites";
 import { useAuth } from "../../features/auth/auth-provider";
 import styles from "../../styles/caseDetailPage.module.css";
@@ -50,10 +51,15 @@ const tabItems: { key: TabKey; label: string }[] = [
   { key: "history", label: "履歴" }
 ];
 
-export default function CasePlanDetailPage() {
+type CasePlanDetailPageProps = {
+  initialCaseData?: CaseSummary | null;
+};
+
+export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanDetailPageProps) {
   const { caseId, planId } = useParams();
   const { user } = useAuth();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
+  const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<PlanAsset[]>([]);
   const [heirs, setHeirs] = useState<CaseHeir[]>([]);
   const [history, setHistory] = useState<PlanHistoryEntry[]>([]);
@@ -63,6 +69,14 @@ export default function CasePlanDetailPage() {
 
   const title = useMemo(() => plan?.title ?? "指図詳細", [plan]);
   const isOwner = plan?.ownerUid && user?.uid ? plan.ownerUid === user.uid : false;
+  const isLocked = caseData?.assetLockStatus === "LOCKED";
+
+  useEffect(() => {
+    if (!caseId || initialCaseData) return;
+    getCase(caseId)
+      .then((data) => setCaseData(data))
+      .catch(() => setCaseData(null));
+  }, [caseId, initialCaseData]);
 
   useEffect(() => {
     if (!caseId || !planId) {
@@ -113,7 +127,7 @@ export default function CasePlanDetailPage() {
               </div>
             ) : null}
           </div>
-          {isOwner && caseId && planId ? (
+          {isOwner && caseId && planId && !isLocked ? (
             <div className={styles.headerActions}>
               <Button asChild size="sm">
                 <Link to={`/cases/${caseId}/plans/${planId}/edit`}>編集する</Link>
