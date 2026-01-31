@@ -3312,4 +3312,58 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.claim?.status).toBe("SUBMITTED");
     expect(listRes.body?.data?.files?.length ?? 0).toBe(0);
   });
+
+  it("issues upload request and registers file", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc("claim_1");
+    await claimRef.set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const issueRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/upload-requests`,
+        body: { fileName: "death.pdf", contentType: "application/pdf", size: 1024 }
+      }) as any,
+      issueRes as any
+    );
+
+    expect(issueRes.body?.data?.requestId).toBeTruthy();
+
+    const fileRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/files`,
+        body: { requestId: issueRes.body?.data?.requestId }
+      }) as any,
+      fileRes as any
+    );
+
+    expect(fileRes.statusCode).toBe(200);
+  });
 });

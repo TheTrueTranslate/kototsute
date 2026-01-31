@@ -54,6 +54,11 @@ const toDrops = (value: string) => {
 const isValidXrplClassicAddress = (address: string) =>
   /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address);
 
+const isAllowedDeathClaimContentType = (value: string) =>
+  ["application/pdf", "image/jpeg", "image/png"].includes(value);
+
+const maxDeathClaimFileSize = 10 * 1024 * 1024;
+
 const createLocalXrplWalletFallback = () => {
   return createLocalXrplWallet();
 };
@@ -784,6 +789,101 @@ export const casesRoutes = () => {
     });
 
     return jsonOk(c, { claimId: claimRef.id });
+  });
+
+  app.post(":caseId/death-claims/:claimId/upload-requests", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const fileName = typeof body?.fileName === "string" ? body.fileName.trim() : "";
+    const contentType = typeof body?.contentType === "string" ? body.contentType : "";
+    const size = Number(body?.size ?? 0);
+    if (
+      !fileName ||
+      !isAllowedDeathClaimContentType(contentType) ||
+      !Number.isFinite(size) ||
+      size <= 0 ||
+      size > maxDeathClaimFileSize
+    ) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "ファイル形式またはサイズが不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    if (claimSnap.data()?.status !== "SUBMITTED") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "提出済みの申請のみ追加できます");
+    }
+
+    const now = c.get("deps").now();
+    const requestRef = claimRef.collection("uploadRequests").doc();
+    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+    await requestRef.set({
+      uid: auth.uid,
+      fileName,
+      contentType,
+      size,
+      status: "ISSUED",
+      expiresAt,
+      createdAt: now
+    });
+
+    return jsonOk(c, {
+      requestId: requestRef.id,
+      uploadPath: `cases/${caseId}/death-claims/${claimId}/${requestRef.id}`
+    });
+  });
+
+  app.post(":caseId/death-claims/:claimId/files", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const requestId = typeof body?.requestId === "string" ? body.requestId.trim() : "";
+    if (!requestId) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "requestIdは必須です");
+    }
+
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const requestRef = claimRef.collection("uploadRequests").doc(requestId);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Upload request not found");
+    }
+    const request = requestSnap.data() ?? {};
+    if (request.uid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const now = c.get("deps").now();
+    const fileRef = claimRef.collection("files").doc();
+    await fileRef.set({
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${requestId}`,
+      fileName: request.fileName,
+      contentType: request.contentType,
+      size: request.size,
+      uploadedByUid: auth.uid,
+      createdAt: now
+    });
+    await requestRef.set({ status: "VERIFIED" }, { merge: true });
+
+    return jsonOk(c, { fileId: fileRef.id });
   });
 
   app.post(":caseId/assets", async (c) => {
