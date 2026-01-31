@@ -698,6 +698,94 @@ export const casesRoutes = () => {
     return jsonOk(c);
   });
 
+  app.get(":caseId/death-claims", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimsSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    const claimDoc = claimsSnap.docs[0];
+    if (!claimDoc) {
+      return jsonOk(c, {
+        claim: null,
+        files: [],
+        confirmationsCount: 0,
+        requiredCount: 0,
+        confirmedByMe: false
+      });
+    }
+
+    const filesSnap = await claimDoc.ref.collection("files").get();
+    const files = filesSnap.docs.map((doc) => ({ fileId: doc.id, ...doc.data() }));
+
+    const confirmationsSnap = await claimDoc.ref.collection("confirmations").get();
+    const confirmationsCount = confirmationsSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = heirCount === 0 ? 0 : Math.floor(heirCount / 2) + 1;
+    const confirmedByMe = confirmationsSnap.docs.some((doc) => doc.id === auth.uid);
+
+    return jsonOk(c, {
+      claim: { claimId: claimDoc.id, ...claimDoc.data() },
+      files,
+      confirmationsCount,
+      requiredCount,
+      confirmedByMe
+    });
+  });
+
+  app.post(":caseId/death-claims", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const submittedSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .where("status", "==", "SUBMITTED")
+      .get();
+    const approvedSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .where("status", "==", "ADMIN_APPROVED")
+      .get();
+    if (submittedSnap.docs.length > 0 || approvedSnap.docs.length > 0) {
+      return jsonError(c, 409, "CONFLICT", "既に申請済みです");
+    }
+
+    const now = c.get("deps").now();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc();
+    await claimRef.set({
+      submittedByUid: auth.uid,
+      status: "SUBMITTED",
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, { claimId: claimRef.id });
+  });
+
   app.post(":caseId/assets", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
