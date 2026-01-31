@@ -21,6 +21,16 @@ const formatDate = (value?: string | null) => {
   return parsed.toLocaleString("ja-JP");
 };
 
+const toStorageDownloadUrl = (path?: string | null) => {
+  if (!path) return null;
+  if (!path.startsWith("cases/")) {
+    return null;
+  }
+  return `https://firebasestorage.googleapis.com/v0/b/kototsute.appspot.com/o/${encodeURIComponent(
+    path
+  )}?alt=media`;
+};
+
 export const toClaimStatusLabel = (status: string) => {
   switch (status) {
     case "SUBMITTED":
@@ -146,19 +156,19 @@ export default function ClaimDetailPage() {
               <div className="file-list">
                 {detail.files.map((file) => (
                   <div key={file.fileId} className="file-row">
-                    <div>
-                      <div className="row-title">{file.fileName}</div>
-                      <div className="row-meta">
-                        {file.contentType} ・ {formatBytes(file.size)}
-                      </div>
-                      <div className="row-meta">
-                        作成日時 {formatDate(file.createdAt)} ・ 提出者{" "}
-                        {file.uploadedByUid ?? "-"}
-                      </div>
-                      {file.storagePath ? (
-                        <div className="row-meta">保存パス {file.storagePath}</div>
-                      ) : null}
-                    </div>
+                    <div className="row-title">{file.fileName}</div>
+                    {toStorageDownloadUrl(file.storagePath) ? (
+                      <a
+                        className="row-meta"
+                        href={toStorageDownloadUrl(file.storagePath)!}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        ファイルを開く
+                      </a>
+                    ) : (
+                      <div className="row-meta">閲覧リンクがありません。</div>
+                    )}
                   </div>
                 ))}
               </div>
