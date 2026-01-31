@@ -15,6 +15,14 @@ const getCaseIdFromRef = (ref: { path?: string; parent?: { parent?: { id?: strin
   return ref.parent?.parent?.id ?? null;
 };
 
+const resolveStorageEmulatorOrigin = (host?: string | null) => {
+  if (!host) return null;
+  if (host.startsWith("http://") || host.startsWith("https://")) {
+    return host;
+  }
+  return `http://${host}`;
+};
+
 export const adminRoutes = () => {
   const app = new Hono<ApiBindings>();
 
@@ -64,12 +72,19 @@ export const adminRoutes = () => {
 
     const filesSnap = await claimRef.collection("files").get();
     const storageBucket = process.env.STORAGE_BUCKET;
+    const emulatorOrigin = resolveStorageEmulatorOrigin(
+      process.env.FIREBASE_STORAGE_EMULATOR_HOST
+    );
     const files = await Promise.all(
       filesSnap.docs.map(async (doc) => {
         const data = doc.data() ?? {};
         let downloadUrl: string | null = null;
         const storagePath = typeof data.storagePath === "string" ? data.storagePath : null;
-        if (storageBucket && storagePath) {
+        if (emulatorOrigin && storageBucket && storagePath) {
+          downloadUrl = `${emulatorOrigin}/v0/b/${storageBucket}/o/${encodeURIComponent(
+            storagePath
+          )}?alt=media`;
+        } else if (storageBucket && storagePath) {
           try {
             const bucket = getStorage().bucket(storageBucket);
             const [signedUrl] = await bucket.file(storagePath).getSignedUrl({

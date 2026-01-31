@@ -3722,7 +3722,8 @@ describe("createApiHandler", () => {
         uploadedByUid: "heir_1",
         createdAt: new Date("2024-01-02T00:00:00.000Z")
       });
-    process.env.STORAGE_BUCKET = "kototsute.appspot.com";
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
 
     const req = authedReq("admin_1", "admin@example.com", {
       method: "GET",
@@ -3742,8 +3743,9 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.files?.[0]?.storagePath).toContain("cases/case_1");
     expect(res.body?.data?.files?.[0]?.uploadedByUid).toBe("heir_1");
     expect(res.body?.data?.files?.[0]?.downloadUrl).toBe(
-      "https://storage.example.com/signed"
+      "http://127.0.0.1:9199/v0/b/kototsute.firebasestorage.app/o/cases%2Fcase_1%2Fdeath-claims%2Fclaim_1%2Ffile_1?alt=media"
     );
+    delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
     delete process.env.STORAGE_BUCKET;
   });
 });
