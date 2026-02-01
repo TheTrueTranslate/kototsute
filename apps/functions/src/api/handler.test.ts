@@ -4003,6 +4003,67 @@ describe("createApiHandler", () => {
     expect(itemsSnap.docs.length).toBe(1);
   });
 
+  it("skips items after retry limit and escalates", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_retry";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+
+    const stateRef = db.collection(`cases/${caseId}/distribution`).doc("state");
+    await stateRef.set({
+      status: "RUNNING",
+      retryLimit: 2,
+      totalCount: 1,
+      successCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+      escalationCount: 0
+    });
+    await stateRef.collection("items").doc("item-1").set({
+      status: "FAILED",
+      attempts: 2,
+      heirUid: "heir_1",
+      heirAddress: "rHeir",
+      token: null,
+      amount: "100"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    const itemSnap = await stateRef.collection("items").doc("item-1").get();
+    expect(itemSnap.data()?.status).toBe("SKIPPED");
+    const stateSnap = await stateRef.get();
+    expect(stateSnap.data()?.escalationCount).toBe(1);
+  });
+
   it("rejects prepare when heir wallets are unverified", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

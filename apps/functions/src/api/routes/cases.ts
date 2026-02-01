@@ -1396,6 +1396,132 @@ export const casesRoutes = () => {
     }
     const lockSeed = decryptPayload(lockSeedEncrypted);
 
+    const stateRef = caseRef.collection("distribution").doc("state");
+    const itemsRef = stateRef.collection("items");
+    const existingStateSnap = await stateRef.get();
+    const existingState = existingStateSnap.data() ?? {};
+    const existingStatus = typeof existingState.status === "string" ? existingState.status : null;
+    if (
+      existingStateSnap.exists &&
+      existingStatus &&
+      ["RUNNING", "PARTIAL", "FAILED"].includes(existingStatus)
+    ) {
+      const retryLimit =
+        typeof existingState.retryLimit === "number" && Number.isFinite(existingState.retryLimit)
+          ? existingState.retryLimit
+          : 3;
+      const itemsSnap = await itemsRef.get();
+      if (!itemsSnap.empty) {
+        let successCount = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+        let escalationCount = 0;
+        const now = c.get("deps").now();
+        for (const doc of itemsSnap.docs) {
+          const item = doc.data() ?? {};
+          const status = String(item.status ?? "QUEUED");
+          const attempts =
+            typeof item.attempts === "number" && Number.isFinite(item.attempts)
+              ? item.attempts
+              : 0;
+          if (status === "VERIFIED") {
+            successCount += 1;
+            continue;
+          }
+          if (status === "SKIPPED") {
+            skippedCount += 1;
+            escalationCount += 1;
+            continue;
+          }
+          if (status === "FAILED" && attempts >= retryLimit) {
+            skippedCount += 1;
+            escalationCount += 1;
+            await doc.ref.set(
+              {
+                status: "SKIPPED",
+                updatedAt: now,
+                error: item.error ?? "再試行回数上限に達しました"
+              },
+              { merge: true }
+            );
+            continue;
+          }
+
+          try {
+            if (item.token) {
+              const result = await sendTokenPayment({
+                fromSeed: lockSeed,
+                fromAddress: lockWalletAddress,
+                to: String(item.heirAddress ?? ""),
+                token: item.token,
+                amount: String(item.amount ?? "0")
+              });
+              await doc.ref.set(
+                {
+                  status: "VERIFIED",
+                  txHash: result.txHash ?? null,
+                  updatedAt: now
+                },
+                { merge: true }
+              );
+            } else {
+              const result = await sendXrpPayment({
+                fromSeed: lockSeed,
+                fromAddress: lockWalletAddress,
+                to: String(item.heirAddress ?? ""),
+                amountDrops: String(item.amount ?? "0")
+              });
+              await doc.ref.set(
+                {
+                  status: "VERIFIED",
+                  txHash: result.txHash ?? null,
+                  updatedAt: now
+                },
+                { merge: true }
+              );
+            }
+            successCount += 1;
+          } catch (error: any) {
+            failedCount += 1;
+            await doc.ref.set(
+              {
+                status: "FAILED",
+                attempts: attempts + 1,
+                error: error?.message ?? "送金に失敗しました",
+                updatedAt: now
+              },
+              { merge: true }
+            );
+          }
+        }
+
+        const status =
+          failedCount > 0 || skippedCount > 0 ? "PARTIAL" : "COMPLETED";
+        await stateRef.set(
+          {
+            status,
+            successCount,
+            failedCount,
+            skippedCount,
+            escalationCount,
+            updatedAt: c.get("deps").now()
+          },
+          { merge: true }
+        );
+
+        return jsonOk(c, {
+          status,
+          totalCount: itemsSnap.docs.length,
+          successCount,
+          failedCount,
+          skippedCount,
+          escalationCount,
+          startedAt: existingState.startedAt ?? null,
+          updatedAt: c.get("deps").now()
+        });
+      }
+    }
+
     const planSnap = await caseRef
       .collection("plans")
       .where("status", "==", "SHARED")
@@ -1556,8 +1682,6 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "NOT_READY", "分配対象がありません");
     }
 
-    const stateRef = caseRef.collection("distribution").doc("state");
-    const itemsRef = stateRef.collection("items");
     const existingItemsSnap = await itemsRef.get();
     if (!existingItemsSnap.empty) {
       await Promise.all(existingItemsSnap.docs.map((doc) => doc.ref.delete()));
