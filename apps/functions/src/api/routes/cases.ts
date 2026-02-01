@@ -1522,12 +1522,15 @@ export const casesRoutes = () => {
       }
     }
 
-    const planSnap = await caseRef
-      .collection("plans")
-      .where("status", "==", "SHARED")
-      .get();
-    if (planSnap.empty) {
-      return jsonError(c, 400, "NOT_READY", "共有中の指図がありません");
+    const planSnap = await caseRef.collection("plans").get();
+    const eligiblePlans = planSnap.docs.filter((doc) => {
+      const plan = doc.data() ?? {};
+      if ((plan.status ?? "DRAFT") === "INACTIVE") return false;
+      const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+      return heirUids.length > 0;
+    });
+    if (eligiblePlans.length === 0) {
+      return jsonError(c, 400, "NOT_READY", "相続対象の指図がありません");
     }
 
     const assetLockItemsSnap = await caseRef.collection("assetLockItems").get();
@@ -1582,7 +1585,7 @@ export const casesRoutes = () => {
       return fixed.replace(/\.?0+$/, "") || "0";
     };
 
-    for (const planDoc of planSnap.docs) {
+    for (const planDoc of eligiblePlans) {
       const plan = planDoc.data() ?? {};
       const planId = plan.planId ?? planDoc.id;
       const planTitle = typeof plan.title === "string" ? plan.title : "";

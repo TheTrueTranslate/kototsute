@@ -3881,7 +3881,7 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.totalCount).toBe(0);
   });
 
-  it("creates distribution items and completes when single xrp", async () => {
+  it("creates distribution items when plan includes heirs even if status is DRAFT", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -3911,7 +3911,7 @@ describe("createApiHandler", () => {
     });
     await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
       planId: "plan-1",
-      status: "SHARED",
+      status: "DRAFT",
       title: "指図A",
       ownerUid: "owner_1",
       heirUids: ["heir_1"],
