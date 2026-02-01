@@ -164,7 +164,7 @@ export const plansRoutes = () => {
     const auth = c.get("auth");
     const body = await c.req.json().catch(() => ({}));
     const nextStatus = body?.status;
-    if (nextStatus !== "DRAFT" && nextStatus !== "SHARED" && nextStatus !== "INACTIVE") {
+    if (nextStatus !== "DRAFT" && nextStatus !== "INACTIVE") {
       return jsonError(c, 400, "VALIDATION_ERROR", "statusが不正です");
     }
 
@@ -185,44 +185,14 @@ export const plansRoutes = () => {
       status: nextStatus,
       updatedAt: now
     };
-    if (nextStatus === "SHARED") {
-      updates.sharedAt = now;
-    }
     if (nextStatus === "DRAFT") {
       updates.sharedAt = null;
     }
     await planRef.set(updates, { merge: true });
 
-    if (nextStatus === "SHARED" && currentStatus !== "SHARED") {
-      const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
-      await Promise.all(
-        heirUids.map(async (heirUid: string) => {
-          const notificationRef = db.collection("notifications").doc();
-          await notificationRef.set({
-            receiverUid: heirUid,
-            type: "PLAN_SHARED",
-            title: "指図が共有されました",
-            body: plan.title ? `「${plan.title}」が共有されました。` : "指図が共有されました。",
-            related: { kind: "plan", id: planId },
-            isRead: false,
-            createdAt: now
-          });
-        })
-      );
-    }
-
-    const historyType =
-      nextStatus === "SHARED"
-        ? "PLAN_SHARED"
-        : nextStatus === "INACTIVE"
-          ? "PLAN_INACTIVATED"
-          : "PLAN_STATUS_CHANGED";
+    const historyType = nextStatus === "INACTIVE" ? "PLAN_INACTIVATED" : "PLAN_STATUS_CHANGED";
     const historyTitle =
-      nextStatus === "SHARED"
-        ? "指図を共有しました"
-        : nextStatus === "INACTIVE"
-          ? "指図を無効にしました"
-          : "指図のステータスを変更しました";
+      nextStatus === "INACTIVE" ? "指図を無効にしました" : "指図のステータスを変更しました";
     await appendPlanHistory(planRef, {
       type: historyType,
       title: historyTitle,

@@ -3115,98 +3115,6 @@ describe("createApiHandler", () => {
     expect(delRes.body?.data?.relatedPlans?.length).toBe(1);
   });
 
-  it("prevents sharing when assets overlap with shared plans", async () => {
-    const caseRepo = new FirestoreCaseRepository();
-    const handler = createApiHandler({
-      repo: new InMemoryAssetRepository(),
-      caseRepo,
-      now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getAuthUser,
-      getOwnerUidForRead: async (uid) => uid
-    });
-
-    const caseRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: "/v1/cases",
-        body: { ownerDisplayName: "山田" }
-      }) as any,
-      caseRes as any
-    );
-    const caseId = caseRes.body?.data?.caseId;
-
-    const assetRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/assets`,
-        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
-      }) as any,
-      assetRes as any
-    );
-    const assetId = assetRes.body?.data?.assetId;
-
-    const planARes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans`,
-        body: { title: "A" }
-      }) as any,
-      planARes as any
-    );
-    const planAId = planARes.body?.data?.planId;
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/assets`,
-        body: { assetId }
-      }) as any,
-      createRes() as any
-    );
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/share`
-      }) as any,
-      createRes() as any
-    );
-
-    const planBRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans`,
-        body: { title: "B" }
-      }) as any,
-      planBRes as any
-    );
-    const planBId = planBRes.body?.data?.planId;
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planBId}/assets`,
-        body: { assetId }
-      }) as any,
-      createRes() as any
-    );
-
-    const shareBRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planBId}/share`
-      }) as any,
-      shareBRes as any
-    );
-
-    expect(shareBRes.statusCode).toBe(400);
-  });
-
   it("lists case plan assets", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
@@ -3417,6 +3325,43 @@ describe("createApiHandler", () => {
     );
 
     expect(blockedRes.statusCode).toBe(403);
+  });
+
+  it("rejects share/unshare endpoints", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await getFirestore().collection("cases").doc("case_1").set({
+      caseId: "case_1",
+      ownerUid: "owner_1",
+      memberUids: ["owner_1"],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await getFirestore().collection("cases/case_1/plans").doc("plan_1").set({
+      planId: "plan_1",
+      ownerUid: "owner_1",
+      title: "A",
+      status: "DRAFT",
+      heirUids: [],
+      heirs: []
+    });
+
+    const shareRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases/case_1/plans/plan_1/share"
+      }) as any,
+      shareRes as any
+    );
+
+    expect(shareRes.statusCode).toBe(404);
   });
 
   it("creates death claim and returns latest", async () => {
