@@ -269,6 +269,10 @@
   @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
 }
 
+.transferActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
 .transferLabel {
   @apply text-body text-foreground;
 }
@@ -279,6 +283,22 @@
 
 .transferMeta {
   @apply text-meta text-muted-foreground;
+}
+
+.transferDialogGrid {
+  @apply grid gap-3;
+}
+
+.transferDialogRow {
+  @apply flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2;
+}
+
+.transferDialogLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.transferDialogValue {
+  @apply break-all text-body text-foreground;
 }
 
 .balanceBlock {

@@ -22,8 +22,10 @@ import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
 import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
 import {
+  getApprovalTx,
   getSignerList,
   submitSignerSignature,
+  type ApprovalTxSummary,
   type SignerListSummary
 } from "../api/signer-list";
 import {
@@ -42,6 +44,12 @@ import {
 } from "../api/invites";
 import { useAuth } from "../../features/auth/auth-provider";
 import { copyText } from "../../features/shared/lib/copy-text";
+import {
+  createPaymentTx,
+  signForMultisign,
+  signSingle,
+  submitSignedBlob
+} from "../../features/xrpl/xrpl-client";
 import {
   dropsToXrpInput,
   normalizeNumberInput,
@@ -84,6 +92,34 @@ const signerStatusLabels: Record<string, string> = {
   NOT_READY: "準備中",
   SET: "署名受付中",
   FAILED: "準備失敗"
+};
+
+const approvalStatusLabels: Record<string, string> = {
+  PREPARED: "準備済み",
+  SUBMITTED: "送信済み",
+  FAILED: "失敗"
+};
+
+const encodeMemoHex = (memo: string) => {
+  if (!memo) return "";
+  const bytes = new TextEncoder().encode(memo);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
+};
+
+const formatTxAmount = (amount: any) => {
+  if (typeof amount === "string") {
+    return `${amount} drops`;
+  }
+  if (amount && typeof amount === "object") {
+    const value = String(amount.value ?? "");
+    const currency = String(amount.currency ?? "");
+    const issuer = String(amount.issuer ?? "");
+    return [value, currency, issuer].filter(Boolean).join(" ");
+  }
+  return "-";
 };
 
 type RelationOption = (typeof relationOptions)[number];
@@ -186,6 +222,10 @@ export default function CaseDetailPage({
   const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
   const [heirWalletVerifyError, setHeirWalletVerifyError] = useState<string | null>(null);
   const [heirWalletVerifySuccess, setHeirWalletVerifySuccess] = useState<string | null>(null);
+  const [heirWalletSendError, setHeirWalletSendError] = useState<string | null>(null);
+  const [heirWalletSendSuccess, setHeirWalletSendSuccess] = useState<string | null>(null);
+  const [heirWalletSending, setHeirWalletSending] = useState(false);
+  const [heirWalletSecret, setHeirWalletSecret] = useState("");
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [heirWalletChallenge, setHeirWalletChallenge] = useState<{
     challenge: string;
@@ -204,7 +244,13 @@ export default function CaseDetailPage({
   const [signerList, setSignerList] = useState<SignerListSummary | null>(null);
   const [signerLoading, setSignerLoading] = useState(false);
   const [signerError, setSignerError] = useState<string | null>(null);
-  const [signerTxHash, setSignerTxHash] = useState("");
+  const [approvalTx, setApprovalTx] = useState<ApprovalTxSummary | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [signerSeed, setSignerSeed] = useState("");
+  const [signerSignedBlob, setSignerSignedBlob] = useState("");
+  const [signerSignedHash, setSignerSignedHash] = useState("");
+  const [signerSigning, setSignerSigning] = useState(false);
   const [signerSubmitting, setSignerSubmitting] = useState(false);
   const tabItems = useMemo(() => {
     if (isOwner === false) {
@@ -257,6 +303,17 @@ export default function CaseDetailPage({
   };
   const signerStatusKey = signerList?.status ?? "NOT_READY";
   const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
+  const approvalStatusLabel = approvalTx?.status
+    ? approvalStatusLabels[approvalTx.status] ?? approvalTx.status
+    : "未生成";
+  const approvalTxJson = approvalTx?.txJson ?? null;
+  const approvalTxJsonText = approvalTxJson ? JSON.stringify(approvalTxJson, null, 2) : "";
+  const approvalAmountCopy =
+    typeof approvalTxJson?.Amount === "string"
+      ? approvalTxJson.Amount
+      : approvalTxJson?.Amount
+        ? JSON.stringify(approvalTxJson.Amount)
+        : "";
   const signerCompleted = Boolean(
     signerList &&
       Number.isFinite(signerList.signaturesCount) &&
@@ -274,6 +331,21 @@ export default function CaseDetailPage({
     if (signerStatusKey !== "SET") {
       return "署名準備中です。";
     }
+    if (approvalLoading) {
+      return "署名対象を取得中です。";
+    }
+    if (approvalError) {
+      return "署名対象の取得に失敗しました。";
+    }
+    if (!approvalTx?.txJson) {
+      return "署名対象が未生成です。";
+    }
+    if (approvalTx.status === "FAILED") {
+      return "署名対象の生成に失敗しました。";
+    }
+    if (approvalTx.status === "SUBMITTED") {
+      return "相続実行は送信済みです。";
+    }
     if (!hasHeirWallet) {
       return "受取用ウォレットの登録が必要です。";
     }
@@ -290,12 +362,17 @@ export default function CaseDetailPage({
   }, [
     caseData,
     signerStatusKey,
+    approvalLoading,
+    approvalError,
+    approvalTx?.txJson,
+    approvalTx?.status,
     hasHeirWallet,
     isHeirWalletVerified,
     signerCompleted,
     signerList?.signedByMe
   ]);
-  const canSubmitSignature = !signerDisabledReason && !signerSubmitting;
+  const canSubmitSignature =
+    !signerDisabledReason && !signerSubmitting && signerSignedBlob.trim().length > 0;
 
   useEffect(() => {
     let active = true;
@@ -431,6 +508,27 @@ export default function CaseDetailPage({
     void fetchSignerList();
   }, [isHeir, tab, caseId, canAccessDeathClaims, fetchSignerList]);
 
+  const fetchApprovalTx = useCallback(async () => {
+    if (!caseId) return;
+    setApprovalLoading(true);
+    setApprovalError(null);
+    try {
+      const data = await getApprovalTx(caseId);
+      setApprovalTx(data);
+    } catch (err: any) {
+      setApprovalError(err?.message ?? "署名対象の取得に失敗しました");
+    } finally {
+      setApprovalLoading(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+      return;
+    }
+    void fetchApprovalTx();
+  }, [isHeir, tab, caseId, canAccessDeathClaims, fetchApprovalTx]);
+
   const handleSaveHeirWallet = async () => {
     if (!caseId) return;
     const address = heirWalletAddressInput.trim();
@@ -458,6 +556,9 @@ export default function CaseDetailPage({
     if (!caseId) return;
     setHeirWalletVerifyError(null);
     setHeirWalletVerifySuccess(null);
+    setHeirWalletSendError(null);
+    setHeirWalletSendSuccess(null);
+    setHeirWalletSecret("");
     setHeirWalletVerifyLoading(true);
     try {
       const result = await requestHeirWalletVerifyChallenge(caseId);
@@ -519,17 +620,78 @@ export default function CaseDetailPage({
     }
   };
 
+  const handleSendHeirWalletVerification = async () => {
+    if (!caseId) return;
+    if (!heirWalletChallenge) {
+      setHeirWalletSendError("検証コードを発行してください");
+      return;
+    }
+    if (!heirWallet?.address) {
+      setHeirWalletSendError("ウォレットアドレスが取得できません");
+      return;
+    }
+    const secret = heirWalletSecret.trim();
+    if (!secret) {
+      setHeirWalletSendError("シークレットを入力してください");
+      return;
+    }
+    setHeirWalletSendError(null);
+    setHeirWalletSendSuccess(null);
+    setHeirWalletSending(true);
+    try {
+      const memoHex = encodeMemoHex(heirWalletChallenge.challenge ?? "");
+      const tx = await createPaymentTx({
+        from: heirWallet.address,
+        to: heirWalletChallenge.address,
+        amount: heirWalletChallenge.amountDrops ?? "1",
+        memoHex
+      });
+      const signed = signSingle(tx, secret);
+      const result = await submitSignedBlob(signed.blob);
+      setHeirWalletTxHash(result.txHash);
+      setHeirWalletSendSuccess("送金を実行しました。取引ハッシュを入力しました。");
+      setHeirWalletSecret("");
+    } catch (err: any) {
+      setHeirWalletSendError(err?.message ?? "送金に失敗しました");
+    } finally {
+      setHeirWalletSending(false);
+    }
+  };
+
+  const handleSignApprovalTx = () => {
+    if (!approvalTx?.txJson) {
+      setSignerError("署名対象トランザクションが取得できません");
+      return;
+    }
+    const secret = signerSeed.trim();
+    if (!secret) {
+      setSignerError("シークレットを入力してください");
+      return;
+    }
+    setSignerSigning(true);
+    setSignerError(null);
+    try {
+      const result = signForMultisign(approvalTx.txJson, secret);
+      setSignerSignedBlob(result.blob);
+      setSignerSignedHash(result.hash);
+    } catch (err: any) {
+      setSignerError(err?.message ?? "署名の生成に失敗しました");
+    } finally {
+      setSignerSigning(false);
+    }
+  };
+
   const handleSubmitSignerSignature = async () => {
     if (!caseId) return;
-    const txHash = signerTxHash.trim();
-    if (!txHash) {
-      setSignerError("TXハッシュを入力してください");
+    const signedBlob = signerSignedBlob.trim();
+    if (!signedBlob) {
+      setSignerError("署名済みデータを入力してください");
       return;
     }
     setSignerSubmitting(true);
     setSignerError(null);
     try {
-      const result = await submitSignerSignature(caseId, txHash);
+      const result = await submitSignerSignature(caseId, signedBlob);
       setSignerList((prev) => ({
         status: prev?.status ?? "SET",
         quorum: prev?.quorum ?? null,
@@ -538,7 +700,10 @@ export default function CaseDetailPage({
         requiredCount: result.requiredCount,
         signedByMe: result.signedByMe
       }));
-      setSignerTxHash("");
+      setSignerSignedBlob("");
+      setSignerSignedHash("");
+      setSignerSeed("");
+      void fetchApprovalTx();
     } catch (err: any) {
       setSignerError(err?.message ?? "署名の送信に失敗しました");
     } finally {
@@ -791,9 +956,11 @@ export default function CaseDetailPage({
                 <span className={styles.signerBadge}>{signerStatusLabel}</span>
               </div>
               {signerError ? <FormAlert variant="error">{signerError}</FormAlert> : null}
+              {approvalError ? <FormAlert variant="error">{approvalError}</FormAlert> : null}
               {signerList?.error ? (
                 <FormAlert variant="error">{signerList.error}</FormAlert>
               ) : null}
+              {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
                   <div className={styles.signerLabel}>署名状況</div>
@@ -812,6 +979,137 @@ export default function CaseDetailPage({
                   </div>
                 </div>
               </div>
+              <div className={styles.signerTxSection}>
+                <div className={styles.signerTxHeader}>
+                  <div className={styles.signerTxHeaderMain}>
+                    <div className={styles.signerTxTitle}>署名対象トランザクション</div>
+                    <div className={styles.signerTxHint}>
+                      送金内容とMemoが正しいことを確認してください。
+                    </div>
+                  </div>
+                  <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
+                </div>
+                {approvalLoading ? (
+                  <div className={styles.muted}>署名対象を読み込み中...</div>
+                ) : null}
+                {approvalTxJson ? (
+                  <>
+                    <div className={styles.signerTxGrid}>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>送金元</div>
+                          <div className={styles.signerTxValue}>
+                            {approvalTxJson.Account ?? "-"}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() =>
+                            handleCopy("送金元", String(approvalTxJson.Account ?? ""))
+                          }
+                          aria-label="送金元をコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>送金先</div>
+                          <div className={styles.signerTxValue}>
+                            {approvalTxJson.Destination ?? "-"}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() =>
+                            handleCopy(
+                              "送金先",
+                              String(approvalTxJson.Destination ?? "")
+                            )
+                          }
+                          aria-label="送金先をコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>送金額</div>
+                          <div className={styles.signerTxValue}>
+                            {formatTxAmount(approvalTxJson.Amount)}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() =>
+                            handleCopy("送金額", approvalAmountCopy)
+                          }
+                          aria-label="送金額をコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>Memo</div>
+                          <div className={styles.signerTxValue}>{approvalTx?.memo ?? "-"}</div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() => handleCopy("Memo", approvalTx?.memo ?? "")}
+                          aria-label="Memoをコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>システム署名</div>
+                          <div className={styles.signerTxValue}>
+                            {approvalTx?.systemSignedHash ?? "-"}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() =>
+                            handleCopy("システム署名", approvalTx?.systemSignedHash ?? "")
+                          }
+                          aria-label="システム署名をコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className={styles.signerTxJson}>
+                      <div className={styles.signerTxJsonHeader}>
+                        <div className={styles.signerTxLabel}>Tx JSON</div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() => handleCopy("Tx JSON", approvalTxJsonText)}
+                          aria-label="Tx JSONをコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                      <pre className={styles.signerTxJsonBody}>{approvalTxJsonText}</pre>
+                    </div>
+                  </>
+                ) : (
+                  <div className={styles.muted}>署名対象が未生成です。</div>
+                )}
+              </div>
               <div className={styles.signerGuide}>
                 <div className={styles.signerGuideTitle}>署名の流れ</div>
                 <ol className={styles.signerGuideList}>
@@ -820,25 +1118,70 @@ export default function CaseDetailPage({
                     XRPLトランザクションです。
                   </li>
                   <li>登録済みの相続人ウォレットでMultiSign署名を行います。</li>
-                  <li>送信後に表示されるTXハッシュを下に貼り付けてください。</li>
+                  <li>
+                    シークレットはブラウザ内でのみ利用し、サーバーには送信されません。
+                  </li>
+                  <li>署名済みBlobを送信すると同意が反映されます。</li>
                 </ol>
               </div>
               <div className={styles.signerActions}>
-                <FormField label="TXハッシュ">
-                  <Input
-                    value={signerTxHash}
-                    onChange={(event) => setSignerTxHash(event.target.value)}
-                    placeholder="例: 3E9D..."
-                    disabled={!canSubmitSignature}
-                  />
-                </FormField>
-                <Button
-                  type="button"
-                  onClick={handleSubmitSignerSignature}
-                  disabled={!canSubmitSignature}
-                >
-                  {signerSubmitting ? "送信中..." : "署名を送信"}
-                </Button>
+                <div className={styles.signerActionBlock}>
+                  <FormField label="シークレット">
+                    <Input
+                      value={signerSeed}
+                      onChange={(event) => setSignerSeed(event.target.value)}
+                      placeholder="s..."
+                      type="password"
+                      disabled={!approvalTxJson || signerDisabledReason !== null}
+                    />
+                  </FormField>
+                  <div className={styles.signerActionRow}>
+                    <Button
+                      type="button"
+                      onClick={handleSignApprovalTx}
+                      disabled={!approvalTxJson || signerSigning || signerDisabledReason !== null}
+                    >
+                      {signerSigning ? "署名中..." : "署名を生成"}
+                    </Button>
+                    {signerSignedHash ? (
+                      <div className={styles.signerHashNote}>
+                        署名ハッシュ(参考): {signerSignedHash}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className={styles.signerSecretNote}>
+                    シークレットはこの端末内だけで使われます。
+                  </div>
+                </div>
+                <div className={styles.signerActionBlock}>
+                  <FormField label="署名済みBlob">
+                    <Textarea
+                      value={signerSignedBlob}
+                      onChange={(event) => setSignerSignedBlob(event.target.value)}
+                      placeholder="署名済みBlobを貼り付け"
+                      rows={4}
+                      disabled={signerDisabledReason !== null}
+                    />
+                  </FormField>
+                  <div className={styles.signerActionRow}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className={styles.copyButton}
+                      onClick={() => handleCopy("署名済みBlob", signerSignedBlob)}
+                      aria-label="署名済みBlobをコピー"
+                    >
+                      <Copy />
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSubmitSignerSignature}
+                      disabled={!canSubmitSignature}
+                    >
+                      {signerSubmitting ? "送信中..." : "署名を送信"}
+                    </Button>
+                  </div>
+                </div>
               </div>
               {signerDisabledReason ? (
                 <div className={styles.signerNote}>{signerDisabledReason}</div>
@@ -1168,6 +1511,36 @@ export default function CaseDetailPage({
                               <Copy />
                             </Button>
                           </div>
+                        </div>
+                      </div>
+                      <div className={styles.walletVerifyApp}>
+                        <div className={styles.walletHint}>
+                          アプリ内で送金する場合はシークレットを入力してください。
+                        </div>
+                        {heirWalletSendError ? (
+                          <FormAlert variant="error">{heirWalletSendError}</FormAlert>
+                        ) : null}
+                        {heirWalletSendSuccess ? (
+                          <FormAlert variant="success">{heirWalletSendSuccess}</FormAlert>
+                        ) : null}
+                        <FormField label="シークレット">
+                          <Input
+                            value={heirWalletSecret}
+                            onChange={(event) => setHeirWalletSecret(event.target.value)}
+                            placeholder="s..."
+                            type="password"
+                            disabled={!heirWalletChallenge}
+                          />
+                        </FormField>
+                        <div className={styles.walletActions}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleSendHeirWalletVerification}
+                            disabled={heirWalletSending || !heirWalletChallenge}
+                          >
+                            {heirWalletSending ? "送金中..." : "送金してTXハッシュ入力"}
+                          </Button>
                         </div>
                       </div>
                       <FormField label="取引ハッシュ">

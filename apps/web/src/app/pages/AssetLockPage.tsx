@@ -35,6 +35,7 @@ import { getCase, type CaseSummary } from "../api/cases";
 import { getPlan, listPlanAssets, listPlans, type PlanAsset, type PlanHeir, type PlanListItem } from "../api/plans";
 import { Copy } from "lucide-react";
 import { copyText } from "../../features/shared/lib/copy-text";
+import { createPaymentTx, signSingle, submitSignedBlob } from "../../features/xrpl/xrpl-client";
 import styles from "../../styles/assetLockPage.module.css";
 
 const XRPL_EXPLORER_BASE = "https://testnet.xrpl.org/accounts";
@@ -111,6 +112,15 @@ export default function AssetLockPage({
   const [completeLoading, setCompleteLoading] = useState(false);
   const [redirectSeconds, setRedirectSeconds] = useState<number | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferDialogItem, setTransferDialogItem] = useState<
+    AssetLockState["items"][number] | null
+  >(null);
+  const [transferFromAddress, setTransferFromAddress] = useState("");
+  const [transferSecret, setTransferSecret] = useState("");
+  const [transferSending, setTransferSending] = useState(false);
+  const [transferSendError, setTransferSendError] = useState<string | null>(null);
+  const [transferSendSuccess, setTransferSendSuccess] = useState<string | null>(null);
   const prevUiStepRef = useRef<number | null>(null);
   const current = steps[stepIndex];
   const methodSteps = [
@@ -135,6 +145,20 @@ export default function AssetLockPage({
       description: "安全のためRegularKeyを解除します。"
     }
   ] as const;
+
+  const assetAddressMap = useMemo(() => {
+    const map = new Map<string, string>();
+    Object.values(planAssetsById).forEach((assets) => {
+      (assets ?? []).forEach((asset) => {
+        if (asset.assetId && asset.assetAddress) {
+          map.set(asset.assetId, asset.assetAddress);
+        }
+      });
+    });
+    return map;
+  }, [planAssetsById]);
+
+  const resolveAssetAddress = (assetId: string) => assetAddressMap.get(assetId) ?? "";
 
   const stepLabel = useMemo(() => `${stepIndex + 1} / ${steps.length}`, [stepIndex]);
   const regularKeyStatuses = lockState?.regularKeyStatuses ?? [];
@@ -164,6 +188,65 @@ export default function AssetLockPage({
   };
 
   const buildExplorerUrl = (address: string) => `${XRPL_EXPLORER_BASE}/${address}`;
+
+  const handleOpenTransferDialog = (item: AssetLockState["items"][number]) => {
+    setTransferDialogItem(item);
+    setTransferFromAddress(resolveAssetAddress(item.assetId));
+    setTransferSecret("");
+    setTransferSendError(null);
+    setTransferSendSuccess(null);
+    setTransferDialogOpen(true);
+  };
+
+  const handleSendTransfer = async () => {
+    if (!transferDialogItem) return;
+    const destination = lockState?.wallet?.address ?? "";
+    if (!destination) {
+      setTransferSendError("送金先が取得できません");
+      return;
+    }
+    const from = transferFromAddress.trim();
+    if (!from) {
+      setTransferSendError("送金元アドレスを入力してください");
+      return;
+    }
+    const secret = transferSecret.trim();
+    if (!secret) {
+      setTransferSendError("シークレットを入力してください");
+      return;
+    }
+    const token = transferDialogItem.token;
+    if (token && !token.issuer) {
+      setTransferSendError("トークン発行者が取得できません");
+      return;
+    }
+    const amount = token
+      ? {
+          currency: token.currency,
+          issuer: token.issuer ?? "",
+          value: String(transferDialogItem.plannedAmount ?? "0")
+        }
+      : String(transferDialogItem.plannedAmount ?? "0");
+
+    setTransferSending(true);
+    setTransferSendError(null);
+    setTransferSendSuccess(null);
+    try {
+      const tx = await createPaymentTx({ from, to: destination, amount });
+      const signed = signSingle(tx, secret);
+      const result = await submitSignedBlob(signed.blob);
+      setTxInputs((prev) => ({
+        ...prev,
+        [transferDialogItem.itemId]: result.txHash
+      }));
+      setTransferSendSuccess("送金を実行しました。TXハッシュを入力しました。");
+      setTransferSecret("");
+    } catch (err: any) {
+      setTransferSendError(err?.message ?? "送金に失敗しました");
+    } finally {
+      setTransferSending(false);
+    }
+  };
 
   const loadBalances = async () => {
     if (!caseId) return;
@@ -338,6 +421,14 @@ export default function AssetLockPage({
     if (status === "FAILED") return "失敗";
     if (status === "SENT") return "送金済み";
     return "未検証";
+  };
+
+  const formatTransferAmount = (item: AssetLockState["items"][number] | null) => {
+    if (!item) return "-";
+    if (item.token) {
+      return `${item.plannedAmount} ${item.token.currency} / ${item.token.issuer ?? "-"}`;
+    }
+    return `${item.plannedAmount} drops`;
   };
 
   const getItemStatusClass = (status: AssetLockState["items"][number]["status"]) => {
@@ -799,34 +890,55 @@ export default function AssetLockPage({
                 {(lockState?.items ?? []).length === 0 ? (
                   <div className={styles.emptyState}>送金対象がありません</div>
                 ) : (
-                  (lockState?.items ?? []).map((item) => (
-                    <div key={item.itemId} className={styles.transferRow}>
-                      <div>
-                        <div className={styles.transferLabel}>{item.assetLabel}</div>
-                        <div className={styles.transferType}>
-                          {item.token ? "トークン送金" : "XRP送金"}
+                  (lockState?.items ?? []).map((item) => {
+                    const assetAddress = resolveAssetAddress(item.assetId);
+                    const canAppTransfer = Boolean(lockState?.wallet?.address);
+                    return (
+                      <div key={item.itemId} className={styles.transferRow}>
+                        <div>
+                          <div className={styles.transferLabel}>{item.assetLabel}</div>
+                          <div className={styles.transferType}>
+                            {item.token ? "トークン送金" : "XRP送金"}
+                          </div>
+                          <div className={styles.transferMeta}>
+                            {item.token
+                              ? `${item.token.currency} / ${item.token.issuer ?? ""}`
+                              : "XRP"}
+                            {" · "}予定 {item.plannedAmount}
+                          </div>
                         </div>
-                        <div className={styles.transferMeta}>
-                          {item.token ? `${item.token.currency} / ${item.token.issuer ?? ""}` : "XRP"}
-                          {" · "}予定 {item.plannedAmount}
+                        <FormField label="TX Hash">
+                          <Input
+                            value={txInputs[item.itemId] ?? ""}
+                            onChange={(event) =>
+                              setTxInputs((prev) => ({
+                                ...prev,
+                                [item.itemId]: event.target.value
+                              }))
+                            }
+                          />
+                        </FormField>
+                        <div className={styles.transferActions}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenTransferDialog(item)}
+                            disabled={!canAppTransfer}
+                          >
+                            アプリで送金
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleVerify(item.itemId)}
+                          >
+                            検証
+                          </Button>
                         </div>
                       </div>
-                      <FormField label="TX Hash">
-                        <Input
-                          value={txInputs[item.itemId] ?? ""}
-                          onChange={(event) =>
-                            setTxInputs((prev) => ({
-                              ...prev,
-                              [item.itemId]: event.target.value
-                            }))
-                          }
-                        />
-                      </FormField>
-                      <Button type="button" size="sm" onClick={() => handleVerify(item.itemId)}>
-                        検証
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
@@ -957,6 +1069,90 @@ export default function AssetLockPage({
           </div>
         ) : null}
       </div>
+
+      <Dialog
+        open={transferDialogOpen}
+        onOpenChange={(open) => {
+          setTransferDialogOpen(open);
+          if (!open) {
+            setTransferDialogItem(null);
+            setTransferSendError(null);
+            setTransferSendSuccess(null);
+            setTransferSecret("");
+            setTransferFromAddress("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>アプリで送金</DialogTitle>
+            <DialogDescription>
+              シークレットはこの端末内でのみ使用され、サーバーへ送信されません。
+            </DialogDescription>
+          </DialogHeader>
+          {transferSendError ? <FormAlert variant="error">{transferSendError}</FormAlert> : null}
+          {transferSendSuccess ? (
+            <FormAlert variant="success">{transferSendSuccess}</FormAlert>
+          ) : null}
+          {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
+          {transferDialogItem ? (
+            <div className={styles.transferDialogGrid}>
+              <FormField label="送金元アドレス">
+                <Input
+                  value={transferFromAddress}
+                  onChange={(event) => setTransferFromAddress(event.target.value)}
+                  placeholder="r..."
+                />
+              </FormField>
+              <div className={styles.transferDialogRow}>
+                <div>
+                  <div className={styles.transferDialogLabel}>送金先</div>
+                  <div className={styles.transferDialogValue}>
+                    {lockState?.wallet?.address ?? "-"}
+                  </div>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={styles.copyButton}
+                  onClick={() => handleCopy("送金先", lockState?.wallet?.address ?? "")}
+                  aria-label="送金先をコピー"
+                >
+                  <Copy />
+                </Button>
+              </div>
+              <div className={styles.transferDialogRow}>
+                <div>
+                  <div className={styles.transferDialogLabel}>送金額</div>
+                  <div className={styles.transferDialogValue}>
+                    {formatTransferAmount(transferDialogItem)}
+                  </div>
+                </div>
+              </div>
+              <FormField label="シークレット">
+                <Input
+                  value={transferSecret}
+                  onChange={(event) => setTransferSecret(event.target.value)}
+                  placeholder="s..."
+                  type="password"
+                />
+              </FormField>
+              <div className={styles.methodActions}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSendTransfer}
+                  disabled={transferSending}
+                >
+                  {transferSending ? "送金中..." : "送金してTXハッシュ入力"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.emptyState}>送金対象を選択してください</div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={regularKeyOpen} onOpenChange={setRegularKeyOpen}>
         <DialogContent>

@@ -23,7 +23,7 @@ describe("xrpl client helpers", () => {
     const tx = await createPaymentTx({
       from: "rFrom",
       to: "rTo",
-      amountDrops: "1",
+      amount: "1",
       memoHex: "AB"
     });
     expect(tx.TransactionType).toBe("Payment");

@@ -6,7 +6,7 @@ const resolveWsUrl = () =>
 export const createPaymentTx = async (input: {
   from: string;
   to: string;
-  amountDrops: string;
+  amount: string | { currency: string; issuer: string; value: string };
   memoHex?: string;
   signersCount?: number;
 }) => {
@@ -18,7 +18,7 @@ export const createPaymentTx = async (input: {
         TransactionType: "Payment",
         Account: input.from,
         Destination: input.to,
-        Amount: input.amountDrops,
+        Amount: input.amount,
         ...(input.memoHex ? { Memos: [{ Memo: { MemoData: input.memoHex } }] } : {})
       },
       input.signersCount
