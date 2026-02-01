@@ -3792,6 +3792,102 @@ describe("createApiHandler", () => {
     expect(approvalSnap.data()?.memo).toBe("memo_123");
   });
 
+  it("allows heir to prepare approval tx", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(true);
+  });
+
+  it("rejects prepare when heir wallets are unverified", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir_unverified";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "PENDING"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("HEIR_WALLET_UNVERIFIED");
+  });
+
   it("allows heir to resubmit rejected death claim", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

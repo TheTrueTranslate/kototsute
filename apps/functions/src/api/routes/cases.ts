@@ -1118,6 +1118,87 @@ export const casesRoutes = () => {
     return jsonOk(c, { confirmationsCount, requiredCount });
   });
 
+  app.post(":caseId/signer-list/prepare", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続中のみ準備できます");
+    }
+
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (heirUids.length === 0) {
+      return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+    }
+    const walletSnaps = await Promise.all(
+      heirUids.map((uid) => caseRef.collection("heirWallets").doc(uid).get())
+    );
+    const hasUnverified = walletSnaps.some((snap) => {
+      const data = snap.data() ?? {};
+      const address = typeof data.address === "string" ? data.address : "";
+      return !address || data.verificationStatus !== "VERIFIED";
+    });
+    if (hasUnverified) {
+      return jsonError(
+        c,
+        400,
+        "HEIR_WALLET_UNVERIFIED",
+        "相続人の受取用ウォレットが未確認です"
+      );
+    }
+
+    const now = c.get("deps").now();
+    const result = await prepareInheritanceExecution({
+      caseRef,
+      caseData,
+      now
+    });
+    if (result.status === "SKIPPED") {
+      switch (result.reason) {
+        case "NOT_IN_PROGRESS":
+          return jsonError(c, 400, "NOT_READY", "相続中のみ準備できます");
+        case "LOCK_WALLET_MISSING":
+          return jsonError(c, 400, "VALIDATION_ERROR", "分配用ウォレットが未設定です");
+        case "HEIR_WALLET_UNVERIFIED":
+          return jsonError(
+            c,
+            400,
+            "HEIR_WALLET_UNVERIFIED",
+            "相続人の受取用ウォレットが未確認です"
+          );
+        case "HEIR_MISSING":
+          return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+        default:
+          return jsonError(c, 400, "NOT_READY", "同意の準備が完了していません");
+      }
+    }
+    if (result.status === "FAILED") {
+      switch (result.reason) {
+        case "SYSTEM_SIGNER_MISSING":
+        case "SYSTEM_SIGNER_SEED_MISSING":
+          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
+        case "VERIFY_ADDRESS_MISSING":
+          return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
+        case "SIGNER_LIST_FAILED":
+          return jsonError(c, 500, "SIGNER_LIST_FAILED", "署名準備に失敗しました");
+        default:
+          return jsonError(c, 500, "PREPARE_FAILED", "同意の準備に失敗しました");
+      }
+    }
+
+    return jsonOk(c, result.approvalTx);
+  });
+
   app.get(":caseId/signer-list/approval-tx", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
