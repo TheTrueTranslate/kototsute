@@ -256,7 +256,21 @@ vi.mock("./utils/xrpl-multisign", () => ({
     Destination: "rVerify",
     Amount: "1"
   }),
-  signForMultisign: () => ({ blob: "blob-system", hash: "hash-system" })
+  signForMultisign: () => ({ blob: "blob-system", hash: "hash-system" }),
+  decodeSignedBlob: () => ({
+    TransactionType: "Payment",
+    Account: "rLock",
+    Destination: "rVerify",
+    Amount: "1",
+    Memos: [{ Memo: { MemoData: "6D656D6F5F616263" } }],
+    Signers: [{ Signer: { Account: "rHeir" } }],
+    SigningPubKey: ""
+  }),
+  combineMultisignedBlobs: () => ({
+    blob: "blob-combined",
+    txJson: { TransactionType: "Payment" }
+  }),
+  submitMultisignedTx: async () => ({ txHash: "tx-final" })
 }));
 
 class InMemoryAssetRepository implements AssetRepository {
@@ -4076,7 +4090,43 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.signedByMe).toBe(true);
   });
 
-  it("accepts signer tx hash and records signature", async () => {
+  it("returns approval tx for heir", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_approval";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "PREPARED"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.memo).toBe("memo_abc");
+  });
+
+  it("accepts signed blob and records signature", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -4102,28 +4152,23 @@ describe("createApiHandler", () => {
       createdAt: new Date(),
       updatedAt: new Date()
     });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      systemSignedBlob: "blob-system",
+      status: "PREPARED"
+    });
     await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
       address: "rHeir",
       verificationStatus: "VERIFIED"
     });
-
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        result: {
-          Account: "rAssetLock",
-          Signers: [{ Signer: { Account: "rHeir" } }]
-        }
-      })
-    }));
-    (globalThis as any).fetch = fetchMock;
 
     const res = createRes();
     await handler(
       authedReq("heir_1", "heir@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/signer-list/sign`,
-        body: { txHash: "tx_hash" }
+        body: { signedBlob: "blob-heir" }
       }) as any,
       res as any
     );
@@ -4134,6 +4179,6 @@ describe("createApiHandler", () => {
       .collection(`cases/${caseId}/signerList/state/signatures`)
       .doc("heir_1")
       .get();
-    expect(sigSnap.data()?.txHash).toBe("tx_hash");
+    expect(sigSnap.data()?.signedBlob).toBe("blob-heir");
   });
 });

@@ -31,6 +31,11 @@ import {
   fetchXrplReserve,
   fetchXrplTx
 } from "../utils/xrpl.js";
+import {
+  combineMultisignedBlobs,
+  decodeSignedBlob,
+  submitMultisignedTx
+} from "../utils/xrpl-multisign.js";
 import { encryptPayload } from "../utils/encryption.js";
 import { decryptPayload } from "../utils/encryption.js";
 
@@ -1089,6 +1094,34 @@ export const casesRoutes = () => {
     return jsonOk(c, { confirmationsCount, requiredCount });
   });
 
+  app.get(":caseId/signer-list/approval-tx", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    if (!approvalSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "ApprovalTx not found");
+    }
+    const approval = approvalSnap.data() ?? {};
+    return jsonOk(c, {
+      memo: approval.memo ?? null,
+      txJson: approval.txJson ?? null,
+      status: approval.status ?? null,
+      systemSignedHash: approval.systemSignedHash ?? null
+    });
+  });
+
   app.get(":caseId/signer-list", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
@@ -1129,9 +1162,10 @@ export const casesRoutes = () => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
     const body = await c.req.json().catch(() => ({}));
-    const txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
-    if (!txHash) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    const signedBlob =
+      typeof body?.signedBlob === "string" ? body.signedBlob.trim() : "";
+    if (!signedBlob) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "signedBlobは必須です");
     }
 
     const db = getFirestore();
@@ -1163,21 +1197,30 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "WALLET_NOT_VERIFIED", "ウォレットが未確認です");
     }
 
-    const txResult = await fetchXrplTx(txHash);
-    if (!txResult.ok) {
-      return jsonError(c, 400, "TX_NOT_FOUND", txResult.message ?? "取引が見つかりません");
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    if (!approvalSnap.exists) {
+      return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "署名対象が未生成です");
     }
-    const signers = Array.isArray(txResult.tx?.Signers) ? txResult.tx.Signers : [];
+    const approvalData = approvalSnap.data() ?? {};
+    const decoded = decodeSignedBlob(signedBlob);
+    const signers = Array.isArray(decoded?.Signers) ? decoded.Signers : [];
     const hasSigner = signers.some((entry: any) => entry?.Signer?.Account === address);
     if (!hasSigner) {
       return jsonError(c, 400, "SIGNER_MISMATCH", "署名者が一致しません");
+    }
+    const memoHex = Buffer.from(String(approvalData.memo ?? ""), "utf8")
+      .toString("hex")
+      .toUpperCase();
+    const memoValue = decoded?.Memos?.[0]?.Memo?.MemoData ?? "";
+    if (memoHex && memoValue !== memoHex) {
+      return jsonError(c, 400, "MEMO_MISMATCH", "署名対象が一致しません");
     }
 
     const now = c.get("deps").now();
     await signerRef.collection("signatures").doc(auth.uid).set({
       uid: auth.uid,
       address,
-      txHash,
+      signedBlob,
       createdAt: now
     });
 
@@ -1185,6 +1228,27 @@ export const casesRoutes = () => {
     const signaturesCount = signaturesSnap.docs.length;
     const heirCount = Math.max(0, memberUids.length - 1);
     const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    if (
+      signaturesCount >= requiredCount &&
+      approvalData?.systemSignedBlob &&
+      approvalData?.status === "PREPARED"
+    ) {
+      const blobs = [
+        approvalData.systemSignedBlob,
+        ...signaturesSnap.docs.map((doc) => doc.data()?.signedBlob).filter(Boolean)
+      ];
+      const combined = combineMultisignedBlobs(blobs);
+      const submitResult = await submitMultisignedTx(combined.txJson);
+      await approvalSnap.ref.set(
+        {
+          status: "SUBMITTED",
+          submittedTxHash: submitResult.txHash ?? null,
+          updatedAt: now
+        },
+        { merge: true }
+      );
+    }
 
     return jsonOk(c, { signaturesCount, requiredCount, signedByMe: true });
   });
