@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Copy } from "lucide-react";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
@@ -21,6 +21,11 @@ import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
 import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
+import {
+  getSignerList,
+  submitSignerSignature,
+  type SignerListSummary
+} from "../api/signer-list";
 import {
   confirmHeirWalletVerify,
   getHeirWallet,
@@ -45,6 +50,7 @@ import {
 import { shouldAutoRequestChallenge } from "../../features/shared/lib/auto-challenge";
 import { shouldCloseWalletDialogOnVerify } from "../../features/shared/lib/wallet-dialog";
 import styles from "../../styles/caseDetailPage.module.css";
+import { DeathClaimsPanel } from "./DeathClaimsPage";
 import { relationOptions } from "@kototsute/shared";
 import { todoMaster, type TaskItem } from "@kototsute/tasks";
 
@@ -72,6 +78,12 @@ const walletStatusLabels: Record<string, string> = {
   UNREGISTERED: "未登録",
   PENDING: "未確認",
   VERIFIED: "確認済み"
+};
+
+const signerStatusLabels: Record<string, string> = {
+  NOT_READY: "準備中",
+  SET: "署名受付中",
+  FAILED: "準備失敗"
 };
 
 type RelationOption = (typeof relationOptions)[number];
@@ -103,7 +115,7 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
   );
 };
 
-type TabKey = "assets" | "plans" | "tasks" | "heirs" | "wallet";
+type TabKey = "assets" | "plans" | "tasks" | "heirs" | "wallet" | "death-claims";
 
 type CaseDetailPageProps = {
   initialTab?: TabKey;
@@ -123,7 +135,7 @@ const baseTabItems: { key: TabKey; label: string }[] = [
   { key: "heirs", label: "相続人" }
 ];
 
-const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet"];
+const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet", "death-claims"];
 
 const isTabKey = (value: string | null): value is TabKey =>
   Boolean(value && allTabKeys.includes(value as TabKey));
@@ -189,12 +201,18 @@ export default function CaseDetailPage({
   const [walletDialogOpen, setWalletDialogOpen] = useState(initialWalletDialogOpen);
   const [walletDialogMode, setWalletDialogMode] =
     useState<"register" | "verify">(initialWalletDialogMode);
+  const [signerList, setSignerList] = useState<SignerListSummary | null>(null);
+  const [signerLoading, setSignerLoading] = useState(false);
+  const [signerError, setSignerError] = useState<string | null>(null);
+  const [signerTxHash, setSignerTxHash] = useState("");
+  const [signerSubmitting, setSignerSubmitting] = useState(false);
   const tabItems = useMemo(() => {
     if (isOwner === false) {
       return [
         baseTabItems[0],
         baseTabItems[1],
         baseTabItems[2],
+        { key: "death-claims" as const, label: "相続実行" },
         { key: "wallet" as const, label: "受取用ウォレット" },
         baseTabItems[3]
       ];
@@ -219,6 +237,10 @@ export default function CaseDetailPage({
   const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
   const isHeir = isOwner === false;
   const isLocked = caseData?.assetLockStatus === "LOCKED";
+  const canAccessDeathClaims =
+    caseData?.stage === "WAITING" ||
+    caseData?.stage === "IN_PROGRESS" ||
+    caseData?.stage === "COMPLETED";
   const hasHeirWallet = Boolean(heirWallet?.address);
   const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
   const needsHeirWalletRegistration = isHeir && !hasHeirWallet;
@@ -233,6 +255,47 @@ export default function CaseDetailPage({
     }
     return null;
   };
+  const signerStatusKey = signerList?.status ?? "NOT_READY";
+  const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
+  const signerCompleted = Boolean(
+    signerList &&
+      Number.isFinite(signerList.signaturesCount) &&
+      Number.isFinite(signerList.requiredCount) &&
+      signerList.signaturesCount >= signerList.requiredCount
+  );
+  const signerDisabledReason = useMemo(() => {
+    if (!caseData) return "ケース情報が取得できません。";
+    if (caseData.stage !== "IN_PROGRESS") {
+      return "相続中になると署名の送信が可能になります。";
+    }
+    if (signerStatusKey === "FAILED") {
+      return "署名準備に失敗しました。運営へご連絡ください。";
+    }
+    if (signerStatusKey !== "SET") {
+      return "署名準備中です。";
+    }
+    if (!hasHeirWallet) {
+      return "受取用ウォレットの登録が必要です。";
+    }
+    if (!isHeirWalletVerified) {
+      return "受取用ウォレットの所有確認が必要です。";
+    }
+    if (signerList?.signedByMe) {
+      return "署名済みです。";
+    }
+    if (signerCompleted) {
+      return "必要数の署名が揃っています。";
+    }
+    return null;
+  }, [
+    caseData,
+    signerStatusKey,
+    hasHeirWallet,
+    isHeirWalletVerified,
+    signerCompleted,
+    signerList?.signedByMe
+  ]);
+  const canSubmitSignature = !signerDisabledReason && !signerSubmitting;
 
   useEffect(() => {
     let active = true;
@@ -347,6 +410,27 @@ export default function CaseDetailPage({
     }
   }, [heirWallet?.address]);
 
+  const fetchSignerList = useCallback(async () => {
+    if (!caseId) return;
+    setSignerLoading(true);
+    setSignerError(null);
+    try {
+      const data = await getSignerList(caseId);
+      setSignerList(data);
+    } catch (err: any) {
+      setSignerError(err?.message ?? "署名状況の取得に失敗しました");
+    } finally {
+      setSignerLoading(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+      return;
+    }
+    void fetchSignerList();
+  }, [isHeir, tab, caseId, canAccessDeathClaims, fetchSignerList]);
+
   const handleSaveHeirWallet = async () => {
     if (!caseId) return;
     const address = heirWalletAddressInput.trim();
@@ -432,6 +516,33 @@ export default function CaseDetailPage({
       setHeirWalletVerifyError(err?.message ?? "所有確認に失敗しました");
     } finally {
       setHeirWalletVerifyLoading(false);
+    }
+  };
+
+  const handleSubmitSignerSignature = async () => {
+    if (!caseId) return;
+    const txHash = signerTxHash.trim();
+    if (!txHash) {
+      setSignerError("TXハッシュを入力してください");
+      return;
+    }
+    setSignerSubmitting(true);
+    setSignerError(null);
+    try {
+      const result = await submitSignerSignature(caseId, txHash);
+      setSignerList((prev) => ({
+        status: prev?.status ?? "SET",
+        quorum: prev?.quorum ?? null,
+        error: prev?.error ?? null,
+        signaturesCount: result.signaturesCount,
+        requiredCount: result.requiredCount,
+        signedByMe: result.signedByMe
+      }));
+      setSignerTxHash("");
+    } catch (err: any) {
+      setSignerError(err?.message ?? "署名の送信に失敗しました");
+    } finally {
+      setSignerSubmitting(false);
     }
   };
 
@@ -541,13 +652,6 @@ export default function CaseDetailPage({
               </div>
             ) : null}
           </div>
-          {caseId && isOwner === false ? (
-            <div className={styles.headerActions}>
-              <Button asChild size="sm" variant="secondary">
-                <Link to={`/cases/${caseId}/death-claims`}>死亡診断書</Link>
-              </Button>
-            </div>
-          ) : null}
         </div>
       </header>
 
@@ -642,6 +746,107 @@ export default function CaseDetailPage({
             </div>
           )}
         </div>
+      ) : null}
+
+      {tab === "death-claims" ? (
+        loading && !caseData ? (
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle}>相続実行</h2>
+            </div>
+            <div className={styles.muted}>読み込み中...</div>
+          </div>
+        ) : !caseData ? (
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle}>相続実行</h2>
+            </div>
+            <div className={styles.muted}>ケース情報が取得できません。</div>
+          </div>
+        ) : canAccessDeathClaims ? (
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle}>相続実行</h2>
+            </div>
+            <details className={styles.collapsible}>
+              <summary className={styles.collapsibleSummary}>
+                <div className={styles.collapsibleText}>
+                  <div className={styles.collapsibleTitle}>死亡診断書</div>
+                  <div className={styles.collapsibleHint}>提出状況の確認・再提出</div>
+                </div>
+                <span className={styles.collapsibleChevron} aria-hidden="true" />
+              </summary>
+              <div className={styles.collapsibleBody}>
+                <DeathClaimsPanel />
+              </div>
+            </details>
+            <div className={styles.signerSection}>
+              <div className={styles.signerHeader}>
+                <div className={styles.signerHeaderMain}>
+                  <div className={styles.signerTitle}>MultiSign署名</div>
+                  <div className={styles.signerHint}>
+                    システム+相続人の過半数の署名が揃うと相続実行が進みます。
+                  </div>
+                </div>
+                <span className={styles.signerBadge}>{signerStatusLabel}</span>
+              </div>
+              {signerError ? <FormAlert variant="error">{signerError}</FormAlert> : null}
+              {signerList?.error ? (
+                <FormAlert variant="error">{signerList.error}</FormAlert>
+              ) : null}
+              <div className={styles.signerGrid}>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>署名状況</div>
+                  <div className={styles.signerValue}>
+                    {signerLoading
+                      ? "読み込み中..."
+                      : signerList
+                        ? `${signerList.signaturesCount} / ${signerList.requiredCount} 人`
+                        : "-"}
+                  </div>
+                </div>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>あなたの署名</div>
+                  <div className={styles.signerValue}>
+                    {signerList?.signedByMe ? "署名済み" : "未署名"}
+                  </div>
+                </div>
+              </div>
+              <div className={styles.signerActions}>
+                <FormField label="TXハッシュ">
+                  <Input
+                    value={signerTxHash}
+                    onChange={(event) => setSignerTxHash(event.target.value)}
+                    placeholder="例: 3E9D..."
+                    disabled={!canSubmitSignature}
+                  />
+                </FormField>
+                <Button
+                  type="button"
+                  onClick={handleSubmitSignerSignature}
+                  disabled={!canSubmitSignature}
+                >
+                  {signerSubmitting ? "送信中..." : "署名を送信"}
+                </Button>
+              </div>
+              {signerDisabledReason ? (
+                <div className={styles.signerNote}>{signerDisabledReason}</div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle}>相続実行</h2>
+            </div>
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>相続待ちになるまで操作できません</div>
+              <div className={styles.emptyBody}>
+                相続待ちに更新されると相続実行の手続きを進められます。
+              </div>
+            </div>
+          </div>
+        )
       ) : null}
 
       {tab === "heirs" ? (
