@@ -1343,6 +1343,310 @@ export const casesRoutes = () => {
     });
   });
 
+  app.post(":caseId/distribution/execute", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続中のみ実行できます");
+    }
+
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    const approval = approvalSnap.data() ?? {};
+    if (approval.status !== "SUBMITTED" || !approval.submittedTxHash) {
+      return jsonError(c, 400, "NOT_READY", "相続実行の同意が完了していません");
+    }
+
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (heirUids.length === 0) {
+      return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+    }
+    const heirWalletSnaps = await Promise.all(
+      heirUids.map((uid) => caseRef.collection("heirWallets").doc(uid).get())
+    );
+    const heirWallets = heirWalletSnaps.map((snap, index) => {
+      const data = snap.data() ?? {};
+      const address = typeof data.address === "string" ? data.address : "";
+      const verified = data.verificationStatus === "VERIFIED" && address.length > 0;
+      return { uid: heirUids[index] ?? "", address, verified };
+    });
+    if (heirWallets.some((wallet) => !wallet.verified)) {
+      return jsonError(c, 400, "HEIR_WALLET_UNVERIFIED", "相続人の受取用ウォレットが未確認です");
+    }
+    const heirWalletMap = new Map(
+      heirWallets.map((wallet) => [wallet.uid, wallet.address])
+    );
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const lockWalletAddress = lockData?.wallet?.address;
+    const lockSeedEncrypted = lockData?.wallet?.seedEncrypted;
+    if (!lockWalletAddress || !lockSeedEncrypted) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "分配用ウォレットが未設定です");
+    }
+    const lockSeed = decryptPayload(lockSeedEncrypted);
+
+    const planSnap = await caseRef
+      .collection("plans")
+      .where("status", "==", "SHARED")
+      .get();
+    if (planSnap.empty) {
+      return jsonError(c, 400, "NOT_READY", "共有中の指図がありません");
+    }
+
+    const assetLockItemsSnap = await caseRef.collection("assetLockItems").get();
+    if (assetLockItemsSnap.empty) {
+      return jsonError(c, 400, "NOT_READY", "分配対象の資産がありません");
+    }
+
+    type AssetTotals = {
+      assetLabel: string;
+      xrpDrops: bigint;
+      tokens: Map<string, { amount: number; token: { currency: string; issuer: string | null; isNative: boolean } }>;
+    };
+    const assetTotals = new Map<string, AssetTotals>();
+
+    assetLockItemsSnap.docs.forEach((doc) => {
+      const item = doc.data() ?? {};
+      const assetId = typeof item.assetId === "string" ? item.assetId : "";
+      if (!assetId) return;
+      const assetLabel = typeof item.assetLabel === "string" ? item.assetLabel : "";
+      const token = item.token ?? null;
+      const plannedAmount = String(item.plannedAmount ?? "0");
+      const current = assetTotals.get(assetId) ?? {
+        assetLabel,
+        xrpDrops: 0n,
+        tokens: new Map()
+      };
+      if (token) {
+        const currency = String(token.currency ?? "");
+        const issuer = token.issuer ?? null;
+        const key = `${currency}:${issuer ?? ""}`;
+        const amount = toNumber(plannedAmount);
+        if (amount > 0) {
+          current.tokens.set(key, {
+            amount,
+            token: { currency, issuer, isNative: false }
+          });
+        }
+      } else {
+        const drops = BigInt(plannedAmount || "0");
+        if (drops > 0n) {
+          current.xrpDrops += drops;
+        }
+      }
+      assetTotals.set(assetId, current);
+    });
+
+    const distributionItems: Array<Record<string, any>> = [];
+    const now = c.get("deps").now();
+    const percentScale = 1_000_000n;
+    const formatTokenAmount = (value: number) => {
+      const fixed = value.toFixed(6);
+      return fixed.replace(/\.?0+$/, "") || "0";
+    };
+
+    for (const planDoc of planSnap.docs) {
+      const plan = planDoc.data() ?? {};
+      const planId = plan.planId ?? planDoc.id;
+      const planTitle = typeof plan.title === "string" ? plan.title : "";
+      const planAssetsSnap = await planDoc.ref.collection("assets").get();
+      for (const assetDoc of planAssetsSnap.docs) {
+        const asset = assetDoc.data() ?? {};
+        const assetId = typeof asset.assetId === "string" ? asset.assetId : "";
+        if (!assetId) continue;
+        const totals = assetTotals.get(assetId);
+        if (!totals) continue;
+        const unitType = asset.unitType === "AMOUNT" ? "AMOUNT" : "PERCENT";
+        const allocations = Array.isArray(asset.allocations) ? asset.allocations : [];
+        const xrpTotal = totals.xrpDrops;
+        const xrpTotalNumber = Number(xrpTotal) / 1_000_000;
+
+        const allocationEntries = allocations.filter(
+          (allocation: any) => allocation?.heirUid && !allocation?.isUnallocated
+        );
+
+        const xrpAmountsByHeir = new Map<string, bigint>();
+        let allocatedTotal = 0n;
+        for (const allocation of allocationEntries) {
+          const heirUid = String(allocation.heirUid ?? "");
+          const value = toNumber(allocation.value);
+          let amountDrops = 0n;
+          if (unitType === "AMOUNT") {
+            amountDrops = BigInt(toDrops(value.toString()));
+          } else {
+            const ratioScaled = BigInt(Math.round((value / 100) * Number(percentScale)));
+            amountDrops = (xrpTotal * ratioScaled) / percentScale;
+          }
+          if (amountDrops > 0n) {
+            xrpAmountsByHeir.set(heirUid, amountDrops);
+            allocatedTotal += amountDrops;
+          }
+        }
+
+        if (xrpTotal > 0n && allocatedTotal > xrpTotal) {
+          return jsonError(c, 400, "VALIDATION_ERROR", "分配額が資産残高を超えています");
+        }
+
+        for (const allocation of allocationEntries) {
+          const heirUid = String(allocation.heirUid ?? "");
+          const heirAddress = heirWalletMap.get(heirUid) ?? "";
+          if (!heirAddress) continue;
+          const amountDrops = xrpAmountsByHeir.get(heirUid) ?? 0n;
+          if (amountDrops > 0n) {
+            distributionItems.push({
+              status: "QUEUED",
+              planId,
+              planTitle,
+              assetId,
+              assetLabel: totals.assetLabel,
+              heirUid,
+              heirAddress,
+              token: null,
+              amount: amountDrops.toString(),
+              attempts: 0,
+              txHash: null,
+              error: null,
+              createdAt: now,
+              updatedAt: now
+            });
+          }
+          for (const tokenEntry of totals.tokens.values()) {
+            let ratio = 0;
+            if (unitType === "PERCENT") {
+              ratio = toNumber(allocation.value) / 100;
+            } else {
+              ratio = xrpTotalNumber > 0 ? toNumber(allocation.value) / xrpTotalNumber : 0;
+            }
+            const tokenAmount = tokenEntry.amount * ratio;
+            if (tokenAmount > 0) {
+              distributionItems.push({
+                status: "QUEUED",
+                planId,
+                planTitle,
+                assetId,
+                assetLabel: totals.assetLabel,
+                heirUid,
+                heirAddress,
+                token: tokenEntry.token,
+                amount: formatTokenAmount(tokenAmount),
+                attempts: 0,
+                txHash: null,
+                error: null,
+                createdAt: now,
+                updatedAt: now
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (distributionItems.length === 0) {
+      return jsonError(c, 400, "NOT_READY", "分配対象がありません");
+    }
+
+    const stateRef = caseRef.collection("distribution").doc("state");
+    const itemsRef = stateRef.collection("items");
+    const existingItemsSnap = await itemsRef.get();
+    if (!existingItemsSnap.empty) {
+      await Promise.all(existingItemsSnap.docs.map((doc) => doc.ref.delete()));
+    }
+
+    await stateRef.set(
+      {
+        status: "RUNNING",
+        totalCount: distributionItems.length,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0,
+        retryLimit: 3,
+        startedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    let successCount = 0;
+    let failedCount = 0;
+    for (const item of distributionItems) {
+      const itemRef = itemsRef.doc();
+      const token = item.token ?? null;
+      try {
+        if (token) {
+          const result = await sendTokenPayment({
+            fromSeed: lockSeed,
+            fromAddress: lockWalletAddress,
+            to: item.heirAddress,
+            token,
+            amount: item.amount
+          });
+          await itemRef.set(
+            { ...item, status: "VERIFIED", txHash: result.txHash ?? null, updatedAt: now },
+            { merge: true }
+          );
+        } else {
+          const result = await sendXrpPayment({
+            fromSeed: lockSeed,
+            fromAddress: lockWalletAddress,
+            to: item.heirAddress,
+            amountDrops: item.amount
+          });
+          await itemRef.set(
+            { ...item, status: "VERIFIED", txHash: result.txHash ?? null, updatedAt: now },
+            { merge: true }
+          );
+        }
+        successCount += 1;
+      } catch (error: any) {
+        failedCount += 1;
+        await itemRef.set(
+          {
+            ...item,
+            status: "FAILED",
+            attempts: 1,
+            error: error?.message ?? "送金に失敗しました",
+            updatedAt: now
+          },
+          { merge: true }
+        );
+      }
+    }
+
+    const status = failedCount > 0 ? "PARTIAL" : "COMPLETED";
+    await stateRef.set(
+      {
+        status,
+        successCount,
+        failedCount,
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, {
+      status,
+      totalCount: distributionItems.length,
+      successCount,
+      failedCount,
+      skippedCount: 0,
+      escalationCount: 0,
+      startedAt: now,
+      updatedAt: c.get("deps").now()
+    });
+  });
+
   app.post(":caseId/signer-list/sign", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");

@@ -3933,6 +3933,76 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.totalCount).toBe(0);
   });
 
+  it("creates distribution items and completes when single xrp", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_single";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
+      planId: "plan-1",
+      status: "SHARED",
+      title: "指図A",
+      ownerUid: "owner_1",
+      heirUids: ["heir_1"],
+      heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+    });
+    await db.collection(`cases/${caseId}/plans/plan-1/assets`).doc("plan-asset-1").set({
+      planAssetId: "plan-asset-1",
+      assetId: "asset-1",
+      unitType: "PERCENT",
+      allocations: [{ heirUid: "heir_1", value: 100 }]
+    });
+    await db.collection(`cases/${caseId}/assetLockItems`).doc("item-1").set({
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      token: null,
+      plannedAmount: "100"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("COMPLETED");
+    expect(res.body?.data?.totalCount).toBe(1);
+
+    const stateSnap = await db.collection(`cases/${caseId}/distribution`).doc("state").get();
+    expect(stateSnap.data()?.totalCount).toBe(1);
+    const itemsSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .get();
+    expect(itemsSnap.docs.length).toBe(1);
+  });
+
   it("rejects prepare when heir wallets are unverified", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
