@@ -812,6 +812,17 @@ export default function CaseDetailPage({
                   </div>
                 </div>
               </div>
+              <div className={styles.signerGuide}>
+                <div className={styles.signerGuideTitle}>署名の流れ</div>
+                <ol className={styles.signerGuideList}>
+                  <li>
+                    署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配する
+                    XRPLトランザクションです。
+                  </li>
+                  <li>登録済みの相続人ウォレットでMultiSign署名を行います。</li>
+                  <li>送信後に表示されるTXハッシュを下に貼り付けてください。</li>
+                </ol>
+              </div>
               <div className={styles.signerActions}>
                 <FormField label="TXハッシュ">
                   <Input

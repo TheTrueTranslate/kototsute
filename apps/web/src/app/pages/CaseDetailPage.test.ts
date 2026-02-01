@@ -231,6 +231,7 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("相続実行の同意");
+    expect(html).toContain("署名の流れ");
   });
 
   it("shows wallet status badge in heirs tab", async () => {
