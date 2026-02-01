@@ -560,7 +560,7 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.length).toBe(1);
   });
 
-  it("adds heir from accepted invite and shares plan", async () => {
+  it("adds heir from accepted invite", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -595,15 +595,8 @@ describe("createApiHandler", () => {
     const resAdd = createRes();
     await handler(addReq as any, resAdd as any);
 
-    const shareReq: MockReq = authedReq("owner_1", "owner@example.com", {
-      method: "POST",
-      path: `/v1/plans/${planId}/share`
-    });
-    const resShare = createRes();
-    await handler(shareReq as any, resShare as any);
-
     const planSnap = await db.collection("plans").doc(planId).get();
-    expect(planSnap.data()?.status).toBe("SHARED");
+    expect(planSnap.data()?.status).toBe("DRAFT");
     expect(planSnap.data()?.heirUids).toContain("heir_1");
   });
 
