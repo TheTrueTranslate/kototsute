@@ -25,6 +25,7 @@ import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
 import {
   getApprovalTx,
   getSignerList,
+  prepareApprovalTx,
   submitSignerSignature,
   type ApprovalTxSummary,
   type SignerListSummary
@@ -143,7 +144,7 @@ export const resolveInheritanceNextAction = (input: {
     return {
       stepIndex: 1,
       title: "相続人同意の準備中",
-      description: "同意の準備中です。しばらくお待ちください。"
+      description: "同意の準備を始めてください。"
     };
   }
   if (input.caseStage === "IN_PROGRESS" && input.approvalStatus === "PREPARED") {
@@ -306,6 +307,9 @@ export default function CaseDetailPage({
   const [approvalTx, setApprovalTx] = useState<ApprovalTxSummary | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [prepareLoading, setPrepareLoading] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [prepareSuccess, setPrepareSuccess] = useState<string | null>(null);
   const [signerSeed, setSignerSeed] = useState("");
   const [signerSignedBlob, setSignerSignedBlob] = useState("");
   const [signerSignedHash, setSignerSignedHash] = useState("");
@@ -392,6 +396,28 @@ export default function CaseDetailPage({
     "相続人同意 受付中",
     "同意完了（相続実行待ち）"
   ];
+  const totalHeirCount = heirs.length;
+  const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
+  const prepareDisabledReason = useMemo(() => {
+    if (!caseData) return "ケース情報が取得できません。";
+    if (caseData.stage !== "IN_PROGRESS") {
+      return "相続中になると準備できます。";
+    }
+    if (signerStatusKey === "FAILED") {
+      return "同意の準備に失敗しました。運営へご連絡ください。";
+    }
+    if (signerStatusKey === "SET") {
+      return "同意の準備は完了しています。";
+    }
+    if (totalHeirCount === 0) {
+      return "相続人が登録されていないため準備できません。";
+    }
+    if (unverifiedHeirCount > 0) {
+      return `相続人の受取用ウォレットが全員分確認済みになると準備できます。未確認: ${unverifiedHeirCount}人`;
+    }
+    return null;
+  }, [caseData, signerStatusKey, totalHeirCount, unverifiedHeirCount]);
+  const canPrepareApproval = !prepareDisabledReason;
   const signerDisabledReason = useMemo(() => {
     if (!caseData) return "ケース情報が取得できません。";
     if (caseData.stage !== "IN_PROGRESS") {
@@ -617,6 +643,31 @@ export default function CaseDetailPage({
     signerList?.status,
     fetchApprovalTx
   ]);
+
+  const handlePrepareApproval = async () => {
+    if (!caseId) return;
+    setPrepareLoading(true);
+    setPrepareError(null);
+    setPrepareSuccess(null);
+    try {
+      await prepareApprovalTx(caseId);
+      setPrepareSuccess("同意の準備が完了しました。署名に進んでください。");
+      await fetchSignerList();
+    } catch (err: any) {
+      const code = err?.data?.code;
+      if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
+        setPrepareError("相続人の受取用ウォレットが全員分確認済みになると準備できます。");
+      } else if (code === "HEIR_MISSING") {
+        setPrepareError("相続人が登録されていないため準備できません。");
+      } else if (code === "NOT_READY") {
+        setPrepareError("相続中になると準備できます。");
+      } else {
+        setPrepareError(err?.message ?? "同意の準備に失敗しました");
+      }
+    } finally {
+      setPrepareLoading(false);
+    }
+  };
 
   const handleSaveHeirWallet = async () => {
     if (!caseId) return;
@@ -1065,8 +1116,28 @@ export default function CaseDetailPage({
                 </div>
                 <span className={styles.signerBadge}>{signerStatusLabel}</span>
               </div>
+              <div className={styles.signerPrepare}>
+                <div className={styles.signerPrepareTitle}>同意の準備</div>
+                <div className={styles.signerPrepareHint}>
+                  相続人の同意を進めるために、署名対象を作成します。
+                </div>
+                <div className={styles.signerPrepareActions}>
+                  <Button
+                    type="button"
+                    onClick={handlePrepareApproval}
+                    disabled={!canPrepareApproval || prepareLoading}
+                  >
+                    {prepareLoading ? "準備中..." : "相続同意の準備を始める"}
+                  </Button>
+                </div>
+                {prepareDisabledReason ? (
+                  <div className={styles.signerPrepareNote}>{prepareDisabledReason}</div>
+                ) : null}
+              </div>
               {signerError ? <FormAlert variant="error">{signerError}</FormAlert> : null}
               {approvalError ? <FormAlert variant="error">{approvalError}</FormAlert> : null}
+              {prepareError ? <FormAlert variant="error">{prepareError}</FormAlert> : null}
+              {prepareSuccess ? <FormAlert variant="success">{prepareSuccess}</FormAlert> : null}
               {signerList?.error ? (
                 <FormAlert variant="error">{signerList.error}</FormAlert>
               ) : null}

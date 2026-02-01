@@ -280,6 +280,69 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("運営承認済み");
   });
 
+  it("shows prepare guidance when some heirs are unverified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    caseHeirsData = [
+      {
+        inviteId: "invite-1",
+        email: "heir1@example.com",
+        relationLabel: "長男",
+        relationOther: null,
+        acceptedByUid: "heir_1",
+        acceptedAt: "2024-01-02",
+        walletStatus: "PENDING"
+      }
+    ];
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirs: caseHeirsData,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("相続人の受取用ウォレットが全員分確認済みになると準備できます");
+    expect(html).toContain("未確認: 1人");
+  });
+
+  it("shows prepare button when all heirs are verified", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    caseHeirsData = [
+      {
+        inviteId: "invite-1",
+        email: "heir1@example.com",
+        relationLabel: "長男",
+        relationOther: null,
+        acceptedByUid: "heir_1",
+        acceptedAt: "2024-01-02",
+        walletStatus: "VERIFIED"
+      }
+    ];
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirs: caseHeirsData,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("相続同意の準備を始める");
+  });
+
   it("renders consent section when inheritance tab is active", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
