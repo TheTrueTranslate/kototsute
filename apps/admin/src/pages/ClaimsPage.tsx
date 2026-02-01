@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listPendingDeathClaims, type AdminDeathClaim } from "../api/death-claims";
+import { listDeathClaims, type AdminDeathClaim } from "../api/death-claims";
+
+const statusTabs = [
+  { id: "SUBMITTED", label: "運営確認待ち" },
+  { id: "ADMIN_APPROVED", label: "運営承認済み" },
+  { id: "CONFIRMED", label: "死亡確定" }
+] as const;
 
 const formatDate = (value?: string) => {
   if (!value) return "-";
@@ -11,6 +17,7 @@ const formatDate = (value?: string) => {
 
 export default function ClaimsPage() {
   const [items, setItems] = useState<AdminDeathClaim[]>([]);
+  const [status, setStatus] = useState<(typeof statusTabs)[number]["id"]>("SUBMITTED");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +26,7 @@ export default function ClaimsPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await listPendingDeathClaims();
+        const data = await listDeathClaims(status);
         setItems(data);
       } catch (err: any) {
         setError(err?.message ?? "一覧の取得に失敗しました");
@@ -28,16 +35,28 @@ export default function ClaimsPage() {
       }
     };
     void load();
-  }, []);
+  }, [status]);
 
   return (
     <div className="card">
-      <div className="card-title">未承認の死亡診断書</div>
+      <div className="card-title">死亡診断書</div>
+      <div className="tabs">
+        {statusTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`tab-button ${status === tab.id ? "active" : ""}`}
+            onClick={() => setStatus(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       {error ? <div className="alert">{error}</div> : null}
       {loading ? (
         <div className="muted">読み込み中...</div>
       ) : items.length === 0 ? (
-        <div className="muted">未承認の申請はありません。</div>
+        <div className="muted">該当する申請はありません。</div>
       ) : (
         <div className="table">
           {items.map((item) => (

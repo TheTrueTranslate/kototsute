@@ -78,6 +78,29 @@ a:hover {
   font-weight: 600;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab-button {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  border-color: #0f172a;
+  color: #0f172a;
+  background: #e2e8f0;
+  font-weight: 600;
+}
+
 .muted {
   color: #64748b;
   font-size: 0.9rem;

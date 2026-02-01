@@ -4,6 +4,7 @@ export type AdminDeathClaim = {
   caseId: string;
   claimId: string;
   submittedByUid: string;
+  status?: string | null;
   createdAt?: string;
 };
 
@@ -35,8 +36,8 @@ export type AdminDeathClaimFileDownload = {
   dataBase64: string;
 };
 
-export const listPendingDeathClaims = async () => {
-  const result = await apiFetch("/v1/admin/death-claims?status=SUBMITTED", { method: "GET" });
+export const listDeathClaims = async (status: string) => {
+  const result = await apiFetch(`/v1/admin/death-claims?status=${status}`, { method: "GET" });
   return result.data as AdminDeathClaim[];
 };
 
