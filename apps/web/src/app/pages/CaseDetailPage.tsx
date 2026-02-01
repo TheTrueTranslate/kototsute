@@ -20,6 +20,7 @@ import { Textarea } from "../../features/shared/components/ui/textarea";
 import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
+import type { DeathClaimSummary } from "../api/death-claims";
 import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
 import {
   getApprovalTx,
@@ -100,6 +101,61 @@ const approvalStatusLabels: Record<string, string> = {
   FAILED: "失敗"
 };
 
+export const shouldFetchApprovalTx = (input: {
+  isHeir: boolean;
+  tab: string | null;
+  caseId?: string | null;
+  canAccessDeathClaims: boolean;
+  caseStage?: string | null;
+  signerStatus?: string | null;
+}) => {
+  if (!input.isHeir) return false;
+  if (input.tab !== "death-claims") return false;
+  if (!input.caseId) return false;
+  if (!input.canAccessDeathClaims) return false;
+  if (input.caseStage !== "IN_PROGRESS") return false;
+  if (input.signerStatus !== "SET") return false;
+  return true;
+};
+
+export const resolveInheritanceNextAction = (input: {
+  claimStatus?: string | null;
+  caseStage?: string | null;
+  signerStatus?: string | null;
+  approvalStatus?: string | null;
+  signerCompleted: boolean;
+}) => {
+  if (input.claimStatus === "ADMIN_APPROVED" && input.caseStage === "WAITING") {
+    return {
+      stepIndex: 0,
+      title: "運営承認済み",
+      description: "相続人の同意が必要です。死亡診断書の同意を進めてください。"
+    };
+  }
+  if (input.caseStage === "IN_PROGRESS" && input.signerCompleted) {
+    return {
+      stepIndex: 3,
+      title: "同意完了（相続実行待ち）",
+      description: "同意がそろいました。相続実行を待っています。"
+    };
+  }
+  if (input.caseStage === "IN_PROGRESS" && input.signerStatus !== "SET") {
+    return {
+      stepIndex: 1,
+      title: "相続人同意の準備中",
+      description: "同意の準備中です。しばらくお待ちください。"
+    };
+  }
+  if (input.caseStage === "IN_PROGRESS" && input.approvalStatus === "PREPARED") {
+    return {
+      stepIndex: 2,
+      title: "相続人同意 受付中",
+      description: "内容を確認して署名してください。"
+    };
+  }
+  return null;
+};
+
 const encodeMemoHex = (memo: string) => {
   if (!memo) return "";
   const bytes = new TextEncoder().encode(memo);
@@ -162,6 +218,7 @@ type CaseDetailPageProps = {
   initialHeirs?: CaseHeir[];
   initialWalletDialogOpen?: boolean;
   initialWalletDialogMode?: "register" | "verify";
+  initialDeathClaim?: DeathClaimSummary | null;
 };
 
 const baseTabItems: { key: TabKey; label: string }[] = [
@@ -184,7 +241,8 @@ export default function CaseDetailPage({
   initialTaskIds = [],
   initialHeirs = [],
   initialWalletDialogOpen = false,
-  initialWalletDialogMode = "register"
+  initialWalletDialogMode = "register",
+  initialDeathClaim = null
 }: CaseDetailPageProps) {
   const { caseId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -218,6 +276,7 @@ export default function CaseDetailPage({
   const [heirWallet, setHeirWallet] = useState<HeirWallet | null>(initialHeirWallet);
   const [heirWalletLoading, setHeirWalletLoading] = useState(false);
   const [heirWalletError, setHeirWalletError] = useState<string | null>(null);
+  const [deathClaim, setDeathClaim] = useState<DeathClaimSummary | null>(initialDeathClaim);
   const [heirWalletSaving, setHeirWalletSaving] = useState(false);
   const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
   const [heirWalletVerifyError, setHeirWalletVerifyError] = useState<string | null>(null);
@@ -320,6 +379,19 @@ export default function CaseDetailPage({
       Number.isFinite(signerList.requiredCount) &&
       signerList.signaturesCount >= signerList.requiredCount
   );
+  const nextAction = resolveInheritanceNextAction({
+    claimStatus: deathClaim?.claim?.status ?? null,
+    caseStage: caseData?.stage ?? null,
+    signerStatus: signerList?.status ?? null,
+    approvalStatus: approvalTx?.status ?? null,
+    signerCompleted
+  });
+  const nextActionSteps = [
+    "運営承認済み",
+    "相続人同意の準備中",
+    "相続人同意 受付中",
+    "同意完了（相続実行待ち）"
+  ];
   const signerDisabledReason = useMemo(() => {
     if (!caseData) return "ケース情報が取得できません。";
     if (caseData.stage !== "IN_PROGRESS") {
@@ -523,11 +595,28 @@ export default function CaseDetailPage({
   }, [caseId]);
 
   useEffect(() => {
-    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+    if (
+      !shouldFetchApprovalTx({
+        isHeir,
+        tab,
+        caseId,
+        canAccessDeathClaims,
+        caseStage: caseData?.stage ?? null,
+        signerStatus: signerList?.status ?? null
+      })
+    ) {
       return;
     }
     void fetchApprovalTx();
-  }, [isHeir, tab, caseId, canAccessDeathClaims, fetchApprovalTx]);
+  }, [
+    isHeir,
+    tab,
+    caseId,
+    canAccessDeathClaims,
+    caseData?.stage,
+    signerList?.status,
+    fetchApprovalTx
+  ]);
 
   const handleSaveHeirWallet = async () => {
     if (!caseId) return;
@@ -933,6 +1022,24 @@ export default function CaseDetailPage({
             <div className={styles.panelHeader}>
               <h2 className={styles.panelTitle}>相続実行</h2>
             </div>
+            {nextAction ? (
+              <div className={styles.nextAction}>
+                <div className={styles.nextActionTitle}>次のアクション</div>
+                <div className={styles.nextActionSteps}>
+                  {nextActionSteps.map((label, index) => (
+                    <span
+                      key={label}
+                      className={`${styles.nextActionStep} ${
+                        index === nextAction.stepIndex ? styles.nextActionStepActive : ""
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className={styles.nextActionBody}>{nextAction.description}</div>
+              </div>
+            ) : null}
             <details className={styles.collapsible}>
               <summary className={styles.collapsibleSummary}>
                 <div className={styles.collapsibleText}>
@@ -942,7 +1049,10 @@ export default function CaseDetailPage({
                 <span className={styles.collapsibleChevron} aria-hidden="true" />
               </summary>
               <div className={styles.collapsibleBody}>
-                <DeathClaimsPanel />
+                <DeathClaimsPanel
+                  initialClaim={initialDeathClaim ?? null}
+                  onClaimChange={setDeathClaim}
+                />
               </div>
             </details>
             <div className={styles.signerSection}>

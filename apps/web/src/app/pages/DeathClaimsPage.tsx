@@ -60,13 +60,15 @@ export type DeathClaimsPanelProps = {
   initialLoading?: boolean;
   initialResubmitDialogOpen?: boolean;
   initialConfirmDialogOpen?: boolean;
+  onClaimChange?: (claim: DeathClaimSummary | null) => void;
 };
 
 export function DeathClaimsPanel({
   initialClaim = null,
   initialLoading,
   initialResubmitDialogOpen = false,
-  initialConfirmDialogOpen = false
+  initialConfirmDialogOpen = false,
+  onClaimChange
 }: DeathClaimsPanelProps) {
   const { caseId } = useParams();
   const { user } = useAuth();
@@ -100,6 +102,10 @@ export function DeathClaimsPanel({
     if (!user || !caseId || initialClaim) return;
     void fetchClaim();
   }, [user, caseId, fetchClaim, initialClaim]);
+
+  useEffect(() => {
+    onClaimChange?.(claim);
+  }, [claim, onClaimChange]);
 
   const handleSubmit = async () => {
     if (!caseId) return;
