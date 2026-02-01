@@ -3,6 +3,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
+import { createChallenge } from "../utils/xrpl.js";
+import { prepareApprovalTx, signForMultisign } from "../utils/xrpl-multisign.js";
 
 const getCaseIdFromRef = (ref: { path?: string; parent?: { parent?: { id?: string } } }) => {
   if (typeof ref.path === "string") {
@@ -144,6 +146,77 @@ export const adminRoutes = () => {
       fileName: fileData.fileName ?? null,
       contentType: fileData.contentType ?? "application/octet-stream",
       dataBase64
+    });
+  });
+
+  app.post("/cases/:caseId/signer-list/prepare", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続中のみ生成できます");
+    }
+
+    const signerSnap = await caseRef.collection("signerList").doc("state").get();
+    if (!signerSnap.exists || signerSnap.data()?.status !== "SET") {
+      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "署名準備が完了していません");
+    }
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const walletAddress = lockData?.wallet?.address;
+    if (!walletAddress) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "分配用Walletが未設定です");
+    }
+
+    const systemSeed = process.env.XRPL_SYSTEM_SIGNER_SEED ?? "";
+    if (!systemSeed) {
+      return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名が未設定です");
+    }
+    const destination = process.env.XRPL_VERIFY_ADDRESS ?? "";
+    if (!destination) {
+      return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
+    }
+
+    const memo = createChallenge();
+    const memoHex = Buffer.from(memo, "utf8").toString("hex").toUpperCase();
+    const entries = Array.isArray(signerSnap.data()?.entries) ? signerSnap.data()?.entries : [];
+    const signersCount = entries.length || 1;
+
+    const txJson = await prepareApprovalTx({
+      fromAddress: walletAddress,
+      destination,
+      amountDrops: "1",
+      memoHex,
+      signersCount
+    });
+    const systemSigned = signForMultisign(txJson, systemSeed);
+    const now = c.get("deps").now();
+    await caseRef.collection("signerList").doc("approvalTx").set({
+      memo,
+      txJson,
+      systemSignedBlob: systemSigned.blob,
+      systemSignedHash: systemSigned.hash,
+      status: "PREPARED",
+      submittedTxHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, {
+      memo,
+      fromAddress: walletAddress,
+      destination,
+      amountDrops: "1"
     });
   });
 

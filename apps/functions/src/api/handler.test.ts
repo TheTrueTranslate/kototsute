@@ -241,6 +241,24 @@ vi.mock("@kototsute/shared", async () => {
   };
 });
 
+vi.mock("./utils/xrpl", async () => {
+  const actual = await vi.importActual<typeof import("./utils/xrpl")>("./utils/xrpl");
+  return {
+    ...actual,
+    createChallenge: () => "memo_123"
+  };
+});
+
+vi.mock("./utils/xrpl-multisign", () => ({
+  prepareApprovalTx: async () => ({
+    TransactionType: "Payment",
+    Account: "rLock",
+    Destination: "rVerify",
+    Amount: "1"
+  }),
+  signForMultisign: () => ({ blob: "blob-system", hash: "hash-system" })
+}));
+
 class InMemoryAssetRepository implements AssetRepository {
   private assets: Asset[] = [];
 
@@ -3704,6 +3722,60 @@ describe("createApiHandler", () => {
     expect(claimSnap.data()?.status).toBe("ADMIN_REJECTED");
     expect(claimSnap.data()?.adminReview?.status).toBe("REJECTED");
     expect(claimSnap.data()?.adminReview?.note).toBe("差し戻し理由");
+  });
+
+  it("allows admin to prepare approval tx", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [
+        { account: "rSystem", weight: 1 },
+        { account: "rHeir", weight: 1 }
+      ]
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/admin/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(true);
+    expect(approvalSnap.data()?.memo).toBe("memo_123");
   });
 
   it("allows heir to resubmit rejected death claim", async () => {
