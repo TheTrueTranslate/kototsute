@@ -214,6 +214,72 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("相続実行");
   });
 
+  it("does not fetch approval tx before inheritance starts", async () => {
+    const { shouldFetchApprovalTx } = await import("./CaseDetailPage");
+    const shouldFetch = shouldFetchApprovalTx({
+      isHeir: true,
+      tab: "death-claims",
+      caseId: "case-1",
+      canAccessDeathClaims: true,
+      caseStage: "WAITING",
+      signerStatus: "SET"
+    });
+    expect(shouldFetch).toBe(false);
+  });
+
+  it("fetches approval tx when inheritance is in progress", async () => {
+    const { shouldFetchApprovalTx } = await import("./CaseDetailPage");
+    const shouldFetch = shouldFetchApprovalTx({
+      isHeir: true,
+      tab: "death-claims",
+      caseId: "case-1",
+      canAccessDeathClaims: true,
+      caseStage: "IN_PROGRESS",
+      signerStatus: "SET"
+    });
+    expect(shouldFetch).toBe(true);
+  });
+
+  it("resolves next action for admin approved", async () => {
+    const { resolveInheritanceNextAction } = await import("./CaseDetailPage");
+    const result = resolveInheritanceNextAction({
+      claimStatus: "ADMIN_APPROVED",
+      caseStage: "WAITING",
+      signerStatus: "NOT_READY",
+      approvalStatus: null,
+      signerCompleted: false
+    });
+    expect(result).not.toBeNull();
+    expect(result?.stepIndex).toBe(0);
+    expect(result?.title).toBe("運営承認済み");
+  });
+
+  it("renders next action banner in inheritance tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "WAITING",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      }
+    });
+    expect(html).toContain("次のアクション");
+    expect(html).toContain("運営承認済み");
+  });
+
   it("renders consent section when inheritance tab is active", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
