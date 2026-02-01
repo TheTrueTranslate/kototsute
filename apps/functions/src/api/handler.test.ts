@@ -3738,7 +3738,7 @@ describe("createApiHandler", () => {
     expect(claimSnap.data()?.adminReview?.note).toBe("差し戻し理由");
   });
 
-  it("allows admin to prepare approval tx", async () => {
+  it("rejects admin prepare approval tx endpoint", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -3783,13 +3783,12 @@ describe("createApiHandler", () => {
     const res = createRes();
     await handler(req as any, res as any);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(404);
     const approvalSnap = await db
       .collection(`cases/${caseId}/signerList`)
       .doc("approvalTx")
       .get();
-    expect(approvalSnap.exists).toBe(true);
-    expect(approvalSnap.data()?.memo).toBe("memo_123");
+    expect(approvalSnap.exists).toBe(false);
   });
 
   it("allows heir to prepare approval tx", async () => {

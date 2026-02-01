@@ -7,7 +7,6 @@ import {
   rejectDeathClaim,
   type AdminDeathClaimDetail
 } from "../api/death-claims";
-import { prepareApprovalTx } from "../api/signer-list";
 
 const formatBytes = (value: number) => {
   if (!Number.isFinite(value)) return "-";
@@ -50,9 +49,6 @@ export const toClaimStatusLabel = (status: string) => {
   }
 };
 
-export const canPrepareApprovalTx = (status: string, caseStage?: string | null) =>
-  status === "CONFIRMED" || caseStage === "IN_PROGRESS";
-
 export const profileLabel = "被相続人プロフィール";
 
 export type ReviewAction = "approve" | "reject";
@@ -94,13 +90,6 @@ export default function ClaimDetailPage() {
   const [rejectNote, setRejectNote] = useState("");
   const [openingFileId, setOpeningFileId] = useState<string | null>(null);
   const [reviewAction, setReviewAction] = useState<ReviewAction | null>(null);
-  const [approvalTx, setApprovalTx] = useState<{
-    memo: string;
-    fromAddress: string;
-    destination: string;
-    amountDrops: string;
-  } | null>(null);
-  const [preparingApproval, setPreparingApproval] = useState(false);
 
   const load = useCallback(async () => {
     if (!caseId || !claimId) return;
@@ -181,29 +170,6 @@ export default function ClaimDetailPage() {
     setReviewAction(null);
   };
 
-  const handlePrepareApprovalTx = async () => {
-    if (!caseId) return;
-    setPreparingApproval(true);
-    setError(null);
-    try {
-      const data = await prepareApprovalTx(caseId);
-      setApprovalTx(data);
-    } catch (err: any) {
-      setError(err?.message ?? "相続実行Txの生成に失敗しました");
-    } finally {
-      setPreparingApproval(false);
-    }
-  };
-
-  const handleCopy = async (value: string) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      setError("コピーに失敗しました");
-    }
-  };
-
   const handleCancelReview = () => {
     if (approving || rejecting) return;
     setReviewAction(null);
@@ -255,71 +221,6 @@ export default function ClaimDetailPage() {
                 placeholder="差し戻し理由を入力してください"
               />
             </label>
-            {canPrepareApprovalTx(detail.claim.status, detail.case?.stage ?? null) ? (
-              <div className="section" style={{ marginTop: "16px" }}>
-                <div className="section-title">相続実行Tx</div>
-                <div className="actions">
-                  <button
-                    className="button"
-                    type="button"
-                    onClick={handlePrepareApprovalTx}
-                    disabled={preparingApproval || Boolean(approvalTx)}
-                  >
-                    {preparingApproval ? "生成中..." : "相続実行Txを生成"}
-                  </button>
-                </div>
-                {approvalTx ? (
-                  <div className="file-list">
-                    <div className="file-row">
-                      <div className="row-title">Memo</div>
-                      <div className="row-meta">{approvalTx.memo}</div>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => handleCopy(approvalTx.memo)}
-                      >
-                        コピー
-                      </button>
-                    </div>
-                    <div className="file-row">
-                      <div className="row-title">送金元</div>
-                      <div className="row-meta">{approvalTx.fromAddress}</div>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => handleCopy(approvalTx.fromAddress)}
-                      >
-                        コピー
-                      </button>
-                    </div>
-                    <div className="file-row">
-                      <div className="row-title">送金先</div>
-                      <div className="row-meta">{approvalTx.destination}</div>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => handleCopy(approvalTx.destination)}
-                      >
-                        コピー
-                      </button>
-                    </div>
-                    <div className="file-row">
-                      <div className="row-title">金額</div>
-                      <div className="row-meta">{approvalTx.amountDrops} drop</div>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => handleCopy(String(approvalTx.amountDrops))}
-                      >
-                        コピー
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="muted">未生成です。</div>
-                )}
-              </div>
-            ) : null}
           </div>
           <div className="section">
             <div className="section-title">{profileLabel}</div>

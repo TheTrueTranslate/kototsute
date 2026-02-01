@@ -969,20 +969,6 @@ export const casesRoutes = () => {
       { merge: true }
     );
 
-    try {
-      const caseRef = db.collection("cases").doc(caseId);
-      const caseSnap = await caseRef.get();
-      if (caseSnap.exists) {
-        await prepareInheritanceExecution({
-          caseRef,
-          caseData: caseSnap.data() ?? {},
-          now
-        });
-      }
-    } catch (error) {
-      console.warn("prepareInheritanceExecution failed on admin approve", error);
-    }
-
     return jsonOk(c);
   });
 

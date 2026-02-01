@@ -3,7 +3,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
-import { prepareInheritanceExecution } from "../utils/inheritance-execution.js";
 
 const getCaseIdFromRef = (ref: { path?: string; parent?: { parent?: { id?: string } } }) => {
   if (typeof ref.path === "string") {
@@ -146,61 +145,6 @@ export const adminRoutes = () => {
       contentType: fileData.contentType ?? "application/octet-stream",
       dataBase64
     });
-  });
-
-  app.post("/cases/:caseId/signer-list/prepare", async (c) => {
-    const auth = c.get("auth");
-    if (!auth.admin) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-    const caseId = c.req.param("caseId");
-    const db = getFirestore();
-    const caseRef = db.collection("cases").doc(caseId);
-    const caseSnap = await caseRef.get();
-    if (!caseSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Case not found");
-    }
-    const caseData = caseSnap.data() ?? {};
-    if (caseData.stage !== "IN_PROGRESS") {
-      return jsonError(c, 400, "NOT_READY", "相続中のみ生成できます");
-    }
-
-    const now = c.get("deps").now();
-    const result = await prepareInheritanceExecution({
-      caseRef,
-      caseData,
-      now
-    });
-    if (result.status === "SKIPPED") {
-      switch (result.reason) {
-        case "NOT_IN_PROGRESS":
-          return jsonError(c, 400, "NOT_READY", "相続中のみ生成できます");
-        case "LOCK_WALLET_MISSING":
-          return jsonError(c, 400, "VALIDATION_ERROR", "分配用Walletが未設定です");
-        case "HEIR_WALLET_UNVERIFIED":
-          return jsonError(c, 400, "WALLET_NOT_VERIFIED", "相続人ウォレットが未検証です");
-        case "HEIR_MISSING":
-          return jsonError(c, 400, "HEIR_MISSING", "相続人ウォレットが未登録です");
-        default:
-          return jsonError(c, 400, "NOT_READY", "署名準備が完了していません");
-      }
-    }
-    if (result.status === "FAILED") {
-      switch (result.reason) {
-        case "SYSTEM_SIGNER_MISSING":
-          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
-        case "SYSTEM_SIGNER_SEED_MISSING":
-          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名が未設定です");
-        case "VERIFY_ADDRESS_MISSING":
-          return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
-        case "SIGNER_LIST_FAILED":
-          return jsonError(c, 500, "SIGNER_LIST_FAILED", "SignerListSetに失敗しました");
-        default:
-          return jsonError(c, 500, "PREPARE_FAILED", "相続実行Txの生成に失敗しました");
-      }
-    }
-
-    return jsonOk(c, result.approvalTx);
   });
 
   return app;
