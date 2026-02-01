@@ -1202,7 +1202,7 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "署名対象が未生成です");
     }
     const approvalData = approvalSnap.data() ?? {};
-    const decoded = decodeSignedBlob(signedBlob);
+    const decoded: any = decodeSignedBlob(signedBlob);
     const signers = Array.isArray(decoded?.Signers) ? decoded.Signers : [];
     const hasSigner = signers.some((entry: any) => entry?.Signer?.Account === address);
     if (!hasSigner) {
