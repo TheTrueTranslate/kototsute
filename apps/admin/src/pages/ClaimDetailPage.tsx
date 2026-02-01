@@ -50,7 +50,8 @@ export const toClaimStatusLabel = (status: string) => {
   }
 };
 
-export const canPrepareApprovalTx = (status: string) => status === "CONFIRMED";
+export const canPrepareApprovalTx = (status: string, caseStage?: string | null) =>
+  status === "CONFIRMED" || caseStage === "IN_PROGRESS";
 
 export const profileLabel = "被相続人プロフィール";
 
@@ -254,7 +255,7 @@ export default function ClaimDetailPage() {
                 placeholder="差し戻し理由を入力してください"
               />
             </label>
-            {canPrepareApprovalTx(detail.claim.status) ? (
+            {canPrepareApprovalTx(detail.claim.status, detail.case?.stage ?? null) ? (
               <div className="section" style={{ marginTop: "16px" }}>
                 <div className="section-title">相続実行Tx</div>
                 <div className="actions">
