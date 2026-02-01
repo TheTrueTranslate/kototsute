@@ -10,6 +10,14 @@ let heirWalletData: { address: string | null; verificationStatus: string | null 
   verificationStatus: null
 };
 let caseHeirsData: Array<any> = [];
+let distributionStateData = {
+  status: "PENDING",
+  totalCount: 0,
+  successCount: 0,
+  failedCount: 0,
+  skippedCount: 0,
+  escalationCount: 0
+};
 let caseData = {
   caseId: "case-1",
   ownerUid: "owner",
@@ -90,6 +98,11 @@ vi.mock("../api/invites", () => ({
   createInvite: async () => ({ inviteId: "invite-1" })
 }));
 
+vi.mock("../api/distribution", () => ({
+  getDistributionState: async () => distributionStateData,
+  executeDistribution: async () => distributionStateData
+}));
+
 vi.mock("../../features/auth/auth-provider", () => ({
   useAuth: () => ({ user: authUser, loading: false })
 }));
@@ -107,6 +120,14 @@ describe("CaseDetailPage", () => {
     searchParams = new URLSearchParams();
     heirWalletData = { address: null, verificationStatus: null };
     caseHeirsData = [];
+    distributionStateData = {
+      status: "PENDING",
+      totalCount: 0,
+      successCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      escalationCount: 0
+    };
     caseData = {
       caseId: "case-1",
       ownerUid: "owner",
@@ -240,6 +261,35 @@ describe("CaseDetailPage", () => {
     expect(shouldFetch).toBe(true);
   });
 
+  it("allows prepare when signer list is set but approval tx is missing", async () => {
+    const { resolvePrepareDisabledReason } = await import("./CaseDetailPage");
+    const reason = resolvePrepareDisabledReason({
+      caseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      signerStatusKey: "SET",
+      totalHeirCount: 1,
+      unverifiedHeirCount: 0,
+      approvalTx: null
+    });
+    expect(reason).toBeNull();
+  });
+
+  it("ignores approval tx not found error", async () => {
+    const { resolveApprovalTxErrorMessage } = await import("./CaseDetailPage");
+    const message = resolveApprovalTxErrorMessage({
+      message: "ApprovalTx not found",
+      data: { code: "NOT_FOUND" }
+    });
+    expect(message).toBeNull();
+  });
+
   it("resolves next action for admin approved", async () => {
     const { resolveInheritanceNextAction } = await import("./CaseDetailPage");
     const result = resolveInheritanceNextAction({
@@ -361,6 +411,124 @@ describe("CaseDetailPage", () => {
     });
     expect(html).toContain("相続実行の同意");
     expect(html).toContain("署名の流れ");
+    expect(html).toContain("MultiSignのしくみ（アドレス）");
+  });
+
+  it("shows distribution section in inheritance tab", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("分配を実行");
+  });
+
+  it("hides manual sign button in consent section", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).not.toContain("署名を生成");
+    expect(html).toContain("署名を送信");
+  });
+
+  it("formats signer from label as legacy wallet", async () => {
+    const { resolveSignerFromLabel } = await import("./CaseDetailPage");
+    expect(resolveSignerFromLabel("山田")).toBe("送金元：被相続人の相続用ウォレット");
+    expect(resolveSignerFromLabel("")).toBe("送金元：被相続人の相続用ウォレット");
+  });
+
+  it("decides whether to poll approval status", async () => {
+    const { shouldPollApprovalStatus } = await import("./CaseDetailPage");
+    expect(
+      shouldPollApprovalStatus({
+        isHeir: true,
+        tab: "death-claims",
+        caseId: "case-1",
+        canAccessDeathClaims: true,
+        caseStage: "IN_PROGRESS",
+        signerStatus: "SET",
+        approvalStatus: "SUBMITTED"
+      })
+    ).toBe(true);
+    expect(
+      shouldPollApprovalStatus({
+        isHeir: true,
+        tab: "death-claims",
+        caseId: "case-1",
+        canAccessDeathClaims: true,
+        caseStage: "IN_PROGRESS",
+        signerStatus: "SET",
+        approvalStatus: "PREPARED"
+      })
+    ).toBe(false);
+  });
+
+  it("hides signer actions when approval is submitted", async () => {
+    const { shouldShowSignerActions } = await import("./CaseDetailPage");
+    expect(shouldShowSignerActions("SUBMITTED")).toBe(false);
+    expect(shouldShowSignerActions("PREPARED")).toBe(true);
+  });
+
+  it("hides signer details when approval is submitted", async () => {
+    const { shouldShowSignerDetails } = await import("./CaseDetailPage");
+    expect(shouldShowSignerDetails("SUBMITTED")).toBe(false);
+    expect(shouldShowSignerDetails("PREPARED")).toBe(true);
+  });
+
+  it("determines approval completion from network status", async () => {
+    const { isApprovalCompleted } = await import("./CaseDetailPage");
+    expect(
+      isApprovalCompleted({
+        approvalStatus: "SUBMITTED",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      })
+    ).toBe(true);
+    expect(
+      isApprovalCompleted({
+        approvalStatus: "SUBMITTED",
+        networkStatus: "FAILED",
+        networkResult: "tecFAILED"
+      })
+    ).toBe(false);
+  });
+
+  it("builds signer entry display list with roles", async () => {
+    const { buildSignerEntryDisplayList } = await import("./CaseDetailPage");
+    const result = buildSignerEntryDisplayList({
+      entries: [
+        { account: "rSystem", weight: 2 },
+        { account: "rOther", weight: 1 },
+        { account: "rMe", weight: 1 }
+      ],
+      systemSignerAddress: "rSystem",
+      heirWalletAddress: "rMe"
+    });
+    expect(result[0].label).toBe("システム署名者");
+    expect(result[1].label).toBe("あなたの受取用ウォレット");
+    expect(result[2].label).toBe("相続人の受取用ウォレット");
   });
 
   it("shows wallet status badge in heirs tab", async () => {

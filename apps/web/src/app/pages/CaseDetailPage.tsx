@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Copy } from "lucide-react";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
@@ -30,6 +30,11 @@ import {
   type ApprovalTxSummary,
   type SignerListSummary
 } from "../api/signer-list";
+import {
+  executeDistribution,
+  getDistributionState,
+  type DistributionState
+} from "../api/distribution";
 import {
   confirmHeirWalletVerify,
   getHeirWallet,
@@ -102,6 +107,22 @@ const approvalStatusLabels: Record<string, string> = {
   FAILED: "失敗"
 };
 
+const approvalNetworkStatusLabels: Record<string, string> = {
+  PENDING: "検証待ち",
+  VALIDATED: "検証済み（成功）",
+  FAILED: "検証済み（失敗）",
+  NOT_FOUND: "未反映",
+  EXPIRED: "期限切れ"
+};
+
+const distributionStatusLabels: Record<string, string> = {
+  PENDING: "未実行",
+  RUNNING: "実行中",
+  PARTIAL: "一部失敗",
+  COMPLETED: "完了",
+  FAILED: "失敗"
+};
+
 export const shouldFetchApprovalTx = (input: {
   isHeir: boolean;
   tab: string | null;
@@ -118,6 +139,32 @@ export const shouldFetchApprovalTx = (input: {
   if (input.signerStatus !== "SET") return false;
   return true;
 };
+
+export const shouldPollApprovalStatus = (input: {
+  isHeir: boolean;
+  tab: string | null;
+  caseId?: string | null;
+  canAccessDeathClaims: boolean;
+  caseStage?: string | null;
+  signerStatus?: string | null;
+  approvalStatus?: string | null;
+}) =>
+  shouldFetchApprovalTx(input) && input.approvalStatus === "SUBMITTED";
+
+export const shouldShowSignerActions = (approvalStatus?: string | null) =>
+  approvalStatus !== "SUBMITTED";
+
+export const shouldShowSignerDetails = (approvalStatus?: string | null) =>
+  approvalStatus !== "SUBMITTED";
+
+export const isApprovalCompleted = (input: {
+  approvalStatus?: string | null;
+  networkStatus?: string | null;
+  networkResult?: string | null;
+}) =>
+  input.approvalStatus === "SUBMITTED" &&
+  input.networkStatus === "VALIDATED" &&
+  (!input.networkResult || input.networkResult === "tesSUCCESS");
 
 export const resolveInheritanceNextAction = (input: {
   claimStatus?: string | null;
@@ -155,6 +202,73 @@ export const resolveInheritanceNextAction = (input: {
     };
   }
   return null;
+};
+
+export const resolvePrepareDisabledReason = (input: {
+  caseData: CaseSummary | null;
+  signerStatusKey: string;
+  totalHeirCount: number;
+  unverifiedHeirCount: number;
+  approvalTx: ApprovalTxSummary | null;
+}) => {
+  if (!input.caseData) return "ケース情報が取得できません。";
+  if (input.caseData.stage !== "IN_PROGRESS") {
+    return "相続中になると準備できます。";
+  }
+  if (input.signerStatusKey === "FAILED") {
+    return "同意の準備に失敗しました。運営へご連絡ください。";
+  }
+  const approvalPrepared =
+    input.approvalTx?.status === "PREPARED" ||
+    input.approvalTx?.status === "SUBMITTED" ||
+    Boolean(input.approvalTx?.txJson);
+  if (input.signerStatusKey === "SET" && approvalPrepared) {
+    return "同意の準備は完了しています。";
+  }
+  if (input.totalHeirCount === 0) {
+    return "相続人が登録されていないため準備できません。";
+  }
+  if (input.unverifiedHeirCount > 0) {
+    return `相続人の受取用ウォレットが全員分確認済みになると準備できます。未確認: ${input.unverifiedHeirCount}人`;
+  }
+  return null;
+};
+
+export const resolveApprovalTxErrorMessage = (error: any) => {
+  const code = error?.data?.code;
+  if (code === "NOT_FOUND") return null;
+  return error?.message ?? "署名対象の取得に失敗しました";
+};
+
+export const resolveSignerFromLabel = () => "送金元：被相続人の相続用ウォレット";
+
+export const buildSignerEntryDisplayList = (input: {
+  entries?: Array<{ account: string; weight: number }> | null;
+  systemSignerAddress?: string | null;
+  heirWalletAddress?: string | null;
+}) => {
+  const entries = Array.isArray(input.entries) ? input.entries : [];
+  const systemSigner = input.systemSignerAddress?.trim() ?? "";
+  const heirWallet = input.heirWalletAddress?.trim() ?? "";
+  const items = entries
+    .map((entry) => {
+      const account = typeof entry.account === "string" ? entry.account : "";
+      if (!account) return null;
+      const isSystem = Boolean(systemSigner && account === systemSigner);
+      const isMine = Boolean(heirWallet && account === heirWallet);
+      const label = isSystem
+        ? "システム署名者"
+        : isMine
+          ? "あなたの受取用ウォレット"
+          : "相続人の受取用ウォレット";
+      return { account, label, isSystem, isMine };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const priority = (item: { isSystem: boolean; isMine: boolean }) =>
+    item.isSystem ? 0 : item.isMine ? 1 : 2;
+  return items.sort(
+    (a, b) => priority(a) - priority(b) || a.account.localeCompare(b.account)
+  );
 };
 
 const encodeMemoHex = (memo: string) => {
@@ -307,6 +421,10 @@ export default function CaseDetailPage({
   const [approvalTx, setApprovalTx] = useState<ApprovalTxSummary | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [distribution, setDistribution] = useState<DistributionState | null>(null);
+  const [distributionLoading, setDistributionLoading] = useState(false);
+  const [distributionError, setDistributionError] = useState<string | null>(null);
+  const [distributionExecuting, setDistributionExecuting] = useState(false);
   const [prepareLoading, setPrepareLoading] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [prepareSuccess, setPrepareSuccess] = useState<string | null>(null);
@@ -315,6 +433,7 @@ export default function CaseDetailPage({
   const [signerSignedHash, setSignerSignedHash] = useState("");
   const [signerSigning, setSignerSigning] = useState(false);
   const [signerSubmitting, setSignerSubmitting] = useState(false);
+  const autoSignKeyRef = useRef("");
   const tabItems = useMemo(() => {
     if (isOwner === false) {
       return [
@@ -369,14 +488,56 @@ export default function CaseDetailPage({
   const approvalStatusLabel = approvalTx?.status
     ? approvalStatusLabels[approvalTx.status] ?? approvalTx.status
     : "未生成";
+  const approvalSubmittedTxHash = approvalTx?.submittedTxHash ?? "";
+  const approvalNetworkStatus = approvalTx?.networkStatus ?? null;
+  const approvalNetworkStatusLabel = approvalNetworkStatus
+    ? approvalNetworkStatusLabels[approvalNetworkStatus] ?? approvalNetworkStatus
+    : approvalTx?.status === "SUBMITTED"
+      ? "検証待ち"
+      : "-";
+  const approvalNetworkDetail = approvalTx?.networkResult
+    ? `${approvalNetworkStatusLabel} (${approvalTx.networkResult})`
+    : approvalNetworkStatusLabel;
+  const approvalCompleted = isApprovalCompleted({
+    approvalStatus: approvalTx?.status ?? null,
+    networkStatus: approvalNetworkStatus,
+    networkResult: approvalTx?.networkResult ?? null
+  });
+  const canReprepareApproval = approvalNetworkStatus === "EXPIRED";
   const approvalTxJson = approvalTx?.txJson ?? null;
   const approvalTxJsonText = approvalTxJson ? JSON.stringify(approvalTxJson, null, 2) : "";
-  const approvalAmountCopy =
-    typeof approvalTxJson?.Amount === "string"
-      ? approvalTxJson.Amount
-      : approvalTxJson?.Amount
-        ? JSON.stringify(approvalTxJson.Amount)
-        : "";
+  const approvalAmountDrops =
+    typeof approvalTxJson?.Amount === "string" ? approvalTxJson.Amount : "";
+  const approvalAmountXrp = approvalAmountDrops
+    ? dropsToXrpInput(approvalAmountDrops)
+    : "";
+  const signerFromLabel = resolveSignerFromLabel();
+  const signerToLabel = "送金先：システムのウォレット";
+  const approvalSummaryAmount = approvalAmountDrops
+    ? `${approvalAmountDrops} drops (${approvalAmountXrp} XRP)`
+    : formatTxAmount(approvalTxJson?.Amount);
+  const signerTxSummary = approvalTxJson
+    ? `送金元: ${signerFromLabel.replace("送金元：", "")} / 送金先: ${signerToLabel.replace(
+        "送金先：",
+        ""
+      )} / 送金額: ${approvalSummaryAmount}`
+    : "";
+  const signerEntryDisplayList = useMemo(
+    () =>
+      buildSignerEntryDisplayList({
+        entries: signerList?.entries,
+        systemSignerAddress: signerList?.systemSignerAddress ?? null,
+        heirWalletAddress: heirWallet?.address ?? null
+      }),
+    [signerList?.entries, signerList?.systemSignerAddress, heirWallet?.address]
+  );
+  const multiSignNote = signerList?.requiredCount
+    ? `相続人の同意が${signerList.requiredCount}人以上とシステム署名が揃うと成立します。`
+    : "相続人の過半数の同意とシステム署名が揃うと成立します。";
+  const showSignerDetails = shouldShowSignerDetails(approvalTx?.status ?? null);
+  const approvalSubmitted = Boolean(
+    approvalTx?.status === "SUBMITTED" || approvalSubmittedTxHash
+  );
   const signerCompleted = Boolean(
     signerList &&
       Number.isFinite(signerList.signaturesCount) &&
@@ -398,26 +559,73 @@ export default function CaseDetailPage({
   ];
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
-  const prepareDisabledReason = useMemo(() => {
+  const prepareDisabledReason = useMemo(
+    () =>
+      resolvePrepareDisabledReason({
+        caseData,
+        signerStatusKey,
+        totalHeirCount,
+        unverifiedHeirCount,
+        approvalTx
+      }),
+    [caseData, signerStatusKey, totalHeirCount, unverifiedHeirCount, approvalTx]
+  );
+  const canPollApprovalStatus = useMemo(
+    () =>
+      shouldPollApprovalStatus({
+        isHeir,
+        tab,
+        caseId,
+        canAccessDeathClaims,
+        caseStage: caseData?.stage ?? null,
+        signerStatus: signerStatusKey,
+        approvalStatus: approvalTx?.status ?? null
+      }),
+    [
+      isHeir,
+      tab,
+      caseId,
+      canAccessDeathClaims,
+      caseData?.stage,
+      signerStatusKey,
+      approvalTx?.status
+    ]
+  );
+  const canPrepareApproval = !prepareDisabledReason;
+  const distributionStatusLabel = distribution?.status
+    ? distributionStatusLabels[distribution.status] ?? distribution.status
+    : "未取得";
+  const distributionDisabledReason = useMemo(() => {
     if (!caseData) return "ケース情報が取得できません。";
     if (caseData.stage !== "IN_PROGRESS") {
-      return "相続中になると準備できます。";
+      return "相続中になると分配を実行できます。";
     }
-    if (signerStatusKey === "FAILED") {
-      return "同意の準備に失敗しました。運営へご連絡ください。";
-    }
-    if (signerStatusKey === "SET") {
-      return "同意の準備は完了しています。";
+    if (!approvalCompleted) {
+      return "相続実行の同意が完了すると分配を実行できます。";
     }
     if (totalHeirCount === 0) {
-      return "相続人が登録されていないため準備できません。";
+      return "相続人が登録されていないため実行できません。";
     }
     if (unverifiedHeirCount > 0) {
-      return `相続人の受取用ウォレットが全員分確認済みになると準備できます。未確認: ${unverifiedHeirCount}人`;
+      return `相続人の受取用ウォレットが全員分確認済みになると実行できます。未確認: ${unverifiedHeirCount}人`;
+    }
+    if (distributionLoading) {
+      return "分配状況を取得中です。";
+    }
+    if (distribution?.status === "RUNNING") {
+      return "分配処理が進行中です。";
     }
     return null;
-  }, [caseData, signerStatusKey, totalHeirCount, unverifiedHeirCount]);
-  const canPrepareApproval = !prepareDisabledReason;
+  }, [
+    caseData,
+    approvalCompleted,
+    totalHeirCount,
+    unverifiedHeirCount,
+    distribution?.status,
+    distributionLoading
+  ]);
+  const canExecuteDistribution =
+    !distributionDisabledReason && !distributionExecuting;
   const signerDisabledReason = useMemo(() => {
     if (!caseData) return "ケース情報が取得できません。";
     if (caseData.stage !== "IN_PROGRESS") {
@@ -442,7 +650,14 @@ export default function CaseDetailPage({
       return "署名対象の生成に失敗しました。";
     }
     if (approvalTx.status === "SUBMITTED") {
-      return "相続実行は送信済みです。";
+      if (approvalNetworkStatus === "EXPIRED") {
+        return "相続実行の送信が期限切れのため、再準備が必要です。";
+      }
+      const networkLabel =
+        approvalNetworkStatusLabel && approvalNetworkStatusLabel !== "-"
+          ? `（${approvalNetworkStatusLabel}）`
+          : "";
+      return `相続実行は送信済みです${networkLabel}。`;
     }
     if (!hasHeirWallet) {
       return "受取用ウォレットの登録が必要です。";
@@ -467,10 +682,15 @@ export default function CaseDetailPage({
     hasHeirWallet,
     isHeirWalletVerified,
     signerCompleted,
-    signerList?.signedByMe
+    signerList?.signedByMe,
+    approvalNetworkStatusLabel,
+    approvalNetworkStatus
   ]);
   const canSubmitSignature =
-    !signerDisabledReason && !signerSubmitting && signerSignedBlob.trim().length > 0;
+    !signerDisabledReason &&
+    !signerSubmitting &&
+    !signerSigning &&
+    signerSignedBlob.trim().length > 0;
 
   useEffect(() => {
     let active = true;
@@ -614,9 +834,29 @@ export default function CaseDetailPage({
       const data = await getApprovalTx(caseId);
       setApprovalTx(data);
     } catch (err: any) {
-      setApprovalError(err?.message ?? "署名対象の取得に失敗しました");
+      const message = resolveApprovalTxErrorMessage(err);
+      if (!message) {
+        setApprovalTx(null);
+        setApprovalError(null);
+        return;
+      }
+      setApprovalError(message);
     } finally {
       setApprovalLoading(false);
+    }
+  }, [caseId]);
+
+  const fetchDistributionState = useCallback(async () => {
+    if (!caseId) return;
+    setDistributionLoading(true);
+    setDistributionError(null);
+    try {
+      const data = await getDistributionState(caseId);
+      setDistribution(data);
+    } catch (err: any) {
+      setDistributionError(err?.message ?? "分配状況の取得に失敗しました");
+    } finally {
+      setDistributionLoading(false);
     }
   }, [caseId]);
 
@@ -644,6 +884,37 @@ export default function CaseDetailPage({
     fetchApprovalTx
   ]);
 
+  useEffect(() => {
+    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+      return;
+    }
+    if (caseData?.stage !== "IN_PROGRESS") return;
+    void fetchDistributionState();
+  }, [
+    isHeir,
+    tab,
+    caseId,
+    canAccessDeathClaims,
+    caseData?.stage,
+    fetchDistributionState
+  ]);
+
+  useEffect(() => {
+    if (!canPollApprovalStatus) return;
+    const intervalId = window.setInterval(() => {
+      void fetchApprovalTx();
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [canPollApprovalStatus, fetchApprovalTx]);
+
+  useEffect(() => {
+    if (distribution?.status !== "RUNNING") return;
+    const intervalId = window.setInterval(() => {
+      void fetchDistributionState();
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [distribution?.status, fetchDistributionState]);
+
   const handlePrepareApproval = async () => {
     if (!caseId) return;
     setPrepareLoading(true);
@@ -651,8 +922,14 @@ export default function CaseDetailPage({
     setPrepareSuccess(null);
     try {
       await prepareApprovalTx(caseId);
-      setPrepareSuccess("同意の準備が完了しました。署名に進んでください。");
+      setPrepareSuccess(
+        "同意の準備が完了しました。シークレットを入力して署名を進めてください。"
+      );
+      setSignerSignedBlob("");
+      setSignerSignedHash("");
+      autoSignKeyRef.current = "";
       await fetchSignerList();
+      await fetchApprovalTx();
     } catch (err: any) {
       const code = err?.data?.code;
       if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
@@ -666,6 +943,51 @@ export default function CaseDetailPage({
       }
     } finally {
       setPrepareLoading(false);
+    }
+  };
+
+  const handleReprepareApproval = async () => {
+    if (!caseId) return;
+    setPrepareLoading(true);
+    setPrepareError(null);
+    setPrepareSuccess(null);
+    try {
+      await prepareApprovalTx(caseId, { force: true });
+      setPrepareSuccess(
+        "同意の再準備が完了しました。シークレットを入力して署名を進めてください。"
+      );
+      setSignerSignedBlob("");
+      setSignerSignedHash("");
+      autoSignKeyRef.current = "";
+      await fetchSignerList();
+      await fetchApprovalTx();
+    } catch (err: any) {
+      const code = err?.data?.code;
+      if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
+        setPrepareError("相続人の受取用ウォレットが全員分確認済みになると準備できます。");
+      } else if (code === "HEIR_MISSING") {
+        setPrepareError("相続人が登録されていないため準備できません。");
+      } else if (code === "NOT_READY") {
+        setPrepareError("送信中のため再準備できません。");
+      } else {
+        setPrepareError(err?.message ?? "同意の再準備に失敗しました");
+      }
+    } finally {
+      setPrepareLoading(false);
+    }
+  };
+
+  const handleExecuteDistribution = async () => {
+    if (!caseId) return;
+    setDistributionExecuting(true);
+    setDistributionError(null);
+    try {
+      const data = await executeDistribution(caseId);
+      setDistribution(data);
+    } catch (err: any) {
+      setDistributionError(err?.message ?? "分配の実行に失敗しました");
+    } finally {
+      setDistributionExecuting(false);
     }
   };
 
@@ -798,28 +1120,67 @@ export default function CaseDetailPage({
     }
   };
 
-  const handleSignApprovalTx = () => {
-    if (!approvalTx?.txJson) {
-      setSignerError("署名対象トランザクションが取得できません");
+  const signApprovalTx = useCallback(
+    (secret: string) => {
+      if (!approvalTx?.txJson) {
+        setSignerError("署名対象トランザクションが取得できません");
+        return false;
+      }
+      setSignerSigning(true);
+      setSignerError(null);
+      try {
+        const result = signForMultisign(approvalTx.txJson, secret);
+        setSignerSignedBlob(result.blob);
+        setSignerSignedHash(result.hash);
+        return true;
+      } catch (err: any) {
+        setSignerSignedBlob("");
+        setSignerSignedHash("");
+        setSignerError(err?.message ?? "署名の生成に失敗しました");
+        return false;
+      } finally {
+        setSignerSigning(false);
+      }
+    },
+    [approvalTx?.txJson]
+  );
+
+  useEffect(() => {
+    if (!approvalTx?.txJson || signerDisabledReason !== null || signerList?.signedByMe) {
+      autoSignKeyRef.current = "";
+      setSignerSignedBlob("");
+      setSignerSignedHash("");
+      return;
+    }
+    if (signerSigning || signerSubmitting) {
       return;
     }
     const secret = signerSeed.trim();
     if (!secret) {
-      setSignerError("シークレットを入力してください");
+      autoSignKeyRef.current = "";
+      setSignerSignedBlob("");
+      setSignerSignedHash("");
       return;
     }
-    setSignerSigning(true);
-    setSignerError(null);
-    try {
-      const result = signForMultisign(approvalTx.txJson, secret);
-      setSignerSignedBlob(result.blob);
-      setSignerSignedHash(result.hash);
-    } catch (err: any) {
-      setSignerError(err?.message ?? "署名の生成に失敗しました");
-    } finally {
-      setSignerSigning(false);
+    const autoSignKey = `${secret}::${approvalTxJsonText}`;
+    if (autoSignKeyRef.current === autoSignKey) {
+      return;
     }
-  };
+    autoSignKeyRef.current = autoSignKey;
+    const ok = signApprovalTx(secret);
+    if (!ok) {
+      autoSignKeyRef.current = "";
+    }
+  }, [
+    approvalTx?.txJson,
+    approvalTxJsonText,
+    signerDisabledReason,
+    signerList?.signedByMe,
+    signerSeed,
+    signerSigning,
+    signerSubmitting,
+    signApprovalTx
+  ]);
 
   const handleSubmitSignerSignature = async () => {
     if (!caseId) return;
@@ -1106,16 +1467,21 @@ export default function CaseDetailPage({
                 />
               </div>
             </details>
-            <div className={styles.signerSection}>
-              <div className={styles.signerHeader}>
-                <div className={styles.signerHeaderMain}>
-                  <div className={styles.signerTitle}>相続実行の同意</div>
-                  <div className={styles.signerHint}>
+            <details className={styles.collapsible} open>
+              <summary className={styles.collapsibleSummary}>
+                <div className={styles.collapsibleText}>
+                  <div className={styles.collapsibleTitle}>相続実行の同意</div>
+                  <div className={styles.collapsibleHint}>
                     システム+相続人の過半数の署名が揃うと相続実行が進みます。
                   </div>
                 </div>
-                <span className={styles.signerBadge}>{signerStatusLabel}</span>
-              </div>
+                <span className={styles.collapsibleMeta}>
+                  <span className={styles.signerBadge}>{signerStatusLabel}</span>
+                  <span className={styles.collapsibleChevron} aria-hidden="true" />
+                </span>
+              </summary>
+              <div className={styles.collapsibleBody}>
+                <div className={styles.signerSection}>
               <div className={styles.signerPrepare}>
                 <div className={styles.signerPrepareTitle}>同意の準備</div>
                 <div className={styles.signerPrepareHint}>
@@ -1159,213 +1525,426 @@ export default function CaseDetailPage({
                     {signerList?.signedByMe ? "署名済み" : "未署名"}
                   </div>
                 </div>
-              </div>
-              <div className={styles.signerTxSection}>
-                <div className={styles.signerTxHeader}>
-                  <div className={styles.signerTxHeaderMain}>
-                    <div className={styles.signerTxTitle}>署名対象トランザクション</div>
-                    <div className={styles.signerTxHint}>
-                      送金内容とMemoが正しいことを確認してください。
-                    </div>
+                {approvalCompleted ? (
+                  <div className={styles.signerRow}>
+                    <div className={styles.signerLabel}>相続状態</div>
+                    <div className={styles.signerValue}>相続完了</div>
                   </div>
-                  <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
-                </div>
-                {approvalLoading ? (
-                  <div className={styles.muted}>署名対象を読み込み中...</div>
                 ) : null}
-                {approvalTxJson ? (
-                  <>
-                    <div className={styles.signerTxGrid}>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>送金元</div>
-                          <div className={styles.signerTxValue}>
-                            {approvalTxJson.Account ?? "-"}
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy("送金元", String(approvalTxJson.Account ?? ""))
-                          }
-                          aria-label="送金元をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>送金先</div>
-                          <div className={styles.signerTxValue}>
-                            {approvalTxJson.Destination ?? "-"}
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy(
-                              "送金先",
-                              String(approvalTxJson.Destination ?? "")
-                            )
-                          }
-                          aria-label="送金先をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>送金額</div>
-                          <div className={styles.signerTxValue}>
-                            {formatTxAmount(approvalTxJson.Amount)}
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy("送金額", approvalAmountCopy)
-                          }
-                          aria-label="送金額をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>Memo</div>
-                          <div className={styles.signerTxValue}>{approvalTx?.memo ?? "-"}</div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() => handleCopy("Memo", approvalTx?.memo ?? "")}
-                          aria-label="Memoをコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>システム署名</div>
-                          <div className={styles.signerTxValue}>
-                            {approvalTx?.systemSignedHash ?? "-"}
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy("システム署名", approvalTx?.systemSignedHash ?? "")
-                          }
-                          aria-label="システム署名をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className={styles.signerTxJson}>
-                      <div className={styles.signerTxJsonHeader}>
-                        <div className={styles.signerTxLabel}>Tx JSON</div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() => handleCopy("Tx JSON", approvalTxJsonText)}
-                          aria-label="Tx JSONをコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <pre className={styles.signerTxJsonBody}>{approvalTxJsonText}</pre>
-                    </div>
-                  </>
-                ) : (
-                  <div className={styles.muted}>署名対象が未生成です。</div>
-                )}
               </div>
-              <div className={styles.signerGuide}>
-                <div className={styles.signerGuideTitle}>署名の流れ</div>
-                <ol className={styles.signerGuideList}>
-                  <li>
-                    署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配する
-                    XRPLトランザクションです。
-                  </li>
-                  <li>登録済みの相続人ウォレットでMultiSign署名を行います。</li>
-                  <li>
-                    シークレットはブラウザ内でのみ利用し、サーバーには送信されません。
-                  </li>
-                  <li>署名済みBlobを送信すると同意が反映されます。</li>
-                </ol>
-              </div>
-              <div className={styles.signerActions}>
-                <div className={styles.signerActionBlock}>
-                  <FormField label="シークレット">
-                    <Input
-                      value={signerSeed}
-                      onChange={(event) => setSignerSeed(event.target.value)}
-                      placeholder="s..."
-                      type="password"
-                      disabled={!approvalTxJson || signerDisabledReason !== null}
-                    />
-                  </FormField>
-                  <div className={styles.signerActionRow}>
-                    <Button
-                      type="button"
-                      onClick={handleSignApprovalTx}
-                      disabled={!approvalTxJson || signerSigning || signerDisabledReason !== null}
-                    >
-                      {signerSigning ? "署名中..." : "署名を生成"}
-                    </Button>
-                    {signerSignedHash ? (
-                      <div className={styles.signerHashNote}>
-                        署名ハッシュ(参考): {signerSignedHash}
-                      </div>
-                    ) : null}
+              <div className={styles.signerMultiSign}>
+                <div className={styles.signerMultiSignTitle}>
+                  MultiSignのしくみ（アドレス）
+                </div>
+                <div className={styles.signerMultiSignBody}>
+                  <div className={styles.signerMultiSignRow}>
+                    <div className={styles.signerMultiSignLabel}>送金元</div>
+                    <div className={styles.signerMultiSignValue}>
+                      {approvalTxJson?.Account ?? "-"}
+                    </div>
                   </div>
-                  <div className={styles.signerSecretNote}>
-                    シークレットはこの端末内だけで使われます。
+                  <div className={styles.signerMultiSignRow}>
+                    <div className={styles.signerMultiSignLabel}>署名者</div>
+                    {signerEntryDisplayList.length ? (
+                      <ul className={styles.signerMultiSignList}>
+                        {signerEntryDisplayList.map((entry) => (
+                          <li
+                            key={`${entry.account}-${entry.label}`}
+                            className={styles.signerMultiSignItem}
+                          >
+                            <div className={styles.signerMultiSignItemLabel}>
+                              {entry.label}
+                            </div>
+                            <div className={styles.signerMultiSignItemValue}>
+                              {entry.account}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className={styles.muted}>
+                        署名の準備が完了すると表示します。
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.signerMultiSignRow}>
+                    <div className={styles.signerMultiSignLabel}>送金先</div>
+                    <div className={styles.signerMultiSignValue}>
+                      {approvalTxJson?.Destination ?? "-"}
+                    </div>
                   </div>
                 </div>
-                <div className={styles.signerActionBlock}>
-                  <FormField label="署名済みBlob">
-                    <Textarea
-                      value={signerSignedBlob}
-                      onChange={(event) => setSignerSignedBlob(event.target.value)}
-                      placeholder="署名済みBlobを貼り付け"
-                      rows={4}
-                      disabled={signerDisabledReason !== null}
-                    />
-                  </FormField>
-                  <div className={styles.signerActionRow}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className={styles.copyButton}
-                      onClick={() => handleCopy("署名済みBlob", signerSignedBlob)}
-                      aria-label="署名済みBlobをコピー"
-                    >
-                      <Copy />
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleSubmitSignerSignature}
-                      disabled={!canSubmitSignature}
-                    >
-                      {signerSubmitting ? "送信中..." : "署名を送信"}
-                    </Button>
+                <div className={styles.signerMultiSignNote}>{multiSignNote}</div>
+              </div>
+              {showSignerDetails ? (
+                <div className={styles.signerTxSection}>
+                  <div className={styles.signerTxHeader}>
+                    <div className={styles.signerTxHeaderMain}>
+                      <div className={styles.signerTxTitle}>署名内容</div>
+                      <div className={styles.signerTxHint}>
+                        送金内容とMemoが正しいことを確認してください。
+                      </div>
+                    </div>
+                    <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
+                  </div>
+                  {approvalSubmitted ? (
+                    <div className={styles.signerTxStatus}>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>送信Tx</div>
+                          <div className={styles.signerTxValue}>
+                            {approvalSubmittedTxHash || "-"}
+                          </div>
+                        </div>
+                        {approvalSubmittedTxHash ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={styles.copyButton}
+                            onClick={() => handleCopy("送信Tx", approvalSubmittedTxHash)}
+                            aria-label="送信Txをコピー"
+                          >
+                            <Copy />
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className={styles.signerTxRow}>
+                        <div>
+                          <div className={styles.signerTxLabel}>送信後の状態</div>
+                          <div className={styles.signerTxValue}>
+                            {approvalNetworkDetail}
+                          </div>
+                        </div>
+                        {canReprepareApproval ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleReprepareApproval}
+                            disabled={prepareLoading}
+                          >
+                            再準備
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void fetchApprovalTx()}
+                          disabled={approvalLoading || !canPollApprovalStatus}
+                        >
+                          再取得
+                        </Button>
+                      </div>
+                      <div className={styles.signerTxNote}>
+                        {canReprepareApproval
+                          ? "期限切れのため再準備が必要です。"
+                          : "1分ごとに自動更新します。"}
+                      </div>
+                    </div>
+                  ) : null}
+                  {approvalLoading ? (
+                    <div className={styles.muted}>署名対象を読み込み中...</div>
+                  ) : null}
+                  {approvalTxJson ? (
+                    <details className={styles.collapsible}>
+                      <summary className={styles.collapsibleSummary}>
+                        <div className={styles.collapsibleText}>
+                          <div className={styles.collapsibleTitle}>署名内容を確認</div>
+                          <div className={styles.collapsibleHint}>{signerTxSummary}</div>
+                        </div>
+                        <span className={styles.collapsibleChevron} aria-hidden="true" />
+                      </summary>
+                      <div className={styles.collapsibleBody}>
+                        <div className={styles.signerTxGrid}>
+                          <div className={styles.signerTxRow}>
+                            <div>
+                              <div className={styles.signerTxLabel}>{signerFromLabel}</div>
+                              <div className={styles.signerTxValue}>
+                                {approvalTxJson.Account ?? "-"}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() =>
+                                handleCopy("送金元", String(approvalTxJson.Account ?? ""))
+                              }
+                              aria-label="送金元をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                          <div className={styles.signerTxRow}>
+                            <div>
+                              <div className={styles.signerTxLabel}>{signerToLabel}</div>
+                              <div className={styles.signerTxValue}>
+                                {approvalTxJson.Destination ?? "-"}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() =>
+                                handleCopy(
+                                  "送金先",
+                                  String(approvalTxJson.Destination ?? "")
+                                )
+                              }
+                              aria-label="送金先をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                          <div className={styles.signerTxRow}>
+                            <div>
+                              <div className={styles.signerTxLabel}>Memo</div>
+                              <div className={styles.signerTxValue}>
+                                {approvalTx?.memo ?? "-"}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() => handleCopy("Memo", approvalTx?.memo ?? "")}
+                              aria-label="Memoをコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className={styles.amountGrid}>
+                          <div className={styles.amountField}>
+                            <FormField label="Amount (drops)">
+                              <Input
+                                value={approvalAmountDrops}
+                                placeholder="-"
+                                readOnly
+                              />
+                            </FormField>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() => handleCopy("Amount (drops)", approvalAmountDrops)}
+                              aria-label="Amount (drops)をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                          <div className={styles.amountField}>
+                            <FormField label="Amount (XRP)">
+                              <Input
+                                value={approvalAmountXrp}
+                                placeholder="-"
+                                readOnly
+                              />
+                            </FormField>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className={styles.copyButton}
+                              onClick={() => handleCopy("Amount (XRP)", approvalAmountXrp)}
+                              aria-label="Amount (XRP)をコピー"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  ) : (
+                    <div className={styles.muted}>署名対象が未生成です。</div>
+                  )}
+                </div>
+              ) : (
+                <div className={styles.signerTxSection}>
+                  <div className={styles.signerTxHeader}>
+                    <div className={styles.signerTxHeaderMain}>
+                      <div className={styles.signerTxTitle}>送信後の状態</div>
+                      <div className={styles.signerTxHint}>
+                        ネットワーク反映の状況を確認できます。
+                      </div>
+                    </div>
+                    <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
+                  </div>
+                  <div className={styles.signerTxStatus}>
+                    <div className={styles.signerTxRow}>
+                      <div>
+                        <div className={styles.signerTxLabel}>送信Tx</div>
+                        <div className={styles.signerTxValue}>
+                          {approvalSubmittedTxHash || "-"}
+                        </div>
+                      </div>
+                      {approvalSubmittedTxHash ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={styles.copyButton}
+                          onClick={() => handleCopy("送信Tx", approvalSubmittedTxHash)}
+                          aria-label="送信Txをコピー"
+                        >
+                          <Copy />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className={styles.signerTxRow}>
+                      <div>
+                        <div className={styles.signerTxLabel}>送信後の状態</div>
+                        <div className={styles.signerTxValue}>
+                          {approvalNetworkDetail}
+                        </div>
+                      </div>
+                      {canReprepareApproval ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleReprepareApproval}
+                          disabled={prepareLoading}
+                        >
+                          再準備
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void fetchApprovalTx()}
+                        disabled={approvalLoading || !canPollApprovalStatus}
+                      >
+                        再取得
+                      </Button>
+                    </div>
+                    <div className={styles.signerTxNote}>
+                      {canReprepareApproval
+                        ? "期限切れのため再準備が必要です。"
+                        : "1分ごとに自動更新します。"}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+              {showSignerDetails ? (
+                <div className={styles.signerGuide}>
+                  <div className={styles.signerGuideTitle}>署名の流れ</div>
+                  <ol className={styles.signerGuideList}>
+                    <li>
+                      署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配する
+                      XRPLトランザクションです。
+                    </li>
+                    <li>登録済みの相続人ウォレットでMultiSign署名を行います。</li>
+                    <li>
+                      シークレットを入力すると署名を自動で作成します（サーバーには送信しません）。
+                    </li>
+                    <li>署名を送信すると同意が反映されます。</li>
+                    <li>必要な署名が揃うと相続実行の送信が自動で行われます。</li>
+                  </ol>
+                </div>
+              ) : null}
+              {shouldShowSignerActions(approvalTx?.status ?? null) ? (
+                <div className={styles.signerActions}>
+                  <div className={styles.signerActionBlock}>
+                    <FormField label="シークレット">
+                      <Input
+                        value={signerSeed}
+                        onChange={(event) => setSignerSeed(event.target.value)}
+                        placeholder="s..."
+                        type="password"
+                        disabled={!approvalTxJson || signerDisabledReason !== null}
+                      />
+                    </FormField>
+                    <div className={styles.signerAutoNote}>
+                      {signerSigning
+                        ? "署名を作成中です..."
+                        : signerSignedBlob
+                          ? "署名の準備ができました。"
+                          : "シークレットを入力すると署名を自動で作成します。"}
+                    </div>
+                  </div>
+                  <div className={styles.signerActionBlock}>
+                    <div className={styles.signerActionRow}>
+                      <Button
+                        type="button"
+                        onClick={handleSubmitSignerSignature}
+                        disabled={!canSubmitSignature}
+                      >
+                        {signerSubmitting ? "送信中..." : "署名を送信"}
+                      </Button>
+                    </div>
+                    <div className={styles.signerSecretNote}>
+                      シークレットはこの端末内だけで使われます。
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {signerDisabledReason ? (
                 <div className={styles.signerNote}>{signerDisabledReason}</div>
+              ) : null}
+                </div>
+              </div>
+            </details>
+            <div className={styles.distributionSection}>
+              <div className={styles.distributionHeader}>
+                <div className={styles.distributionHeaderMain}>
+                  <div className={styles.distributionTitle}>分配を実行</div>
+                  <div className={styles.distributionHint}>
+                    相続用ウォレットから受取用ウォレットへ送金します。
+                  </div>
+                </div>
+                <span className={styles.distributionBadge}>{distributionStatusLabel}</span>
+              </div>
+              {distributionError ? (
+                <FormAlert variant="error">{distributionError}</FormAlert>
+              ) : null}
+              <div className={styles.signerGrid}>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>進捗</div>
+                  <div className={styles.signerValue}>
+                    {distribution?.totalCount
+                      ? `${distribution.successCount} / ${distribution.totalCount} 件`
+                      : "-"}
+                  </div>
+                </div>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>失敗</div>
+                  <div className={styles.signerValue}>
+                    {distribution?.failedCount ?? 0} 件
+                  </div>
+                </div>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>スキップ</div>
+                  <div className={styles.signerValue}>
+                    {distribution?.skippedCount ?? 0} 件
+                  </div>
+                </div>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>エスカレ</div>
+                  <div className={styles.signerValue}>
+                    {distribution?.escalationCount ?? 0} 件
+                  </div>
+                </div>
+              </div>
+              <div className={styles.distributionActions}>
+                <Button
+                  type="button"
+                  onClick={handleExecuteDistribution}
+                  disabled={!canExecuteDistribution}
+                >
+                  {distributionExecuting
+                    ? "実行中..."
+                    : distribution?.status === "PARTIAL" || distribution?.status === "FAILED"
+                      ? "再開"
+                      : "分配を実行"}
+                </Button>
+                {distribution?.status === "RUNNING" ? (
+                  <span className={styles.distributionNote}>1分ごとに自動更新します。</span>
+                ) : null}
+              </div>
+              {distributionDisabledReason ? (
+                <div className={styles.distributionNote}>{distributionDisabledReason}</div>
               ) : null}
             </div>
           </div>
