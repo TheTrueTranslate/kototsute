@@ -22,8 +22,6 @@ import {
   getPlan,
   listPlanAssets,
   removePlanHeir,
-  sharePlan,
-  unsharePlan,
   updatePlanAllocations,
   updatePlanTitle,
   type PlanAsset,
@@ -32,8 +30,8 @@ import {
 import styles from "../../styles/plansPage.module.css";
 
 const statusLabels: Record<string, string> = {
-  DRAFT: "下書き",
-  SHARED: "共有中",
+  DRAFT: "作成中",
+  SHARED: "有効",
   INACTIVE: "無効"
 };
 
@@ -66,8 +64,6 @@ export default function PlanEditPage() {
   const [addingHeirUid, setAddingHeirUid] = useState<string | null>(null);
   const [removingHeirUid, setRemovingHeirUid] = useState<string | null>(null);
   const [savingAllocationId, setSavingAllocationId] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [unsharing, setUnsharing] = useState(false);
   const [heirModalOpen, setHeirModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
 
@@ -306,40 +302,6 @@ export default function PlanEditPage() {
     }
   };
 
-  const handleShare = async () => {
-    if (!caseId || !planId) {
-      setError("指図IDが取得できません");
-      return;
-    }
-    setSharing(true);
-    setError(null);
-    try {
-      await sharePlan(caseId, planId);
-      await refreshPlan();
-    } catch (err: any) {
-      setError(err?.message ?? "指図の共有に失敗しました");
-    } finally {
-      setSharing(false);
-    }
-  };
-
-  const handleUnshare = async () => {
-    if (!caseId || !planId) {
-      setError("指図IDが取得できません");
-      return;
-    }
-    setUnsharing(true);
-    setError(null);
-    try {
-      await unsharePlan(caseId, planId);
-      await refreshPlan();
-    } catch (err: any) {
-      setError(err?.message ?? "共有の解除に失敗しました");
-    } finally {
-      setUnsharing(false);
-    }
-  };
-
   const canSaveTitle =
     Boolean(title.trim()) && title.trim() !== (plan?.title ?? "") && !savingTitle;
 
@@ -405,7 +367,7 @@ export default function PlanEditPage() {
         </div>
         <div className={styles.calloutBody}>
           <div className={styles.calloutTitle}>編集の流れ</div>
-          <div className={styles.calloutText}>基本情報 → 相続人 → 資産 → 配分 → 共有</div>
+          <div className={styles.calloutText}>基本情報 → 相続人 → 資産 → 配分</div>
         </div>
       </div>
 
@@ -423,9 +385,6 @@ export default function PlanEditPage() {
             <Button type="button" onClick={handleSaveTitle} disabled={!canSaveTitle}>
               {savingTitle ? "保存中..." : "タイトルを更新"}
             </Button>
-            {plan?.status === "SHARED" ? (
-              <span className={styles.badgeMuted}>共有中の指図です</span>
-            ) : null}
           </div>
         </div>
       </div>
@@ -754,40 +713,6 @@ export default function PlanEditPage() {
         )}
       </div>
 
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>5. 共有</h2>
-        <div className={styles.sectionBody}>
-          <div className={styles.shareNotes}>
-            <p className={styles.helper}>
-              共有すると相続人の画面に指図が表示されます。共有済みの指図は「共有中」として扱われます。
-            </p>
-            <p className={styles.helper}>
-              共有済みの指図同士で同じ資産を含むことはできません。
-            </p>
-          </div>
-          <div className={styles.inlineRow}>
-            <Button
-              type="button"
-              onClick={handleShare}
-              disabled={sharing || plan?.status === "SHARED" || planAssets.length === 0}
-            >
-              {plan?.status === "SHARED"
-                ? "共有済み"
-                : sharing
-                  ? "共有中..."
-                  : "共有する"}
-            </Button>
-            {plan?.status === "SHARED" ? (
-              <Button type="button" variant="outline" onClick={handleUnshare} disabled={unsharing}>
-                {unsharing ? "戻し中..." : "共有を戻す"}
-              </Button>
-            ) : null}
-            {planAssets.length === 0 ? (
-              <span className={styles.badgeMuted}>資産を追加すると共有できます</span>
-            ) : null}
-          </div>
-        </div>
-      </div>
     </section>
   );
 }

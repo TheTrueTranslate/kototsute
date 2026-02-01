@@ -644,11 +644,7 @@ export default function AssetLockPage({
                     <div key={plan.planId} className={styles.planCard}>
                       <div className={styles.planTitle}>{plan.title}</div>
                       <div className={styles.planMeta}>
-                        {plan.status === "SHARED"
-                          ? "共有中"
-                          : plan.status === "INACTIVE"
-                          ? "停止中"
-                          : "下書き"}
+                        {plan.status === "INACTIVE" ? "停止中" : "作成中"}
                       </div>
                       <div className={styles.planRuleTitle}>分配ルール</div>
                       {planAssetsById[plan.planId] ? (

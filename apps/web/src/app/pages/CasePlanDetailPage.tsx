@@ -18,8 +18,8 @@ import { useAuth } from "../../features/auth/auth-provider";
 import styles from "../../styles/caseDetailPage.module.css";
 
 const statusLabels: Record<string, string> = {
-  DRAFT: "下書き",
-  SHARED: "共有中",
+  DRAFT: "作成中",
+  SHARED: "有効",
   INACTIVE: "無効"
 };
 
@@ -46,7 +46,7 @@ type TabKey = "summary" | "assets" | "heirs" | "history";
 
 const tabItems: { key: TabKey; label: string }[] = [
   { key: "summary", label: "概要" },
-  { key: "assets", label: "共有内容" },
+  { key: "assets", label: "内容" },
   { key: "heirs", label: "相続人" },
   { key: "history", label: "履歴" }
 ];
@@ -150,12 +150,6 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
             <div className={styles.list}>
               <div className={styles.row}>
                 <div className={styles.rowMain}>
-                  <div className={styles.rowTitle}>共有日時</div>
-                  <div className={styles.rowMeta}>{formatDate(plan.sharedAt)}</div>
-                </div>
-              </div>
-              <div className={styles.row}>
-                <div className={styles.rowMain}>
                   <div className={styles.rowTitle}>最終更新</div>
                   <div className={styles.rowMeta}>{formatDate(plan.updatedAt)}</div>
                 </div>
@@ -173,12 +167,12 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       {tab === "assets" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>共有内容</h2>
+            <h2 className={styles.panelTitle}>内容</h2>
           </div>
           {loading ? null : assets.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>共有された資産がありません</div>
-              <div className={styles.emptyBody}>指図に含まれる資産がここに表示されます。</div>
+              <div className={styles.emptyTitle}>指図に含まれる資産がありません</div>
+              <div className={styles.emptyBody}>指図に設定した資産がここに表示されます。</div>
             </div>
           ) : (
             <div className={styles.list}>

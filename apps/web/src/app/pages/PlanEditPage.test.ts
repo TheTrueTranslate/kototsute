@@ -26,4 +26,9 @@ describe("PlanEditPage", () => {
     const html = await render();
     expect(html).toContain("指図編集");
   });
+
+  it("does not render sharing step", async () => {
+    const html = await render();
+    expect(html).not.toContain("共有");
+  });
 });

@@ -84,8 +84,8 @@ const formatDate = (value: string | null | undefined) => {
 };
 
 const planStatusLabels: Record<string, string> = {
-  DRAFT: "下書き",
-  SHARED: "共有中",
+  DRAFT: "作成中",
+  SHARED: "有効",
   INACTIVE: "無効"
 };
 
@@ -1376,9 +1376,9 @@ export default function CaseDetailPage({
             <div className={styles.emptyState}>
               {isOwner === false ? (
                 <>
-                  <div className={styles.emptyTitle}>共有された指図がありません</div>
+                  <div className={styles.emptyTitle}>指図がありません</div>
                   <div className={styles.emptyBody}>
-                    共有された指図がある場合はここに表示されます。
+                    指図が作成されるとここに表示されます。
                   </div>
                 </>
               ) : (
