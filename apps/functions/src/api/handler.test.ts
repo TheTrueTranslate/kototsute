@@ -3480,6 +3480,152 @@ describe("createApiHandler", () => {
     expect(fileRes.statusCode).toBe(200);
   });
 
+  it("allows upload request when claim is rejected", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc("claim_1");
+    await claimRef.set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_REJECTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const issueRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/upload-requests`,
+        body: { fileName: "death.pdf", contentType: "application/pdf", size: 1024 }
+      }) as any,
+      issueRes as any
+    );
+
+    expect(issueRes.statusCode).toBe(200);
+    expect(issueRes.body?.data?.requestId).toBeTruthy();
+  });
+
+  it("allows case member to download death claim file", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims/${claimId}/files`).doc(fileId).set({
+      fileName: "death.pdf",
+      contentType: "application/pdf",
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${fileId}`,
+      createdAt: new Date()
+    });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/death-claims/${claimId}/files/${fileId}/download`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.dataBase64).toBeTruthy();
+  });
+
+  it("allows owner to download even if not in member list", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims/${claimId}/files`).doc(fileId).set({
+      fileName: "death.pdf",
+      contentType: "application/pdf",
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${fileId}`,
+      createdAt: new Date()
+    });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/death-claims/${claimId}/files/${fileId}/download`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
   it("allows admin to approve death claim", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -3808,5 +3954,114 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.dataBase64).toBe("ZHVtbXktZmlsZQ==");
 
     delete process.env.STORAGE_BUCKET;
+  });
+
+  it("returns signer list status and counts", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [{ account: "rSystem", weight: 2 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db
+      .collection(`cases/${caseId}/signerList/state/signatures`)
+      .doc("heir_1")
+      .set({ uid: "heir_1", address: "rHeir", txHash: "tx1", createdAt: new Date() });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("SET");
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    expect(res.body?.data?.requiredCount).toBe(2);
+    expect(res.body?.data?.signedByMe).toBe(true);
+  });
+
+  it("accepts signer tx hash and records signature", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [{ account: "rSystem", weight: 2 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          Account: "rAssetLock",
+          Signers: [{ Signer: { Account: "rHeir" } }]
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/signer-list/sign`,
+        body: { txHash: "tx_hash" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    const sigSnap = await db
+      .collection(`cases/${caseId}/signerList/state/signatures`)
+      .doc("heir_1")
+      .get();
+    expect(sigSnap.data()?.txHash).toBe("tx_hash");
   });
 });

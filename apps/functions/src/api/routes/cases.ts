@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
 import {
   assetCreateSchema,
   assetReserveSchema,
@@ -833,8 +834,14 @@ export const casesRoutes = () => {
     if (!claimSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Claim not found");
     }
-    if (claimSnap.data()?.status !== "SUBMITTED") {
-      return jsonError(c, 400, "VALIDATION_ERROR", "提出済みの申請のみ追加できます");
+    const claimStatus = claimSnap.data()?.status;
+    if (claimStatus !== "SUBMITTED" && claimStatus !== "ADMIN_REJECTED") {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        "提出済みまたは差し戻しの申請のみ追加できます"
+      );
     }
 
     const now = c.get("deps").now();
@@ -891,6 +898,44 @@ export const casesRoutes = () => {
     await requestRef.set({ status: "VERIFIED" }, { merge: true });
 
     return jsonOk(c, { fileId: fileRef.id });
+  });
+
+  app.get(":caseId/death-claims/:claimId/files/:fileId/download", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const fileId = c.req.param("fileId");
+    const db = getFirestore();
+    const caseSnap = await db.collection("cases").doc(caseId).get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const fileSnap = await db
+      .collection(`cases/${caseId}/deathClaims/${claimId}/files`)
+      .doc(fileId)
+      .get();
+    if (!fileSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "File not found");
+    }
+    const fileData = fileSnap.data() ?? {};
+    const storagePath = typeof fileData.storagePath === "string" ? fileData.storagePath : null;
+    const storageBucket = process.env.STORAGE_BUCKET;
+    if (!storagePath || !storageBucket) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "storagePathがありません");
+    }
+    const [buffer] = await getStorage().bucket(storageBucket).file(storagePath).download();
+    const dataBase64 = Buffer.from(buffer).toString("base64");
+    return jsonOk(c, {
+      fileName: fileData.fileName ?? null,
+      contentType: fileData.contentType ?? "application/octet-stream",
+      dataBase64
+    });
   });
 
   app.post(":caseId/death-claims/:claimId/admin-approve", async (c) => {
@@ -1042,6 +1087,106 @@ export const casesRoutes = () => {
     }
 
     return jsonOk(c, { confirmationsCount, requiredCount });
+  });
+
+  app.get(":caseId/signer-list", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const signerRef = caseRef.collection("signerList").doc("state");
+    const signerSnap = await signerRef.get();
+    const signerData = signerSnap.data() ?? null;
+    const status = signerData?.status ?? "NOT_READY";
+    const error = signerData?.error ?? null;
+    const signaturesSnap = await signerRef.collection("signatures").get();
+    const signaturesCount = signaturesSnap.docs.length;
+    const signedByMe = signaturesSnap.docs.some((doc) => doc.id === auth.uid);
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    return jsonOk(c, {
+      status,
+      quorum: signerData?.quorum ?? null,
+      error,
+      signaturesCount,
+      requiredCount,
+      signedByMe
+    });
+  });
+
+  app.post(":caseId/signer-list/sign", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
+    if (!txHash) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続実行が開始されていません");
+    }
+
+    const signerRef = caseRef.collection("signerList").doc("state");
+    const signerSnap = await signerRef.get();
+    if (!signerSnap.exists || signerSnap.data()?.status !== "SET") {
+      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "署名準備が完了していません");
+    }
+
+    const walletSnap = await caseRef.collection("heirWallets").doc(auth.uid).get();
+    const wallet = walletSnap.data() ?? {};
+    const address = typeof wallet.address === "string" ? wallet.address : "";
+    const isVerified = wallet.verificationStatus === "VERIFIED";
+    if (!address || !isVerified) {
+      return jsonError(c, 400, "WALLET_NOT_VERIFIED", "ウォレットが未確認です");
+    }
+
+    const txResult = await fetchXrplTx(txHash);
+    if (!txResult.ok) {
+      return jsonError(c, 400, "TX_NOT_FOUND", txResult.message ?? "取引が見つかりません");
+    }
+    const signers = Array.isArray(txResult.tx?.Signers) ? txResult.tx.Signers : [];
+    const hasSigner = signers.some((entry: any) => entry?.Signer?.Account === address);
+    if (!hasSigner) {
+      return jsonError(c, 400, "SIGNER_MISMATCH", "署名者が一致しません");
+    }
+
+    const now = c.get("deps").now();
+    await signerRef.collection("signatures").doc(auth.uid).set({
+      uid: auth.uid,
+      address,
+      txHash,
+      createdAt: now
+    });
+
+    const signaturesSnap = await signerRef.collection("signatures").get();
+    const signaturesCount = signaturesSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    return jsonOk(c, { signaturesCount, requiredCount, signedByMe: true });
   });
 
   app.post(":caseId/assets", async (c) => {
