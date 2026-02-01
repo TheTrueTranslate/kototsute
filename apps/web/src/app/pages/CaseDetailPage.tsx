@@ -783,7 +783,7 @@ export default function CaseDetailPage({
             <div className={styles.signerSection}>
               <div className={styles.signerHeader}>
                 <div className={styles.signerHeaderMain}>
-                  <div className={styles.signerTitle}>MultiSign署名</div>
+                  <div className={styles.signerTitle}>相続実行の同意</div>
                   <div className={styles.signerHint}>
                     システム+相続人の過半数の署名が揃うと相続実行が進みます。
                   </div>

@@ -214,7 +214,7 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("相続実行");
   });
 
-  it("renders multisign section when inheritance tab is active", async () => {
+  it("renders consent section when inheritance tab is active", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
 
@@ -230,7 +230,7 @@ describe("CaseDetailPage", () => {
         updatedAt: "2024-01-01"
       }
     });
-    expect(html).toContain("MultiSign署名");
+    expect(html).toContain("相続実行の同意");
   });
 
   it("shows wallet status badge in heirs tab", async () => {
