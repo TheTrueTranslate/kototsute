@@ -38,6 +38,7 @@ import {
 } from "../utils/xrpl-multisign.js";
 import { encryptPayload } from "../utils/encryption.js";
 import { decryptPayload } from "../utils/encryption.js";
+import { prepareInheritanceExecution } from "../utils/inheritance-execution.js";
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -968,6 +969,20 @@ export const casesRoutes = () => {
       { merge: true }
     );
 
+    try {
+      const caseRef = db.collection("cases").doc(caseId);
+      const caseSnap = await caseRef.get();
+      if (caseSnap.exists) {
+        await prepareInheritanceExecution({
+          caseRef,
+          caseData: caseSnap.data() ?? {},
+          now
+        });
+      }
+    } catch (error) {
+      console.warn("prepareInheritanceExecution failed on admin approve", error);
+    }
+
     return jsonOk(c);
   });
 
@@ -1089,6 +1104,15 @@ export const casesRoutes = () => {
         { merge: true }
       );
       await caseRef.set({ stage: "IN_PROGRESS", updatedAt: now }, { merge: true });
+      try {
+        await prepareInheritanceExecution({
+          caseRef,
+          caseData: { ...caseData, stage: "IN_PROGRESS" },
+          now
+        });
+      } catch (error) {
+        console.warn("prepareInheritanceExecution failed on confirm", error);
+      }
     }
 
     return jsonOk(c, { confirmationsCount, requiredCount });

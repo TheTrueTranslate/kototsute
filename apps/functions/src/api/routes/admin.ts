@@ -3,8 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
-import { createChallenge } from "../utils/xrpl.js";
-import { prepareApprovalTx, signForMultisign } from "../utils/xrpl-multisign.js";
+import { prepareInheritanceExecution } from "../utils/inheritance-execution.js";
 
 const getCaseIdFromRef = (ref: { path?: string; parent?: { parent?: { id?: string } } }) => {
   if (typeof ref.path === "string") {
@@ -166,58 +165,42 @@ export const adminRoutes = () => {
       return jsonError(c, 400, "NOT_READY", "相続中のみ生成できます");
     }
 
-    const signerSnap = await caseRef.collection("signerList").doc("state").get();
-    if (!signerSnap.exists || signerSnap.data()?.status !== "SET") {
-      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "署名準備が完了していません");
-    }
-
-    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
-    const lockData = lockSnap.data() ?? {};
-    const walletAddress = lockData?.wallet?.address;
-    if (!walletAddress) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "分配用Walletが未設定です");
-    }
-
-    const systemSeed = process.env.XRPL_SYSTEM_SIGNER_SEED ?? "";
-    if (!systemSeed) {
-      return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名が未設定です");
-    }
-    const destination = process.env.XRPL_VERIFY_ADDRESS ?? "";
-    if (!destination) {
-      return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
-    }
-
-    const memo = createChallenge();
-    const memoHex = Buffer.from(memo, "utf8").toString("hex").toUpperCase();
-    const entries = Array.isArray(signerSnap.data()?.entries) ? signerSnap.data()?.entries : [];
-    const signersCount = entries.length || 1;
-
-    const txJson = await prepareApprovalTx({
-      fromAddress: walletAddress,
-      destination,
-      amountDrops: "1",
-      memoHex,
-      signersCount
-    });
-    const systemSigned = signForMultisign(txJson, systemSeed);
     const now = c.get("deps").now();
-    await caseRef.collection("signerList").doc("approvalTx").set({
-      memo,
-      txJson,
-      systemSignedBlob: systemSigned.blob,
-      systemSignedHash: systemSigned.hash,
-      status: "PREPARED",
-      submittedTxHash: null,
-      createdAt: now,
-      updatedAt: now
+    const result = await prepareInheritanceExecution({
+      caseRef,
+      caseData,
+      now
     });
+    if (result.status === "SKIPPED") {
+      switch (result.reason) {
+        case "NOT_IN_PROGRESS":
+          return jsonError(c, 400, "NOT_READY", "相続中のみ生成できます");
+        case "LOCK_WALLET_MISSING":
+          return jsonError(c, 400, "VALIDATION_ERROR", "分配用Walletが未設定です");
+        case "HEIR_WALLET_UNVERIFIED":
+          return jsonError(c, 400, "WALLET_NOT_VERIFIED", "相続人ウォレットが未検証です");
+        case "HEIR_MISSING":
+          return jsonError(c, 400, "HEIR_MISSING", "相続人ウォレットが未登録です");
+        default:
+          return jsonError(c, 400, "NOT_READY", "署名準備が完了していません");
+      }
+    }
+    if (result.status === "FAILED") {
+      switch (result.reason) {
+        case "SYSTEM_SIGNER_MISSING":
+          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
+        case "SYSTEM_SIGNER_SEED_MISSING":
+          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名が未設定です");
+        case "VERIFY_ADDRESS_MISSING":
+          return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
+        case "SIGNER_LIST_FAILED":
+          return jsonError(c, 500, "SIGNER_LIST_FAILED", "SignerListSetに失敗しました");
+        default:
+          return jsonError(c, 500, "PREPARE_FAILED", "相続実行Txの生成に失敗しました");
+      }
+    }
 
-    return jsonOk(c, {
-      memo,
-      fromAddress: walletAddress,
-      destination,
-      amountDrops: "1"
-    });
+    return jsonOk(c, result.approvalTx);
   });
 
   return app;
