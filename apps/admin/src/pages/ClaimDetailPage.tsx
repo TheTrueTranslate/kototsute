@@ -37,7 +37,7 @@ export const decodeBase64ToBytes = (dataBase64: string) => {
 export const toClaimStatusLabel = (status: string) => {
   switch (status) {
     case "SUBMITTED":
-      return "提出済み";
+      return "運営確認待ち";
     case "ADMIN_APPROVED":
       return "運営承認済み";
     case "ADMIN_REJECTED":
@@ -51,6 +51,35 @@ export const toClaimStatusLabel = (status: string) => {
 
 export const profileLabel = "被相続人プロフィール";
 
+export type ReviewAction = "approve" | "reject";
+
+export const getReviewModalCopy = (action: ReviewAction, note: string) => {
+  if (action === "approve") {
+    return {
+      title: "運営承認の確認",
+      message: "この申請を承認しますか？",
+      confirmLabel: "承認する",
+      noteLabel: null
+    };
+  }
+  const trimmed = note.trim();
+  return {
+    title: "差し戻しの確認",
+    message: "この申請を差し戻しますか？",
+    confirmLabel: "差し戻す",
+    noteLabel: trimmed ? `差し戻し理由: ${trimmed}` : "差し戻し理由: （未入力）"
+  };
+};
+
+const FileOpenIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path
+      d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h5V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-5h-2v5H5V5z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export default function ClaimDetailPage() {
   const { caseId, claimId } = useParams();
   const [detail, setDetail] = useState<AdminDeathClaimDetail | null>(null);
@@ -60,6 +89,7 @@ export default function ClaimDetailPage() {
   const [rejecting, setRejecting] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
   const [openingFileId, setOpeningFileId] = useState<string | null>(null);
+  const [reviewAction, setReviewAction] = useState<ReviewAction | null>(null);
 
   const load = useCallback(async () => {
     if (!caseId || !claimId) return;
@@ -130,9 +160,27 @@ export default function ClaimDetailPage() {
     }
   };
 
+  const handleConfirmReview = async () => {
+    if (!reviewAction) return;
+    if (reviewAction === "approve") {
+      await handleApprove();
+    } else {
+      await handleReject();
+    }
+    setReviewAction(null);
+  };
+
+  const handleCancelReview = () => {
+    if (approving || rejecting) return;
+    setReviewAction(null);
+  };
+
   if (!caseId || !claimId) {
     return <div className="card">不正なURLです。</div>;
   }
+
+  const reviewCopy = reviewAction ? getReviewModalCopy(reviewAction, rejectNote) : null;
+  const reviewBusy = approving || rejecting;
 
   return (
     <div className="card">
@@ -148,11 +196,19 @@ export default function ClaimDetailPage() {
               <div className="badge">{toClaimStatusLabel(detail.claim.status)}</div>
             </div>
             <div className="actions">
-              <button className="button" onClick={handleApprove} disabled={approving}>
-                {approving ? "承認中..." : "運営承認"}
+              <button
+                className="button"
+                onClick={() => setReviewAction("approve")}
+                disabled={approving || rejecting}
+              >
+                運営承認
               </button>
-              <button className="button button-secondary" onClick={handleReject} disabled={rejecting}>
-                {rejecting ? "差し戻し中..." : "差し戻し"}
+              <button
+                className="button button-secondary"
+                onClick={() => setReviewAction("reject")}
+                disabled={approving || rejecting}
+              >
+                差し戻し
               </button>
             </div>
             <label className="label">
@@ -185,20 +241,16 @@ export default function ClaimDetailPage() {
                     <div className="row-title">{file.fileName}</div>
                     {file.fileId ? (
                       <button
-                        className="row-meta"
+                        className="icon-button"
                         type="button"
                         onClick={() => handleOpenFile(file.fileId)}
                         disabled={openingFileId === file.fileId}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          padding: 0,
-                          color: "#2563eb",
-                          cursor: "pointer",
-                          font: "inherit"
-                        }}
+                        aria-label={
+                          openingFileId === file.fileId ? "ファイルを取得中" : "ファイルを開く"
+                        }
+                        title="ファイルを開く"
                       >
-                        {openingFileId === file.fileId ? "取得中..." : "ファイルを開く"}
+                        <FileOpenIcon />
                       </button>
                     ) : (
                       <div className="row-meta">閲覧できません。</div>
@@ -212,6 +264,35 @@ export default function ClaimDetailPage() {
       ) : (
         <div className="muted">詳細が見つかりません。</div>
       )}
+      {reviewAction && reviewCopy ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={handleCancelReview}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">{reviewCopy.title}</div>
+            <div className="modal-message">{reviewCopy.message}</div>
+            {reviewCopy.noteLabel ? (
+              <div className="modal-note">{reviewCopy.noteLabel}</div>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={handleCancelReview}
+                disabled={reviewBusy}
+              >
+                キャンセル
+              </button>
+              <button
+                className="button"
+                type="button"
+                onClick={handleConfirmReview}
+                disabled={reviewBusy}
+              >
+                {reviewBusy ? "処理中..." : reviewCopy.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
