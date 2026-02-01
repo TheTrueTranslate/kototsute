@@ -3316,7 +3316,7 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.length).toBe(1);
   });
 
-  it("lists shared plans for case members", async () => {
+  it("lists plans that include the member as heir", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -3359,13 +3359,16 @@ describe("createApiHandler", () => {
     );
     const planBId = planBRes.body?.data?.planId;
 
-    await ownerHandler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/share`
-      }) as any,
-      createRes() as any
-    );
+    await getFirestore()
+      .collection(`cases/${caseId}/plans`)
+      .doc(planAId)
+      .set(
+        {
+          heirUids: ["heir_1"],
+          heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+        },
+        { merge: true }
+      );
 
     await getFirestore()
       .collection("cases")

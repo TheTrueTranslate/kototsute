@@ -3436,13 +3436,14 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const snapshot = isOwner
-      ? await db.collection(`cases/${caseId}/plans`).get()
-      : await db
-          .collection(`cases/${caseId}/plans`)
-          .where("status", "==", "SHARED")
-          .get();
-    const data = snapshot.docs.map((doc) => ({ planId: doc.id, ...doc.data() }));
+    const snapshot = await db.collection(`cases/${caseId}/plans`).get();
+    const data = snapshot.docs
+      .map((doc) => ({ planId: doc.id, ...doc.data() }))
+      .filter((plan) => {
+        if (isOwner) return true;
+        const heirUids = Array.isArray(plan?.heirUids) ? plan.heirUids : [];
+        return heirUids.includes(auth.uid);
+      });
     return jsonOk(c, data);
   });
 
@@ -3471,7 +3472,8 @@ export const casesRoutes = () => {
     if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
       return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -3506,7 +3508,8 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -3780,7 +3783,8 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
