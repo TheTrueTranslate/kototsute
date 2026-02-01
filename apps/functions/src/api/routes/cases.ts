@@ -3440,11 +3440,12 @@ export const casesRoutes = () => {
     }
 
     const snapshot = await db.collection(`cases/${caseId}/plans`).get();
-    const data = snapshot.docs
-      .map((doc) => ({ planId: doc.id, ...doc.data() }))
+    const data: Array<Record<string, any>> = snapshot.docs
+      .map((doc) => ({ planId: doc.id, ...(doc.data() as Record<string, any>) }))
       .filter((plan) => {
         if (isOwner) return true;
-        const heirUids = Array.isArray(plan?.heirUids) ? plan.heirUids : [];
+        const planData = plan as Record<string, any>;
+        const heirUids = Array.isArray(planData.heirUids) ? planData.heirUids : [];
         return heirUids.includes(auth.uid);
       });
     return jsonOk(c, data);
