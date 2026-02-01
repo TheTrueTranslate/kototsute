@@ -249,13 +249,17 @@ vi.mock("./utils/xrpl", async () => {
   };
 });
 
-vi.mock("./utils/xrpl-multisign", () => ({
-  prepareApprovalTx: async () => ({
+const prepareApprovalTxMock = vi.hoisted(() =>
+  vi.fn(async () => ({
     TransactionType: "Payment",
     Account: "rLock",
     Destination: "rVerify",
     Amount: "1"
-  }),
+  }))
+);
+
+vi.mock("./utils/xrpl-multisign", () => ({
+  prepareApprovalTx: prepareApprovalTxMock,
   signForMultisign: () => ({ blob: "blob-system", hash: "hash-system" }),
   decodeSignedBlob: () => ({
     TransactionType: "Payment",
@@ -3841,6 +3845,94 @@ describe("createApiHandler", () => {
     expect(approvalSnap.exists).toBe(true);
   });
 
+  it("prepares approval tx even when txJson contains undefined fields", async () => {
+    prepareApprovalTxMock.mockResolvedValueOnce({
+      TransactionType: "Payment",
+      Account: "rLock",
+      Destination: "rVerify",
+      Amount: "1",
+      NetworkID: undefined
+    });
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir_undefined";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(true);
+  });
+
+  it("returns default distribution state when missing", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_distribution_default";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "GET",
+      path: `/v1/cases/${caseId}/distribution`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("PENDING");
+    expect(res.body?.data?.totalCount).toBe(0);
+  });
+
   it("rejects prepare when heir wallets are unverified", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -4138,6 +4230,7 @@ describe("createApiHandler", () => {
   });
 
   it("returns signer list status and counts", async () => {
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -4183,6 +4276,8 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.signaturesCount).toBe(1);
     expect(res.body?.data?.requiredCount).toBe(2);
     expect(res.body?.data?.signedByMe).toBe(true);
+    expect(res.body?.data?.entries).toEqual([{ account: "rSystem", weight: 2 }]);
+    expect(res.body?.data?.systemSignerAddress).toBe("rSystem");
   });
 
   it("returns approval tx for heir", async () => {
@@ -4219,6 +4314,115 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body?.data?.memo).toBe("memo_abc");
+  });
+
+  it("returns approval tx verification status when submitted", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          validated: true,
+          meta: { TransactionResult: "tesSUCCESS" }
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_1"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.submittedTxHash).toBe("tx_hash_1");
+    expect(res.body?.data?.networkStatus).toBe("VALIDATED");
+    expect(res.body?.data?.networkResult).toBe("tesSUCCESS");
+
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns approval tx expired status when last ledger is passed", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { validated: false, LastLedgerSequence: 10 }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { state: { validated_ledger: { seq: 20 } } }
+        })
+      });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted_expired";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_2"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.networkStatus).toBe("EXPIRED");
+
+    (globalThis as any).fetch = fetchOriginal;
   });
 
   it("accepts signed blob and records signature", async () => {

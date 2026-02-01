@@ -29,7 +29,8 @@ import {
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
   fetchXrplReserve,
-  fetchXrplTx
+  fetchXrplTx,
+  fetchXrplValidatedLedgerIndex
 } from "../utils/xrpl.js";
 import {
   combineMultisignedBlobs,
@@ -1107,6 +1108,8 @@ export const casesRoutes = () => {
   app.post(":caseId/signer-list/prepare", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const force = body?.force === true;
     const db = getFirestore();
     const caseRef = db.collection("cases").doc(caseId);
     const caseSnap = await caseRef.get();
@@ -1147,7 +1150,8 @@ export const casesRoutes = () => {
     const result = await prepareInheritanceExecution({
       caseRef,
       caseData,
-      now
+      now,
+      force
     });
     if (result.status === "SKIPPED") {
       switch (result.reason) {
@@ -1164,6 +1168,8 @@ export const casesRoutes = () => {
           );
         case "HEIR_MISSING":
           return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+        case "APPROVAL_NOT_EXPIRED":
+          return jsonError(c, 400, "NOT_READY", "送信中のため再準備できません");
         default:
           return jsonError(c, 400, "NOT_READY", "同意の準備が完了していません");
       }
@@ -1205,11 +1211,60 @@ export const casesRoutes = () => {
       return jsonError(c, 404, "NOT_FOUND", "ApprovalTx not found");
     }
     const approval = approvalSnap.data() ?? {};
+    const submittedTxHash =
+      typeof approval.submittedTxHash === "string" ? approval.submittedTxHash : null;
+    let networkStatus:
+      | "PENDING"
+      | "VALIDATED"
+      | "FAILED"
+      | "NOT_FOUND"
+      | "EXPIRED"
+      | null = null;
+    let networkResult: string | null = null;
+    if (approval.status === "SUBMITTED" && submittedTxHash) {
+      const result = await fetchXrplTx(submittedTxHash);
+      if (!result.ok) {
+        networkStatus = "NOT_FOUND";
+      } else {
+        const tx = result.tx as any;
+        const validated = Boolean(tx?.validated);
+        networkResult =
+          typeof tx?.meta?.TransactionResult === "string"
+            ? tx.meta.TransactionResult
+            : null;
+        if (!validated) {
+          const lastLedgerRaw = tx?.LastLedgerSequence;
+          const lastLedger =
+            typeof lastLedgerRaw === "number"
+              ? lastLedgerRaw
+              : typeof lastLedgerRaw === "string"
+                ? Number(lastLedgerRaw)
+                : NaN;
+          if (Number.isFinite(lastLedger)) {
+            const ledgerResult = await fetchXrplValidatedLedgerIndex();
+            if (ledgerResult.ok && ledgerResult.ledgerIndex >= lastLedger) {
+              networkStatus = "EXPIRED";
+            } else {
+              networkStatus = "PENDING";
+            }
+          } else {
+            networkStatus = "PENDING";
+          }
+        } else if (networkResult && networkResult !== "tesSUCCESS") {
+          networkStatus = "FAILED";
+        } else {
+          networkStatus = "VALIDATED";
+        }
+      }
+    }
     return jsonOk(c, {
       memo: approval.memo ?? null,
       txJson: approval.txJson ?? null,
       status: approval.status ?? null,
-      systemSignedHash: approval.systemSignedHash ?? null
+      systemSignedHash: approval.systemSignedHash ?? null,
+      submittedTxHash,
+      networkStatus,
+      networkResult
     });
   });
 
@@ -1233,6 +1288,8 @@ export const casesRoutes = () => {
     const signerData = signerSnap.data() ?? null;
     const status = signerData?.status ?? "NOT_READY";
     const error = signerData?.error ?? null;
+    const entries = Array.isArray(signerData?.entries) ? signerData?.entries : [];
+    const systemSignerAddress = process.env.XRPL_SYSTEM_SIGNER_ADDRESS ?? null;
     const signaturesSnap = await signerRef.collection("signatures").get();
     const signaturesCount = signaturesSnap.docs.length;
     const signedByMe = signaturesSnap.docs.some((doc) => doc.id === auth.uid);
@@ -1243,9 +1300,46 @@ export const casesRoutes = () => {
       status,
       quorum: signerData?.quorum ?? null,
       error,
+      entries,
+      systemSignerAddress,
       signaturesCount,
       requiredCount,
       signedByMe
+    });
+  });
+
+  app.get(":caseId/distribution", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const stateSnap = await caseRef.collection("distribution").doc("state").get();
+    const state = stateSnap.data() ?? {};
+
+    const toCount = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value) ? value : 0;
+
+    return jsonOk(c, {
+      status: typeof state.status === "string" ? state.status : "PENDING",
+      totalCount: toCount(state.totalCount),
+      successCount: toCount(state.successCount),
+      failedCount: toCount(state.failedCount),
+      skippedCount: toCount(state.skippedCount),
+      escalationCount: toCount(state.escalationCount),
+      retryLimit: toCount(state.retryLimit),
+      startedAt: state.startedAt ?? null,
+      lastProcessedAt: state.lastProcessedAt ?? null,
+      updatedAt: state.updatedAt ?? null
     });
   });
 
