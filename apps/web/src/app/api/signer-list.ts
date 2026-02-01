@@ -16,6 +16,13 @@ export type ApprovalTxSummary = {
   systemSignedHash?: string | null;
 };
 
+export type PrepareApprovalTxSummary = {
+  memo: string;
+  fromAddress: string;
+  destination: string;
+  amountDrops: string;
+};
+
 export const getSignerList = async (caseId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/signer-list`, { method: "GET" });
   return result.data as SignerListSummary;
@@ -26,6 +33,13 @@ export const getApprovalTx = async (caseId: string) => {
     method: "GET"
   });
   return result.data as ApprovalTxSummary;
+};
+
+export const prepareApprovalTx = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/signer-list/prepare`, {
+    method: "POST"
+  });
+  return result.data as PrepareApprovalTxSummary;
 };
 
 export const submitSignerSignature = async (caseId: string, signedBlob: string) => {

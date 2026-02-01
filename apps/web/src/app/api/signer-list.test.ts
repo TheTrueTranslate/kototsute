@@ -28,4 +28,12 @@ describe("signer list api", () => {
       body: JSON.stringify({ signedBlob: "blob-signed" })
     });
   });
+
+  it("prepares approval tx", async () => {
+    const { prepareApprovalTx } = await import("./signer-list");
+    await prepareApprovalTx("case-1");
+    expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/signer-list/prepare", {
+      method: "POST"
+    });
+  });
 });
