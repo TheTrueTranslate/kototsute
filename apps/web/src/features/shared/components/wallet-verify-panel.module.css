@@ -1,0 +1,27 @@
+.panel {
+  @apply grid gap-3;
+}
+
+.block {
+  @apply grid gap-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-4;
+}
+
+.row {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.label {
+  @apply text-meta text-muted-foreground;
+}
+
+.value {
+  @apply break-all text-body text-foreground;
+}
+
+.hint {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.actions {
+  @apply flex justify-end;
+}
