@@ -120,6 +120,50 @@ it("shows plan previews and confirm button for owner", async () => {
   expect(html).toContain("確認しました");
 });
 
+it("disables confirm when no active plans", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialIsOwner: true,
+        initialPlans: []
+      })
+    )
+  );
+  expect(html).toContain("相続対象の指図がありません");
+  expect(html.indexOf("相続対象の指図がありません")).toBeLessThan(html.indexOf("準備・注意"));
+  expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>確認しました/);
+});
+
+it("disables start when a plan has no heirs", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialIsOwner: true,
+        initialStep: 1,
+        initialPlans: [
+          {
+            planId: "plan-1",
+            title: "指図A",
+            status: "DRAFT",
+            sharedAt: null,
+            updatedAt: "2024-01-01"
+          }
+        ],
+        initialPlanHeirs: { "plan-1": [] }
+      })
+    )
+  );
+  expect(html).toContain("相続人が未設定の指図があります");
+  expect(html.indexOf("相続人が未設定の指図があります")).toBeLessThan(html.indexOf("方式選択"));
+  expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>ロックを開始/);
+});
+
 it("shows tx input per asset item", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
