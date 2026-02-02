@@ -3717,6 +3717,38 @@ export const casesRoutes = () => {
     return jsonOk(c, { title: parsed.data.title });
   });
 
+  app.delete(":caseId/plans/:planId", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+
+    const assetsSnap = await db
+      .collection(`cases/${caseId}/plans/${planId}/assets`)
+      .limit(1)
+      .get();
+    if ((assetsSnap.docs?.length ?? 0) > 0) {
+      return jsonError(c, 400, "HAS_ASSETS", "資産が追加されているため削除できません");
+    }
+
+    await planRef.delete();
+    return jsonOk(c);
+  });
+
   app.post(":caseId/plans/:planId/heirs", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
