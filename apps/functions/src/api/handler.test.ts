@@ -4062,6 +4062,99 @@ describe("createApiHandler", () => {
     (globalThis as any).fetch = fetchOriginal;
   });
 
+  it("scales down xrp on retry when balance is insufficient", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "50000000", OwnerCount: 1 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_retry_scale";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/distribution`).doc("state").set({
+      status: "FAILED",
+      totalCount: 1,
+      successCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+      escalationCount: 0,
+      retryLimit: 3
+    });
+    await db.collection(`cases/${caseId}/distribution/state/items`).doc("item-1").set({
+      status: "FAILED",
+      planId: "plan-1",
+      planTitle: "指図A",
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      heirUid: "heir-1",
+      heirAddress: "rHeir",
+      token: null,
+      amount: "100000000",
+      attempts: 1
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const itemSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .doc("item-1")
+      .get();
+    expect(Number(itemSnap.data()?.amount ?? "0")).toBeLessThan(100000000);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
   it("skips items after retry limit and escalates", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),

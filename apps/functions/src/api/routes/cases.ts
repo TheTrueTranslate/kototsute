@@ -1412,11 +1412,73 @@ export const casesRoutes = () => {
           : 3;
       const itemsSnap = await itemsRef.get();
       if (!itemsSnap.empty) {
+        const now = c.get("deps").now();
+        const retryCandidates = itemsSnap.docs.map((doc) => {
+          const item = doc.data() ?? {};
+          const status = String(item.status ?? "QUEUED");
+          const attempts =
+            typeof item.attempts === "number" && Number.isFinite(item.attempts)
+              ? item.attempts
+              : 0;
+          return { doc, item, status, attempts };
+        });
+        const itemsToAttempt = retryCandidates.filter(({ status, attempts }) => {
+          if (status === "VERIFIED") return false;
+          if (status === "SKIPPED") return false;
+          if (status === "FAILED" && attempts >= retryLimit) return false;
+          return true;
+        });
+        const adjustedAmounts = new Map<string, string>();
+        if (itemsToAttempt.length > 0) {
+          const totalXrpDrops = itemsToAttempt.reduce((total, { item }) => {
+            if (item.token) return total;
+            const amountDrops = BigInt(item.amount ?? "0");
+            return total + amountDrops;
+          }, 0n);
+          if (totalXrpDrops > 0n) {
+            const feePerTxDrops = 12n;
+            const reserveInfo = await fetchXrplReserve();
+            const reserveBaseDrops =
+              reserveInfo.status === "ok"
+                ? BigInt(reserveInfo.reserveBaseDrops)
+                : BigInt(toDrops(process.env.XRPL_RESERVE_BASE_XRP ?? "10"));
+            const reserveIncDrops =
+              reserveInfo.status === "ok"
+                ? BigInt(reserveInfo.reserveIncDrops)
+                : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
+            const accountInfo = await fetchXrplAccountInfo(lockWalletAddress);
+            if (accountInfo.status !== "ok") {
+              return jsonError(c, 400, "XRPL_ACCOUNT_INFO_FAILED", accountInfo.message);
+            }
+            const ownerCount =
+              typeof accountInfo.ownerCount === "number" &&
+              Number.isFinite(accountInfo.ownerCount)
+                ? accountInfo.ownerCount
+                : 0;
+            const balanceDrops = BigInt(toDrops(accountInfo.balanceXrp));
+            const requiredReserveDrops =
+              reserveBaseDrops + reserveIncDrops * BigInt(ownerCount);
+            const feeDrops = BigInt(itemsToAttempt.length) * feePerTxDrops;
+            const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
+            if (availableDrops <= 0n) {
+              return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+            }
+            if (totalXrpDrops > availableDrops) {
+              for (const { doc, item } of itemsToAttempt) {
+                if (item.token) continue;
+                const amountDrops = BigInt(item.amount ?? "0");
+                const adjustedDrops =
+                  (amountDrops * availableDrops) / totalXrpDrops;
+                adjustedAmounts.set(doc.id, adjustedDrops.toString());
+              }
+            }
+          }
+        }
+
         let successCount = 0;
         let failedCount = 0;
         let skippedCount = 0;
         let escalationCount = 0;
-        const now = c.get("deps").now();
         for (const doc of itemsSnap.docs) {
           const item = doc.data() ?? {};
           const status = String(item.status ?? "QUEUED");
@@ -1449,31 +1511,35 @@ export const casesRoutes = () => {
 
           try {
             if (item.token) {
+              const amount = String(item.amount ?? "0");
               const result = await sendTokenPayment({
                 fromSeed: lockSeed,
                 fromAddress: lockWalletAddress,
                 to: String(item.heirAddress ?? ""),
                 token: item.token,
-                amount: String(item.amount ?? "0")
+                amount
               });
               await doc.ref.set(
                 {
                   status: "VERIFIED",
+                  amount,
                   txHash: result.txHash ?? null,
                   updatedAt: now
                 },
                 { merge: true }
               );
             } else {
+              const amount = adjustedAmounts.get(doc.id) ?? String(item.amount ?? "0");
               const result = await sendXrpPayment({
                 fromSeed: lockSeed,
                 fromAddress: lockWalletAddress,
                 to: String(item.heirAddress ?? ""),
-                amountDrops: String(item.amount ?? "0")
+                amountDrops: amount
               });
               await doc.ref.set(
                 {
                   status: "VERIFIED",
+                  amount,
                   txHash: result.txHash ?? null,
                   updatedAt: now
                 },
@@ -1486,6 +1552,7 @@ export const casesRoutes = () => {
             await doc.ref.set(
               {
                 status: "FAILED",
+                amount: adjustedAmounts.get(doc.id) ?? String(item.amount ?? "0"),
                 attempts: attempts + 1,
                 error: error?.message ?? "送金に失敗しました",
                 updatedAt: now
