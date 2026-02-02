@@ -25,7 +25,7 @@ export const WalletVerifyPanel = ({
   secretDisabled
 }: WalletVerifyPanelProps) => {
   return (
-    <div className={styles.panel}>
+    <div className={styles.panel} data-testid="wallet-verify-panel">
       <div className={styles.block}>
         <div className={styles.row}>
           <div>

@@ -29,7 +29,8 @@ import {
   type AssetReserveToken
 } from "../api/assets";
 import { getCase, type CaseSummary } from "../api/cases";
-import { autoVerifyAssetOwnership } from "../../features/assets/asset-verify";
+import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import {
   createPaymentTx,
   signSingle,
@@ -372,20 +373,18 @@ export default function AssetDetailPage({
     setVerifySuccess(null);
     setVerifySending(true);
     try {
-      const result = await autoVerifyAssetOwnership(
+      const result = await autoVerifyWalletOwnership(
         {
-          caseId,
-          assetId,
-          assetAddress: asset.address,
+          walletAddress: asset.address,
           secret: verifySecret,
           challenge: resolveVerifyChallenge()
         },
         {
-          requestVerifyChallenge,
+          requestChallenge: () => requestVerifyChallenge(caseId, assetId),
           createPaymentTx,
           signSingle,
           submitSignedBlob,
-          confirmVerify
+          confirmVerify: (txHash) => confirmVerify(caseId, assetId, txHash)
         }
       );
       setChallenge(result.challenge);
@@ -701,49 +700,16 @@ export default function AssetDetailPage({
                   {verifyError ? <FormAlert variant="error">{verifyError}</FormAlert> : null}
                   {verifySuccess ? <FormAlert variant="success">{verifySuccess}</FormAlert> : null}
 
-                  <div className={styles.verifyBlock}>
-                    <div className={styles.verifyRow}>
-                      <div>
-                        <div className={styles.metaLabel}>
-                          Destination（運営確認用ウォレット）
-                        </div>
-                        <div className={styles.metaValue}>{asset.verificationAddress}</div>
-                      </div>
-                    </div>
-                    <div className={styles.verifyHint}>
-                      送金先はシステムの検証用アドレスです。
-                    </div>
-
-                    <div className={styles.verifyRow}>
-                      <div>
-                        <div className={styles.metaLabel}>Memo</div>
-                        <div className={styles.metaValue}>{memoDisplay}</div>
-                      </div>
-                    </div>
-                    <div className={styles.verifyHint}>1 drops (=0.000001 XRP) を送信します。</div>
-                  </div>
-
-                  <FormField label="シークレット">
-                    <Input
-                      type="password"
-                      value={verifySecret}
-                      onChange={(event) => setVerifySecret(event.target.value)}
-                      placeholder="s..."
-                      disabled={isLocked || verifySending}
-                    />
-                  </FormField>
-                  <div className={styles.verifyHint}>
-                    シークレットは一時的に利用し、保存しません。
-                  </div>
-                  <div className={styles.verifyActions}>
-                    <Button
-                      size="sm"
-                      onClick={handleAutoVerify}
-                      disabled={isLocked || verifySending || verifyChallengeLoading}
-                    >
-                      {verifySending ? "自動検証中..." : "シークレットで自動検証"}
-                    </Button>
-                  </div>
+                  <WalletVerifyPanel
+                    destination={asset.verificationAddress}
+                    memo={memoDisplay}
+                    secret={verifySecret}
+                    onSecretChange={setVerifySecret}
+                    onSubmit={handleAutoVerify}
+                    isSubmitting={verifySending}
+                    submitDisabled={isLocked || verifySending || verifyChallengeLoading}
+                    secretDisabled={isLocked || verifySending}
+                  />
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="ghost">閉じる</Button>

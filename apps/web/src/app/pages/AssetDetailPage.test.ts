@@ -175,6 +175,7 @@ describe("AssetDetailPage", () => {
 
   it("renders auto verify guidance without tx hash input", async () => {
     const html = await render();
+    expect(html).toContain("data-testid=\"wallet-verify-panel\"");
     expect(html).toContain("シークレットで自動検証");
     expect(html).toContain("Destination（運営確認用ウォレット）");
     expect(html).toContain("システムの検証用アドレス");
