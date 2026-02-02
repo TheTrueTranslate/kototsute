@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Copy, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -29,12 +29,14 @@ import {
   type AssetReserveToken
 } from "../api/assets";
 import { getCase, type CaseSummary } from "../api/cases";
-import { copyText } from "../../features/shared/lib/copy-text";
+import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import {
-  dropsToXrpInput,
-  normalizeNumberInput,
-  xrpToDropsInput
-} from "../../features/shared/lib/xrp-amount";
+  createPaymentTx,
+  signSingle,
+  submitSignedBlob
+} from "../../features/xrpl/xrpl-client";
+import { normalizeNumberInput } from "../../features/shared/lib/xrp-amount";
 import styles from "../../styles/assetDetailPage.module.css";
 
 const verificationLabels: Record<AssetDetail["verificationStatus"], string> = {
@@ -107,8 +109,9 @@ export default function AssetDetailPage({
   const [tab, setTab] = useState<TabKey>(initialTab ?? "overview");
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState("");
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [verifySecret, setVerifySecret] = useState("");
+  const [verifySending, setVerifySending] = useState(false);
+  const [verifyChallengeLoading, setVerifyChallengeLoading] = useState(false);
   const [challenge, setChallenge] = useState<
     | {
         challenge: string;
@@ -118,8 +121,6 @@ export default function AssetDetailPage({
     | null
   >(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [dropsInput, setDropsInput] = useState("1");
-  const [xrpInput, setXrpInput] = useState("0.000001");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [relatedPlans, setRelatedPlans] = useState<RelatedPlan[]>([]);
@@ -137,6 +138,8 @@ export default function AssetDetailPage({
 
   const title = useMemo(() => asset?.label ?? "資産詳細", [asset?.label]);
   const isLocked = caseData?.assetLockStatus === "LOCKED";
+  const memoValue = asset?.verificationChallenge ?? challenge?.challenge ?? "";
+  const memoDisplay = memoValue || (verifyChallengeLoading ? "発行中..." : "未発行");
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -231,6 +234,20 @@ export default function AssetDetailPage({
     loadHistory();
   }, [tab, caseId, assetId]);
 
+  useEffect(() => {
+    if (!verifyOpen) return;
+    if (!caseId || !assetId) return;
+    if (asset?.verificationChallenge || challenge || verifyChallengeLoading) return;
+    handleRequestChallenge();
+  }, [
+    verifyOpen,
+    caseId,
+    assetId,
+    asset?.verificationChallenge,
+    challenge,
+    verifyChallengeLoading
+  ]);
+
   const handleSync = async () => {
     if (!caseId || !assetId) return;
     setSyncing(true);
@@ -250,12 +267,10 @@ export default function AssetDetailPage({
     if (!caseId || !assetId) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifyChallengeLoading(true);
     try {
       const result = await requestVerifyChallenge(caseId, assetId);
       setChallenge(result);
-      const dropsValue = result.amountDrops ?? "1";
-      setDropsInput(dropsValue);
-      setXrpInput(dropsToXrpInput(dropsValue));
       setAsset((prev) =>
         prev
           ? {
@@ -268,19 +283,9 @@ export default function AssetDetailPage({
       );
     } catch (err: any) {
       setVerifyError(err?.message ?? "検証コードの取得に失敗しました");
+    } finally {
+      setVerifyChallengeLoading(false);
     }
-  };
-
-  const handleDropsChange = (value: string) => {
-    const cleaned = normalizeNumberInput(value);
-    setDropsInput(cleaned);
-    setXrpInput(dropsToXrpInput(cleaned));
-  };
-
-  const handleXrpChange = (value: string) => {
-    const cleaned = normalizeNumberInput(value);
-    setXrpInput(cleaned);
-    setDropsInput(xrpToDropsInput(cleaned));
   };
 
   const getReserveTokenKey = (token: { currency: string; issuer: string | null }) =>
@@ -350,28 +355,49 @@ export default function AssetDetailPage({
     }
   };
 
-  const handleCopy = async (label: string, value: string) => {
-    const result = await copyText(label, value);
-    setCopyMessage(result.message);
-    if (result.ok) {
-      window.setTimeout(() => setCopyMessage(null), 1500);
+  const resolveVerifyChallenge = () => {
+    if (challenge) return challenge;
+    if (asset?.verificationChallenge) {
+      return {
+        challenge: asset.verificationChallenge,
+        address: asset.verificationAddress,
+        amountDrops: "1"
+      };
     }
+    return null;
   };
 
-  const handleConfirm = async () => {
-    if (!caseId || !assetId) return;
+  const handleAutoVerify = async () => {
+    if (!caseId || !assetId || !asset) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifySending(true);
     try {
-      await confirmVerify(caseId, assetId, txHash);
+      const result = await autoVerifyWalletOwnership(
+        {
+          walletAddress: asset.address,
+          secret: verifySecret,
+          challenge: resolveVerifyChallenge()
+        },
+        {
+          requestChallenge: () => requestVerifyChallenge(caseId, assetId),
+          createPaymentTx,
+          signSingle,
+          submitSignedBlob,
+          confirmVerify: (txHash) => confirmVerify(caseId, assetId, txHash)
+        }
+      );
+      setChallenge(result.challenge);
+      setVerifySecret("");
       setVerifySuccess("検証が完了しました");
-      setTxHash("");
       await loadAsset();
       if (tab === "history") {
         await loadHistory();
       }
     } catch (err: any) {
-      setVerifyError(err?.message ?? "検証に失敗しました");
+      setVerifyError(err?.message ?? "自動検証に失敗しました");
+    } finally {
+      setVerifySending(false);
     }
   };
 
@@ -667,125 +693,27 @@ export default function AssetDetailPage({
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>XRPL検証</DialogTitle>
-                    <DialogDescription>送金情報を確認し、TXハッシュで検証します。</DialogDescription>
+                    <DialogDescription>
+                      シークレットで送金し、自動で検証します。
+                    </DialogDescription>
                   </DialogHeader>
                   {verifyError ? <FormAlert variant="error">{verifyError}</FormAlert> : null}
                   {verifySuccess ? <FormAlert variant="success">{verifySuccess}</FormAlert> : null}
-                  {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
 
-                  <div className={styles.verifyBlock}>
-                    <div className={styles.verifyRow}>
-                      <div>
-                        <div className={styles.metaLabel}>Destination</div>
-                        <div className={styles.metaValue}>{asset.verificationAddress}</div>
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className={styles.copyButton}
-                        onClick={() => handleCopy("Destination", asset.verificationAddress)}
-                        aria-label="Destinationをコピー"
-                      >
-                        <Copy />
-                      </Button>
-                    </div>
-
-                    <div className={styles.verifyRow}>
-                      <div>
-                        <div className={styles.metaLabel}>Memo</div>
-                        <div className={styles.metaValue}>
-                          {asset.verificationChallenge ?? challenge?.challenge ?? "未発行"}
-                        </div>
-                      </div>
-                      <div className={styles.verifyRowActions}>
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className={styles.iconButton}
-                          onClick={handleRequestChallenge}
-                          aria-label="検証コードを発行"
-                          disabled={isLocked}
-                        >
-                          <RefreshCw />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy(
-                              "Memo",
-                              asset.verificationChallenge ?? challenge?.challenge ?? ""
-                            )
-                          }
-                          aria-label="Memoをコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className={styles.amountGrid}>
-                      <div className={styles.amountField}>
-                        <FormField label="Amount (drops)">
-                          <Input
-                            value={dropsInput}
-                            onChange={(event) => handleDropsChange(event.target.value)}
-                            placeholder="例: 1"
-                            disabled={isLocked}
-                          />
-                        </FormField>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() => handleCopy("Amount (drops)", dropsInput)}
-                          aria-label="Amount (drops)をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                      <div className={styles.amountField}>
-                        <FormField label="Amount (XRP)">
-                          <Input
-                            value={xrpInput}
-                            onChange={(event) => handleXrpChange(event.target.value)}
-                            placeholder="例: 0.000001"
-                            disabled={isLocked}
-                          />
-                        </FormField>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() => handleCopy("Amount (XRP)", xrpInput)}
-                          aria-label="Amount (XRP)をコピー"
-                        >
-                          <Copy />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <FormField label="TX Hash">
-                    <Input
-                      value={txHash}
-                      onChange={(event) => setTxHash(event.target.value)}
-                      placeholder="例: 7F3A..."
-                      disabled={isLocked}
-                    />
-                  </FormField>
+                  <WalletVerifyPanel
+                    destination={asset.verificationAddress}
+                    memo={memoDisplay}
+                    secret={verifySecret}
+                    onSecretChange={setVerifySecret}
+                    onSubmit={handleAutoVerify}
+                    isSubmitting={verifySending}
+                    submitDisabled={isLocked || verifySending || verifyChallengeLoading}
+                    secretDisabled={isLocked || verifySending}
+                  />
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="ghost">閉じる</Button>
                     </DialogClose>
-                    <Button
-                      size="sm"
-                      onClick={handleConfirm}
-                      disabled={!txHash.trim() || isLocked}
-                    >
-                      検証を完了
-                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

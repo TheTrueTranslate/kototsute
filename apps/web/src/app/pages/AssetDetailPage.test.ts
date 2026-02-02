@@ -63,6 +63,25 @@ vi.mock("../api/assets", () => ({
   deleteAsset: async () => ({})
 }));
 
+vi.mock("../../features/shared/components/ui/dialog", () => ({
+  Dialog: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogContent: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogHeader: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogFooter: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogTitle: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogDescription: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogTrigger: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children),
+  DialogClose: ({ children }: { children: React.ReactNode }) =>
+    React.createElement("div", null, children)
+}));
+
 const render = async (props?: Record<string, unknown>) => {
   const { default: AssetDetailPage } = await import("./AssetDetailPage");
   return renderToString(
@@ -152,5 +171,17 @@ describe("AssetDetailPage", () => {
     });
     expect(html).toContain("担当者");
     expect(html).toContain("owner@example.com");
+  });
+
+  it("renders auto verify guidance without tx hash input", async () => {
+    const html = await render();
+    expect(html).toContain("data-testid=\"wallet-verify-panel\"");
+    expect(html).toContain("シークレットで自動検証");
+    expect(html).toContain("Destination（運営確認用ウォレット）");
+    expect(html).toContain("システムの検証用アドレス");
+    expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).not.toContain("TX Hash");
+    expect(html).not.toContain("Destinationをコピー");
+    expect(html).not.toContain("Memoをコピー");
   });
 });

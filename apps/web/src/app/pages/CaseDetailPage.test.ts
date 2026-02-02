@@ -186,6 +186,53 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("XRP Wallet");
   });
 
+  it("renders verification status badges for assets", async () => {
+    const { AssetRow } = await import("./CaseDetailPage");
+    const html = renderToString(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(AssetRow, {
+            caseId: "case-1",
+            asset: {
+              assetId: "asset-1",
+              label: "XRP Wallet",
+              address: "rXXXX",
+              createdAt: "2024-01-01",
+              verificationStatus: "VERIFIED"
+            }
+          }),
+          React.createElement(AssetRow, {
+            caseId: "case-1",
+            asset: {
+              assetId: "asset-2",
+              label: "BTC Wallet",
+              address: "1XXXX",
+              createdAt: "2024-01-02",
+              verificationStatus: "PENDING"
+            }
+          }),
+          React.createElement(AssetRow, {
+            caseId: "case-1",
+            asset: {
+              assetId: "asset-3",
+              label: "ETH Wallet",
+              address: "0xXXXX",
+              createdAt: "2024-01-03",
+              verificationStatus: "UNVERIFIED"
+            }
+          })
+        )
+      )
+    );
+    expect(html).toContain("検証成功");
+    expect(html).toContain("検証失敗");
+    expect(html).toContain("未検証");
+  });
+
   it("does not show shared tasks section", async () => {
     const html = await render();
     expect(html).not.toContain("共有タスク");
@@ -667,9 +714,14 @@ describe("CaseDetailPage", () => {
       initialWalletDialogOpen: true,
       initialWalletDialogMode: "verify"
     });
-    expect(html).toContain("Amount (drops)");
-    expect(html).toContain("Amount (XRP)");
-    expect(html).toContain("Memo");
+    expect(html).toContain("Destination（運営確認用ウォレット）");
+    expect(html).toContain("システムの検証用アドレス");
+    expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).not.toContain("Amount (drops)");
+    expect(html).not.toContain("Amount (XRP)");
+    expect(html).not.toContain("取引ハッシュ");
+    expect(html).not.toContain("Destinationをコピー");
+    expect(html).not.toContain("Memoをコピー");
   });
 
 });
