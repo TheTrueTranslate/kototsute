@@ -634,6 +634,9 @@ export default function AssetLockPage({
         </div>
       </header>
 
+      {planValidationError ? (
+        <FormAlert variant="error">{planValidationError}</FormAlert>
+      ) : null}
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}
       {isLocked ? (
         <FormAlert variant="success">
@@ -723,9 +726,6 @@ export default function AssetLockPage({
             ) : (
               <div className={styles.planHint}>被相続人の確認待ちです。</div>
             )}
-            {planValidationError ? (
-              <FormAlert variant="error">{planValidationError}</FormAlert>
-            ) : null}
           </div>
         ) : null}
         {current.id === "method" ? (
@@ -785,9 +785,6 @@ export default function AssetLockPage({
                 </ul>
               </label>
             </div>
-            {planValidationError ? (
-              <FormAlert variant="error">{planValidationError}</FormAlert>
-            ) : null}
             <div className={styles.methodActions}>
               <Button type="button" onClick={handleStart} disabled={loading || !!planValidationError}>
                 {loading ? "開始中..." : "ロックを開始"}

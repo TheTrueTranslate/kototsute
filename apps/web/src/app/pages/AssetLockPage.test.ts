@@ -133,6 +133,7 @@ it("disables confirm when no active plans", async () => {
     )
   );
   expect(html).toContain("相続対象の指図がありません");
+  expect(html.indexOf("相続対象の指図がありません")).toBeLessThan(html.indexOf("準備・注意"));
   expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>確認しました/);
 });
 
@@ -159,6 +160,7 @@ it("disables start when a plan has no heirs", async () => {
     )
   );
   expect(html).toContain("相続人が未設定の指図があります");
+  expect(html.indexOf("相続人が未設定の指図があります")).toBeLessThan(html.indexOf("方式選択"));
   expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>ロックを開始/);
 });
 
