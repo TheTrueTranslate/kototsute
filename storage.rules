@@ -2,8 +2,54 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+
+    function caseDoc(caseId) {
+      return get(/databases/$(database)/documents/cases/$(caseId));
+    }
+
+    function isCaseMember(caseId) {
+      return caseDoc(caseId).data.memberUids.hasAny([request.auth.uid]);
+    }
+
+    function uploadRequest(caseId, claimId, requestId) {
+      return get(
+        /databases/$(database)/documents/cases/$(caseId)/deathClaims/$(claimId)/uploadRequests/$(requestId)
+      );
+    }
+
+    function isUploadAllowed(caseId, claimId, requestId) {
+      let req = uploadRequest(caseId, claimId, requestId);
+      return req.exists()
+        && req.data.uid == request.auth.uid
+        && req.data.status == "ISSUED"
+        && req.data.contentType == request.resource.contentType
+        && req.data.size == request.resource.size
+        && request.time < req.data.expiresAt;
+    }
+
+    function isDeathClaimsPath() {
+      return (request.resource != null
+          ? request.resource.name
+          : resource.name
+        ).matches(".*/o/cases/.+/death-claims/.+");
+    }
+
+    match /cases/{caseId}/death-claims/{claimId}/{requestId} {
+      allow read: if isSignedIn() && (isCaseMember(caseId) || isAdmin());
+      allow write: if isSignedIn()
+        && (isCaseMember(caseId) || isAdmin())
+        && isUploadAllowed(caseId, claimId, requestId);
+    }
+
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && !isDeathClaimsPath();
     }
   }
 }

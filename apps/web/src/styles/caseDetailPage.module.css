@@ -46,6 +46,30 @@
   @apply flex flex-wrap items-center gap-2;
 }
 
+.nextAction {
+  @apply grid gap-2 rounded-2xl border border-border/60 bg-muted/30 px-4 py-4;
+}
+
+.nextActionTitle {
+  @apply text-body font-medium text-foreground;
+}
+
+.nextActionSteps {
+  @apply flex flex-wrap gap-2;
+}
+
+.nextActionStep {
+  @apply rounded-full border border-border bg-background px-3 py-1 text-meta text-muted-foreground;
+}
+
+.nextActionStepActive {
+  @apply border-foreground text-foreground;
+}
+
+.nextActionBody {
+  @apply text-body-sm text-muted-foreground;
+}
+
 .list {
   @apply flex flex-col gap-4;
 }
@@ -95,6 +119,10 @@
 }
 
 .badgeMuted {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.muted {
   @apply text-body-sm text-muted-foreground;
 }
 
@@ -256,4 +284,303 @@
 
 .taskBadge {
   @apply mt-1 inline-flex w-fit items-center rounded-full border border-border bg-background px-2 py-0.5 text-meta text-muted-foreground;
+}
+
+.collapsible {
+  @apply rounded-2xl border border-border/60 bg-muted/30;
+}
+
+.collapsibleSummary {
+  @apply flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3;
+}
+
+.collapsibleSummary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsibleSummary::marker {
+  display: none;
+}
+
+.collapsibleText {
+  @apply grid gap-1;
+}
+
+.collapsibleTitle {
+  @apply text-body font-medium text-foreground;
+}
+
+.collapsibleHint {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.collapsibleChevron {
+  @apply relative h-3 w-3 text-muted-foreground transition-transform;
+}
+
+.collapsibleChevron::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.collapsible[open] .collapsibleChevron::before {
+  transform: rotate(-135deg);
+}
+
+.collapsibleMeta {
+  @apply flex items-center gap-3;
+}
+
+.collapsibleBody {
+  @apply px-4 pb-4 pt-2;
+}
+
+.signerSection {
+  @apply grid gap-3 rounded-2xl border border-border/60 bg-muted/30 p-4;
+}
+
+.signerHeader {
+  @apply flex flex-wrap items-start justify-between gap-3;
+}
+
+.signerHeaderMain {
+  @apply grid gap-1;
+}
+
+.signerTitle {
+  @apply text-body font-medium text-foreground;
+}
+
+.signerHint {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.signerBadge {
+  @apply inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-meta text-muted-foreground;
+}
+
+.signerPrepare {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.signerPrepareTitle {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.signerPrepareHint {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerPrepareActions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.distributionSection {
+  @apply grid gap-3 rounded-2xl border border-border/60 bg-muted/30 p-4;
+}
+
+.distributionHeader {
+  @apply flex flex-wrap items-start justify-between gap-3;
+}
+
+.distributionHeaderMain {
+  @apply grid gap-1;
+}
+
+.distributionTitle {
+  @apply text-body font-medium text-foreground;
+}
+
+.distributionHint {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.distributionBadge {
+  @apply inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-meta text-muted-foreground;
+}
+
+.distributionActions {
+  @apply flex flex-wrap items-center gap-3;
+}
+
+.distributionNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerPrepareNote {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.signerGrid {
+  @apply grid gap-2;
+}
+
+.signerRow {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.signerLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerValue {
+  @apply text-body text-foreground;
+}
+
+.signerActions {
+  @apply grid gap-4 md:grid-cols-2;
+}
+
+.signerNote {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.signerMultiSign {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.signerMultiSignTitle {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.signerMultiSignBody {
+  @apply grid gap-2;
+}
+
+.signerMultiSignRow {
+  @apply grid gap-1;
+}
+
+.signerMultiSignLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerMultiSignValue {
+  @apply break-all text-body text-foreground;
+}
+
+.signerMultiSignList {
+  @apply grid gap-2;
+}
+
+.signerMultiSignItem {
+  @apply grid gap-0.5;
+}
+
+.signerMultiSignItemLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerMultiSignItemValue {
+  @apply break-all text-body text-foreground;
+}
+
+.signerMultiSignNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerGuide {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.signerGuideTitle {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.signerGuideList {
+  @apply grid gap-1 pl-4 text-body-sm text-muted-foreground;
+  list-style: decimal;
+}
+
+.signerTxSection {
+  @apply grid gap-3 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.signerTxHeader {
+  @apply flex flex-wrap items-start justify-between gap-2;
+}
+
+.signerTxHeaderMain {
+  @apply grid gap-1;
+}
+
+.signerTxTitle {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.signerTxHint {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerTxBadge {
+  @apply inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-meta text-muted-foreground;
+}
+
+.signerTxStatus {
+  @apply grid gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-3;
+}
+
+.signerTxNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerTxGrid {
+  @apply grid gap-2;
+}
+
+.signerTxRow {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.signerTxLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerTxValue {
+  @apply break-all text-body text-foreground;
+}
+
+.signerTxJson {
+  @apply grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-3;
+}
+
+.signerTxJsonHeader {
+  @apply flex items-center justify-between gap-2;
+}
+
+.signerTxJsonBody {
+  @apply max-h-60 overflow-auto rounded-md bg-background p-2 text-[11px] text-foreground;
+}
+
+.signerActionBlock {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.signerActionRow {
+  @apply flex flex-wrap items-center gap-3;
+}
+
+.signerAutoNote {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.signerSecretNote {
+  @apply text-meta text-muted-foreground;
+}
+
+.signerHashNote {
+  @apply text-meta text-muted-foreground;
+  word-break: break-all;
+}
+
+.walletVerifyApp {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-3;
 }

@@ -12,6 +12,7 @@
     }
   },
   "dependencies": {
+    "xrpl": "^4.5.0",
     "zod": "^3.23.8"
   },
   "scripts": {

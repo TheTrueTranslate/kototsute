@@ -13,7 +13,7 @@ export const createDefaultDeps = (): ApiDeps => {
     if (!match) throw unauthorizedError();
     try {
       const decoded = await getAuth().verifyIdToken(match[1]);
-      return { uid: decoded.uid, email: decoded.email ?? null };
+      return { uid: decoded.uid, email: decoded.email ?? null, admin: decoded.admin === true };
     } catch (error: any) {
       if (typeof error?.code === "string" && error.code.startsWith("auth/")) {
         throw unauthorizedError();

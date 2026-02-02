@@ -1,13 +1,19 @@
 import { Hono } from "hono";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
 import {
   assetCreateSchema,
   assetReserveSchema,
+  createLocalXrplWallet,
   displayNameSchema,
+  getWalletAddressFromSeed,
   inviteCreateSchema,
   planAllocationSchema,
-  planCreateSchema
+  planCreateSchema,
+  sendSignerListSet,
+  sendTokenPayment,
+  sendXrpPayment
 } from "@kototsute/shared";
 import type { ApiBindings } from "../types.js";
 import { jsonError, jsonOk } from "../utils/response.js";
@@ -23,16 +29,17 @@ import {
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
   fetchXrplReserve,
-  fetchXrplTx
+  fetchXrplTx,
+  fetchXrplValidatedLedgerIndex
 } from "../utils/xrpl.js";
+import {
+  combineMultisignedBlobs,
+  decodeSignedBlob,
+  submitMultisignedTx
+} from "../utils/xrpl-multisign.js";
 import { encryptPayload } from "../utils/encryption.js";
 import { decryptPayload } from "../utils/encryption.js";
-import {
-  createLocalXrplWallet,
-  getWalletAddressFromSeed,
-  sendXrpPayment,
-  sendTokenPayment
-} from "../utils/xrpl-wallet.js";
+import { prepareInheritanceExecution } from "../utils/inheritance-execution.js";
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -53,6 +60,11 @@ const toDrops = (value: string) => {
 
 const isValidXrplClassicAddress = (address: string) =>
   /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address);
+
+const isAllowedDeathClaimContentType = (value: string) =>
+  ["application/pdf", "image/jpeg", "image/png"].includes(value);
+
+const maxDeathClaimFileSize = 10 * 1024 * 1024;
 
 const createLocalXrplWalletFallback = () => {
   return createLocalXrplWallet();
@@ -215,6 +227,14 @@ export const casesRoutes = () => {
     const normalizedEmail = normalizeEmail(parsed.data.email);
     const now = c.get("deps").now();
     const invitesCollection = db.collection(`cases/${caseId}/invites`);
+    const countSnap = await invitesCollection.get();
+    const activeCount = countSnap.docs.filter((doc) => {
+      const status = doc.data()?.status;
+      return status === "pending" || status === "accepted";
+    }).length;
+    if (activeCount >= 30) {
+      return jsonError(c, 400, "HEIR_LIMIT_REACHED", "相続人は30人までです");
+    }
     const resolveInviteReceiver = async (): Promise<string | null> => {
       try {
         const user = await getAuth().getUserByEmail(normalizedEmail);
@@ -696,6 +716,1272 @@ export const casesRoutes = () => {
     );
 
     return jsonOk(c);
+  });
+
+  app.get(":caseId/death-claims", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimsSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    const claimDoc = claimsSnap.docs[0];
+    if (!claimDoc) {
+      return jsonOk(c, {
+        claim: null,
+        files: [],
+        confirmationsCount: 0,
+        requiredCount: 0,
+        confirmedByMe: false
+      });
+    }
+
+    const filesSnap = await claimDoc.ref.collection("files").get();
+    const files = filesSnap.docs.map((doc) => ({ fileId: doc.id, ...doc.data() }));
+
+    const confirmationsSnap = await claimDoc.ref.collection("confirmations").get();
+    const confirmationsCount = confirmationsSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = heirCount === 0 ? 0 : Math.floor(heirCount / 2) + 1;
+    const confirmedByMe = confirmationsSnap.docs.some((doc) => doc.id === auth.uid);
+
+    return jsonOk(c, {
+      claim: { claimId: claimDoc.id, ...claimDoc.data() },
+      files,
+      confirmationsCount,
+      requiredCount,
+      confirmedByMe
+    });
+  });
+
+  app.post(":caseId/death-claims", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const submittedSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .where("status", "==", "SUBMITTED")
+      .get();
+    const approvedSnap = await db
+      .collection(`cases/${caseId}/deathClaims`)
+      .where("status", "==", "ADMIN_APPROVED")
+      .get();
+    if (submittedSnap.docs.length > 0 || approvedSnap.docs.length > 0) {
+      return jsonError(c, 409, "CONFLICT", "既に申請済みです");
+    }
+
+    const now = c.get("deps").now();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc();
+    await claimRef.set({
+      submittedByUid: auth.uid,
+      status: "SUBMITTED",
+      createdAt: now,
+      updatedAt: now
+    });
+
+    return jsonOk(c, { claimId: claimRef.id });
+  });
+
+  app.post(":caseId/death-claims/:claimId/upload-requests", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const fileName = typeof body?.fileName === "string" ? body.fileName.trim() : "";
+    const contentType = typeof body?.contentType === "string" ? body.contentType : "";
+    const size = Number(body?.size ?? 0);
+    if (
+      !fileName ||
+      !isAllowedDeathClaimContentType(contentType) ||
+      !Number.isFinite(size) ||
+      size <= 0 ||
+      size > maxDeathClaimFileSize
+    ) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "ファイル形式またはサイズが不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    const claimStatus = claimSnap.data()?.status;
+    if (claimStatus !== "SUBMITTED" && claimStatus !== "ADMIN_REJECTED") {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        "提出済みまたは差し戻しの申請のみ追加できます"
+      );
+    }
+
+    const now = c.get("deps").now();
+    const requestRef = claimRef.collection("uploadRequests").doc();
+    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+    await requestRef.set({
+      uid: auth.uid,
+      fileName,
+      contentType,
+      size,
+      status: "ISSUED",
+      expiresAt,
+      createdAt: now
+    });
+
+    return jsonOk(c, {
+      requestId: requestRef.id,
+      uploadPath: `cases/${caseId}/death-claims/${claimId}/${requestRef.id}`
+    });
+  });
+
+  app.post(":caseId/death-claims/:claimId/files", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const requestId = typeof body?.requestId === "string" ? body.requestId.trim() : "";
+    if (!requestId) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "requestIdは必須です");
+    }
+
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const requestRef = claimRef.collection("uploadRequests").doc(requestId);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Upload request not found");
+    }
+    const request = requestSnap.data() ?? {};
+    if (request.uid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const now = c.get("deps").now();
+    const fileRef = claimRef.collection("files").doc();
+    await fileRef.set({
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${requestId}`,
+      fileName: request.fileName,
+      contentType: request.contentType,
+      size: request.size,
+      uploadedByUid: auth.uid,
+      createdAt: now
+    });
+    await requestRef.set({ status: "VERIFIED" }, { merge: true });
+
+    return jsonOk(c, { fileId: fileRef.id });
+  });
+
+  app.get(":caseId/death-claims/:claimId/files/:fileId/download", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const fileId = c.req.param("fileId");
+    const db = getFirestore();
+    const caseSnap = await db.collection("cases").doc(caseId).get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const fileSnap = await db
+      .collection(`cases/${caseId}/deathClaims/${claimId}/files`)
+      .doc(fileId)
+      .get();
+    if (!fileSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "File not found");
+    }
+    const fileData = fileSnap.data() ?? {};
+    const storagePath = typeof fileData.storagePath === "string" ? fileData.storagePath : null;
+    const storageBucket = process.env.STORAGE_BUCKET;
+    if (!storagePath || !storageBucket) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "storagePathがありません");
+    }
+    const [buffer] = await getStorage().bucket(storageBucket).file(storagePath).download();
+    const dataBase64 = Buffer.from(buffer).toString("base64");
+    return jsonOk(c, {
+      fileName: fileData.fileName ?? null,
+      contentType: fileData.contentType ?? "application/octet-stream",
+      dataBase64
+    });
+  });
+
+  app.post(":caseId/death-claims/:claimId/admin-approve", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "ADMIN_APPROVED",
+        adminApprovedByUid: auth.uid,
+        adminApprovedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/death-claims/:claimId/admin-reject", async (c) => {
+    const auth = c.get("auth");
+    if (!auth.admin) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const body = await c.req.json().catch(() => ({}));
+    const note = typeof body?.note === "string" ? body.note.trim() : null;
+    const db = getFirestore();
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "ADMIN_REJECTED",
+        adminReview: {
+          status: "REJECTED",
+          note,
+          reviewedByUid: auth.uid,
+          reviewedAt: now
+        },
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/death-claims/:claimId/resubmit", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    if (claimSnap.data()?.status !== "ADMIN_REJECTED") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "差し戻し中のみ再提出できます");
+    }
+
+    const now = c.get("deps").now();
+    await claimRef.set(
+      {
+        status: "SUBMITTED",
+        adminReview: null,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    const confirmationsSnap = await claimRef.collection("confirmations").get();
+    await Promise.all(confirmationsSnap.docs.map((doc) => doc.ref.delete()));
+
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/death-claims/:claimId/confirm", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const claimId = c.req.param("claimId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc(claimId);
+    const claimSnap = await claimRef.get();
+    if (!claimSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Claim not found");
+    }
+    if (claimSnap.data()?.status !== "ADMIN_APPROVED") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "運営承認が必要です");
+    }
+
+    const confirmationRef = claimRef.collection("confirmations").doc(auth.uid);
+    const confirmationSnap = await confirmationRef.get();
+    if (!confirmationSnap.exists) {
+      await confirmationRef.set({ uid: auth.uid, createdAt: c.get("deps").now() });
+    }
+
+    const confirmationsSnap = await claimRef.collection("confirmations").get();
+    const confirmationsCount = confirmationsSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    if (confirmationsCount >= requiredCount) {
+      const now = c.get("deps").now();
+      await claimRef.set(
+        { status: "CONFIRMED", confirmedAt: now, updatedAt: now },
+        { merge: true }
+      );
+      await caseRef.set({ stage: "IN_PROGRESS", updatedAt: now }, { merge: true });
+      try {
+        await prepareInheritanceExecution({
+          caseRef,
+          caseData: { ...caseData, stage: "IN_PROGRESS" },
+          now
+        });
+      } catch (error) {
+        console.warn("prepareInheritanceExecution failed on confirm", error);
+      }
+    }
+
+    return jsonOk(c, { confirmationsCount, requiredCount });
+  });
+
+  app.post(":caseId/signer-list/prepare", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const force = body?.force === true;
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続中のみ準備できます");
+    }
+
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (heirUids.length === 0) {
+      return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+    }
+    const walletSnaps = await Promise.all(
+      heirUids.map((uid) => caseRef.collection("heirWallets").doc(uid).get())
+    );
+    const hasUnverified = walletSnaps.some((snap) => {
+      const data = snap.data() ?? {};
+      const address = typeof data.address === "string" ? data.address : "";
+      return !address || data.verificationStatus !== "VERIFIED";
+    });
+    if (hasUnverified) {
+      return jsonError(
+        c,
+        400,
+        "HEIR_WALLET_UNVERIFIED",
+        "相続人の受取用ウォレットが未確認です"
+      );
+    }
+
+    const now = c.get("deps").now();
+    const result = await prepareInheritanceExecution({
+      caseRef,
+      caseData,
+      now,
+      force
+    });
+    if (result.status === "SKIPPED") {
+      switch (result.reason) {
+        case "NOT_IN_PROGRESS":
+          return jsonError(c, 400, "NOT_READY", "相続中のみ準備できます");
+        case "LOCK_WALLET_MISSING":
+          return jsonError(c, 400, "VALIDATION_ERROR", "分配用ウォレットが未設定です");
+        case "HEIR_WALLET_UNVERIFIED":
+          return jsonError(
+            c,
+            400,
+            "HEIR_WALLET_UNVERIFIED",
+            "相続人の受取用ウォレットが未確認です"
+          );
+        case "HEIR_MISSING":
+          return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+        case "APPROVAL_NOT_EXPIRED":
+          return jsonError(c, 400, "NOT_READY", "送信中のため再準備できません");
+        default:
+          return jsonError(c, 400, "NOT_READY", "同意の準備が完了していません");
+      }
+    }
+    if (result.status === "FAILED") {
+      switch (result.reason) {
+        case "SYSTEM_SIGNER_MISSING":
+        case "SYSTEM_SIGNER_SEED_MISSING":
+          return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
+        case "VERIFY_ADDRESS_MISSING":
+          return jsonError(c, 500, "VERIFY_ADDRESS_MISSING", "送金先が未設定です");
+        case "SIGNER_LIST_FAILED":
+          return jsonError(c, 500, "SIGNER_LIST_FAILED", "署名準備に失敗しました");
+        default:
+          return jsonError(c, 500, "PREPARE_FAILED", "同意の準備に失敗しました");
+      }
+    }
+
+    return jsonOk(c, result.approvalTx);
+  });
+
+  app.get(":caseId/signer-list/approval-tx", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    if (!approvalSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "ApprovalTx not found");
+    }
+    const approval = approvalSnap.data() ?? {};
+    const submittedTxHash =
+      typeof approval.submittedTxHash === "string" ? approval.submittedTxHash : null;
+    let networkStatus:
+      | "PENDING"
+      | "VALIDATED"
+      | "FAILED"
+      | "NOT_FOUND"
+      | "EXPIRED"
+      | null = null;
+    let networkResult: string | null = null;
+    if (approval.status === "SUBMITTED" && submittedTxHash) {
+      const result = await fetchXrplTx(submittedTxHash);
+      if (!result.ok) {
+        networkStatus = "NOT_FOUND";
+      } else {
+        const tx = result.tx as any;
+        const validated = Boolean(tx?.validated);
+        networkResult =
+          typeof tx?.meta?.TransactionResult === "string"
+            ? tx.meta.TransactionResult
+            : null;
+        if (!validated) {
+          const lastLedgerRaw = tx?.LastLedgerSequence;
+          const lastLedger =
+            typeof lastLedgerRaw === "number"
+              ? lastLedgerRaw
+              : typeof lastLedgerRaw === "string"
+                ? Number(lastLedgerRaw)
+                : NaN;
+          if (Number.isFinite(lastLedger)) {
+            const ledgerResult = await fetchXrplValidatedLedgerIndex();
+            if (ledgerResult.ok && ledgerResult.ledgerIndex >= lastLedger) {
+              networkStatus = "EXPIRED";
+            } else {
+              networkStatus = "PENDING";
+            }
+          } else {
+            networkStatus = "PENDING";
+          }
+        } else if (networkResult && networkResult !== "tesSUCCESS") {
+          networkStatus = "FAILED";
+        } else {
+          networkStatus = "VALIDATED";
+        }
+      }
+    }
+    return jsonOk(c, {
+      memo: approval.memo ?? null,
+      txJson: approval.txJson ?? null,
+      status: approval.status ?? null,
+      systemSignedHash: approval.systemSignedHash ?? null,
+      submittedTxHash,
+      networkStatus,
+      networkResult
+    });
+  });
+
+  app.get(":caseId/signer-list", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const signerRef = caseRef.collection("signerList").doc("state");
+    const signerSnap = await signerRef.get();
+    const signerData = signerSnap.data() ?? null;
+    const status = signerData?.status ?? "NOT_READY";
+    const error = signerData?.error ?? null;
+    const entries = Array.isArray(signerData?.entries) ? signerData?.entries : [];
+    const systemSignerAddress = process.env.XRPL_SYSTEM_SIGNER_ADDRESS ?? null;
+    const signaturesSnap = await signerRef.collection("signatures").get();
+    const signaturesCount = signaturesSnap.docs.length;
+    const signedByMe = signaturesSnap.docs.some((doc) => doc.id === auth.uid);
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    return jsonOk(c, {
+      status,
+      quorum: signerData?.quorum ?? null,
+      error,
+      entries,
+      systemSignerAddress,
+      signaturesCount,
+      requiredCount,
+      signedByMe
+    });
+  });
+
+  app.get(":caseId/distribution", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const stateSnap = await caseRef.collection("distribution").doc("state").get();
+    const state = stateSnap.data() ?? {};
+
+    const toCount = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value) ? value : 0;
+
+    return jsonOk(c, {
+      status: typeof state.status === "string" ? state.status : "PENDING",
+      totalCount: toCount(state.totalCount),
+      successCount: toCount(state.successCount),
+      failedCount: toCount(state.failedCount),
+      skippedCount: toCount(state.skippedCount),
+      escalationCount: toCount(state.escalationCount),
+      retryLimit: toCount(state.retryLimit),
+      startedAt: state.startedAt ?? null,
+      lastProcessedAt: state.lastProcessedAt ?? null,
+      updatedAt: state.updatedAt ?? null
+    });
+  });
+
+  app.post(":caseId/distribution/execute", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続中のみ実行できます");
+    }
+
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    const approval = approvalSnap.data() ?? {};
+    if (approval.status !== "SUBMITTED" || !approval.submittedTxHash) {
+      return jsonError(c, 400, "NOT_READY", "相続実行の同意が完了していません");
+    }
+
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (heirUids.length === 0) {
+      return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+    }
+    const heirWalletSnaps = await Promise.all(
+      heirUids.map((uid) => caseRef.collection("heirWallets").doc(uid).get())
+    );
+    const heirWallets = heirWalletSnaps.map((snap, index) => {
+      const data = snap.data() ?? {};
+      const address = typeof data.address === "string" ? data.address : "";
+      const verified = data.verificationStatus === "VERIFIED" && address.length > 0;
+      return { uid: heirUids[index] ?? "", address, verified };
+    });
+    if (heirWallets.some((wallet) => !wallet.verified)) {
+      return jsonError(c, 400, "HEIR_WALLET_UNVERIFIED", "相続人の受取用ウォレットが未確認です");
+    }
+    const heirWalletMap = new Map(
+      heirWallets.map((wallet) => [wallet.uid, wallet.address])
+    );
+
+    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockData = lockSnap.data() ?? {};
+    const lockWalletAddress = lockData?.wallet?.address;
+    const lockSeedEncrypted = lockData?.wallet?.seedEncrypted;
+    if (!lockWalletAddress || !lockSeedEncrypted) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "分配用ウォレットが未設定です");
+    }
+    const lockSeed = decryptPayload(lockSeedEncrypted);
+
+    const stateRef = caseRef.collection("distribution").doc("state");
+    const itemsRef = stateRef.collection("items");
+    const existingStateSnap = await stateRef.get();
+    const existingState = existingStateSnap.data() ?? {};
+    const existingStatus = typeof existingState.status === "string" ? existingState.status : null;
+    if (
+      existingStateSnap.exists &&
+      existingStatus &&
+      ["RUNNING", "PARTIAL", "FAILED"].includes(existingStatus)
+    ) {
+      const retryLimit =
+        typeof existingState.retryLimit === "number" && Number.isFinite(existingState.retryLimit)
+          ? existingState.retryLimit
+          : 3;
+      const itemsSnap = await itemsRef.get();
+      if (!itemsSnap.empty) {
+        const now = c.get("deps").now();
+        const retryCandidates = itemsSnap.docs.map((doc) => {
+          const item = doc.data() ?? {};
+          const status = String(item.status ?? "QUEUED");
+          const attempts =
+            typeof item.attempts === "number" && Number.isFinite(item.attempts)
+              ? item.attempts
+              : 0;
+          return { doc, item, status, attempts };
+        });
+        const itemsToAttempt = retryCandidates.filter(({ status, attempts }) => {
+          if (status === "VERIFIED") return false;
+          if (status === "SKIPPED") return false;
+          if (status === "FAILED" && attempts >= retryLimit) return false;
+          return true;
+        });
+        const adjustedAmounts = new Map<string, string>();
+        if (itemsToAttempt.length > 0) {
+          const totalXrpDrops = itemsToAttempt.reduce((total, { item }) => {
+            if (item.token) return total;
+            const amountDrops = BigInt(item.amount ?? "0");
+            return total + amountDrops;
+          }, 0n);
+          if (totalXrpDrops > 0n) {
+            const feePerTxDrops = 12n;
+            const reserveInfo = await fetchXrplReserve();
+            const reserveBaseDrops =
+              reserveInfo.status === "ok"
+                ? BigInt(reserveInfo.reserveBaseDrops)
+                : BigInt(toDrops(process.env.XRPL_RESERVE_BASE_XRP ?? "10"));
+            const reserveIncDrops =
+              reserveInfo.status === "ok"
+                ? BigInt(reserveInfo.reserveIncDrops)
+                : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
+            const accountInfo = await fetchXrplAccountInfo(lockWalletAddress);
+            if (accountInfo.status !== "ok") {
+              return jsonError(c, 400, "XRPL_ACCOUNT_INFO_FAILED", accountInfo.message);
+            }
+            const ownerCount =
+              typeof accountInfo.ownerCount === "number" &&
+              Number.isFinite(accountInfo.ownerCount)
+                ? accountInfo.ownerCount
+                : 0;
+            const balanceDrops = BigInt(toDrops(accountInfo.balanceXrp));
+            const requiredReserveDrops =
+              reserveBaseDrops + reserveIncDrops * BigInt(ownerCount);
+            const feeDrops = BigInt(itemsToAttempt.length) * feePerTxDrops;
+            const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
+            if (availableDrops <= 0n) {
+              return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+            }
+            if (totalXrpDrops > availableDrops) {
+              for (const { doc, item } of itemsToAttempt) {
+                if (item.token) continue;
+                const amountDrops = BigInt(item.amount ?? "0");
+                const adjustedDrops =
+                  (amountDrops * availableDrops) / totalXrpDrops;
+                adjustedAmounts.set(doc.id, adjustedDrops.toString());
+              }
+            }
+          }
+        }
+
+        let successCount = 0;
+        let failedCount = 0;
+        let skippedCount = 0;
+        let escalationCount = 0;
+        for (const doc of itemsSnap.docs) {
+          const item = doc.data() ?? {};
+          const status = String(item.status ?? "QUEUED");
+          const attempts =
+            typeof item.attempts === "number" && Number.isFinite(item.attempts)
+              ? item.attempts
+              : 0;
+          if (status === "VERIFIED") {
+            successCount += 1;
+            continue;
+          }
+          if (status === "SKIPPED") {
+            skippedCount += 1;
+            escalationCount += 1;
+            continue;
+          }
+          if (status === "FAILED" && attempts >= retryLimit) {
+            skippedCount += 1;
+            escalationCount += 1;
+            await doc.ref.set(
+              {
+                status: "SKIPPED",
+                updatedAt: now,
+                error: item.error ?? "再試行回数上限に達しました"
+              },
+              { merge: true }
+            );
+            continue;
+          }
+
+          try {
+            if (item.token) {
+              const amount = String(item.amount ?? "0");
+              const result = await sendTokenPayment({
+                fromSeed: lockSeed,
+                fromAddress: lockWalletAddress,
+                to: String(item.heirAddress ?? ""),
+                token: item.token,
+                amount
+              });
+              await doc.ref.set(
+                {
+                  status: "VERIFIED",
+                  amount,
+                  txHash: result.txHash ?? null,
+                  updatedAt: now
+                },
+                { merge: true }
+              );
+            } else {
+              const amount = adjustedAmounts.get(doc.id) ?? String(item.amount ?? "0");
+              const result = await sendXrpPayment({
+                fromSeed: lockSeed,
+                fromAddress: lockWalletAddress,
+                to: String(item.heirAddress ?? ""),
+                amountDrops: amount
+              });
+              await doc.ref.set(
+                {
+                  status: "VERIFIED",
+                  amount,
+                  txHash: result.txHash ?? null,
+                  updatedAt: now
+                },
+                { merge: true }
+              );
+            }
+            successCount += 1;
+          } catch (error: any) {
+            failedCount += 1;
+            await doc.ref.set(
+              {
+                status: "FAILED",
+                amount: adjustedAmounts.get(doc.id) ?? String(item.amount ?? "0"),
+                attempts: attempts + 1,
+                error: error?.message ?? "送金に失敗しました",
+                updatedAt: now
+              },
+              { merge: true }
+            );
+          }
+        }
+
+        const status =
+          failedCount > 0 || skippedCount > 0 ? "PARTIAL" : "COMPLETED";
+        await stateRef.set(
+          {
+            status,
+            successCount,
+            failedCount,
+            skippedCount,
+            escalationCount,
+            updatedAt: c.get("deps").now()
+          },
+          { merge: true }
+        );
+
+        return jsonOk(c, {
+          status,
+          totalCount: itemsSnap.docs.length,
+          successCount,
+          failedCount,
+          skippedCount,
+          escalationCount,
+          startedAt: existingState.startedAt ?? null,
+          updatedAt: c.get("deps").now()
+        });
+      }
+    }
+
+    const planSnap = await caseRef.collection("plans").get();
+    const eligiblePlans = planSnap.docs.filter((doc) => {
+      const plan = doc.data() ?? {};
+      if ((plan.status ?? "DRAFT") === "INACTIVE") return false;
+      const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+      return heirUids.length > 0;
+    });
+    if (eligiblePlans.length === 0) {
+      return jsonError(c, 400, "NOT_READY", "相続対象の指図がありません");
+    }
+
+    const assetLockItemsSnap = await caseRef.collection("assetLockItems").get();
+    if (assetLockItemsSnap.empty) {
+      return jsonError(c, 400, "NOT_READY", "分配対象の資産がありません");
+    }
+
+    type AssetTotals = {
+      assetLabel: string;
+      xrpDrops: bigint;
+      tokens: Map<string, { amount: number; token: { currency: string; issuer: string | null; isNative: boolean } }>;
+    };
+    const assetTotals = new Map<string, AssetTotals>();
+
+    assetLockItemsSnap.docs.forEach((doc) => {
+      const item = doc.data() ?? {};
+      const assetId = typeof item.assetId === "string" ? item.assetId : "";
+      if (!assetId) return;
+      const assetLabel = typeof item.assetLabel === "string" ? item.assetLabel : "";
+      const token = item.token ?? null;
+      const plannedAmount = String(item.plannedAmount ?? "0");
+      const current = assetTotals.get(assetId) ?? {
+        assetLabel,
+        xrpDrops: 0n,
+        tokens: new Map()
+      };
+      if (token) {
+        const currency = String(token.currency ?? "");
+        const issuer = token.issuer ?? null;
+        const key = `${currency}:${issuer ?? ""}`;
+        const amount = toNumber(plannedAmount);
+        if (amount > 0) {
+          current.tokens.set(key, {
+            amount,
+            token: { currency, issuer, isNative: false }
+          });
+        }
+      } else {
+        const drops = BigInt(plannedAmount || "0");
+        if (drops > 0n) {
+          current.xrpDrops += drops;
+        }
+      }
+      assetTotals.set(assetId, current);
+    });
+
+    const distributionItems: Array<Record<string, any>> = [];
+    const now = c.get("deps").now();
+    const percentScale = 1_000_000n;
+    const formatTokenAmount = (value: number) => {
+      const fixed = value.toFixed(6);
+      return fixed.replace(/\.?0+$/, "") || "0";
+    };
+
+    for (const planDoc of eligiblePlans) {
+      const plan = planDoc.data() ?? {};
+      const planId = plan.planId ?? planDoc.id;
+      const planTitle = typeof plan.title === "string" ? plan.title : "";
+      const planAssetsSnap = await planDoc.ref.collection("assets").get();
+      for (const assetDoc of planAssetsSnap.docs) {
+        const asset = assetDoc.data() ?? {};
+        const assetId = typeof asset.assetId === "string" ? asset.assetId : "";
+        if (!assetId) continue;
+        const totals = assetTotals.get(assetId);
+        if (!totals) continue;
+        const unitType = asset.unitType === "AMOUNT" ? "AMOUNT" : "PERCENT";
+        const allocations = Array.isArray(asset.allocations) ? asset.allocations : [];
+        const xrpTotal = totals.xrpDrops;
+        const xrpTotalNumber = Number(xrpTotal) / 1_000_000;
+
+        const allocationEntries = allocations.filter(
+          (allocation: any) => allocation?.heirUid && !allocation?.isUnallocated
+        );
+
+        const xrpAmountsByHeir = new Map<string, bigint>();
+        let allocatedTotal = 0n;
+        for (const allocation of allocationEntries) {
+          const heirUid = String(allocation.heirUid ?? "");
+          const value = toNumber(allocation.value);
+          let amountDrops = 0n;
+          if (unitType === "AMOUNT") {
+            amountDrops = BigInt(toDrops(value.toString()));
+          } else {
+            const ratioScaled = BigInt(Math.round((value / 100) * Number(percentScale)));
+            amountDrops = (xrpTotal * ratioScaled) / percentScale;
+          }
+          if (amountDrops > 0n) {
+            xrpAmountsByHeir.set(heirUid, amountDrops);
+            allocatedTotal += amountDrops;
+          }
+        }
+
+        if (xrpTotal > 0n && allocatedTotal > xrpTotal) {
+          return jsonError(c, 400, "VALIDATION_ERROR", "分配額が資産残高を超えています");
+        }
+
+        for (const allocation of allocationEntries) {
+          const heirUid = String(allocation.heirUid ?? "");
+          const heirAddress = heirWalletMap.get(heirUid) ?? "";
+          if (!heirAddress) continue;
+          const amountDrops = xrpAmountsByHeir.get(heirUid) ?? 0n;
+          if (amountDrops > 0n) {
+            distributionItems.push({
+              status: "QUEUED",
+              planId,
+              planTitle,
+              assetId,
+              assetLabel: totals.assetLabel,
+              heirUid,
+              heirAddress,
+              token: null,
+              amount: amountDrops.toString(),
+              attempts: 0,
+              txHash: null,
+              error: null,
+              createdAt: now,
+              updatedAt: now
+            });
+          }
+          for (const tokenEntry of totals.tokens.values()) {
+            let ratio = 0;
+            if (unitType === "PERCENT") {
+              ratio = toNumber(allocation.value) / 100;
+            } else {
+              ratio = xrpTotalNumber > 0 ? toNumber(allocation.value) / xrpTotalNumber : 0;
+            }
+            const tokenAmount = tokenEntry.amount * ratio;
+            if (tokenAmount > 0) {
+              distributionItems.push({
+                status: "QUEUED",
+                planId,
+                planTitle,
+                assetId,
+                assetLabel: totals.assetLabel,
+                heirUid,
+                heirAddress,
+                token: tokenEntry.token,
+                amount: formatTokenAmount(tokenAmount),
+                attempts: 0,
+                txHash: null,
+                error: null,
+                createdAt: now,
+                updatedAt: now
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (distributionItems.length === 0) {
+      return jsonError(c, 400, "NOT_READY", "分配対象がありません");
+    }
+
+    const feePerTxDrops = 12n;
+    const reserveInfo = await fetchXrplReserve();
+    const reserveBaseDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveBaseDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_BASE_XRP ?? "10"));
+    const reserveIncDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveIncDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
+    const accountInfo = await fetchXrplAccountInfo(lockWalletAddress);
+    if (accountInfo.status !== "ok") {
+      return jsonError(c, 400, "XRPL_ACCOUNT_INFO_FAILED", accountInfo.message);
+    }
+    const ownerCount =
+      typeof accountInfo.ownerCount === "number" && Number.isFinite(accountInfo.ownerCount)
+        ? accountInfo.ownerCount
+        : 0;
+    const balanceDrops = BigInt(toDrops(accountInfo.balanceXrp));
+    const requiredReserveDrops = reserveBaseDrops + reserveIncDrops * BigInt(ownerCount);
+    const feeDrops = BigInt(distributionItems.length) * feePerTxDrops;
+    const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
+    if (availableDrops <= 0n) {
+      return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+    }
+    const totalXrpDrops = distributionItems.reduce((total, item) => {
+      if (item.token) return total;
+      const amountDrops = BigInt(item.amount ?? "0");
+      return total + amountDrops;
+    }, 0n);
+    if (totalXrpDrops > availableDrops && totalXrpDrops > 0n) {
+      const scaledItems: Array<Record<string, any>> = [];
+      for (const item of distributionItems) {
+        if (item.token) {
+          scaledItems.push(item);
+          continue;
+        }
+        const amountDrops = BigInt(item.amount ?? "0");
+        const adjustedDrops = (amountDrops * availableDrops) / totalXrpDrops;
+        if (adjustedDrops <= 0n) {
+          continue;
+        }
+        scaledItems.push({ ...item, amount: adjustedDrops.toString() });
+      }
+      distributionItems.length = 0;
+      distributionItems.push(...scaledItems);
+    }
+
+    const existingItemsSnap = await itemsRef.get();
+    if (!existingItemsSnap.empty) {
+      await Promise.all(existingItemsSnap.docs.map((doc) => doc.ref.delete()));
+    }
+
+    await stateRef.set(
+      {
+        status: "RUNNING",
+        totalCount: distributionItems.length,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0,
+        retryLimit: 3,
+        startedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    let successCount = 0;
+    let failedCount = 0;
+    for (const item of distributionItems) {
+      const itemRef = itemsRef.doc();
+      const token = item.token ?? null;
+      try {
+        if (token) {
+          const result = await sendTokenPayment({
+            fromSeed: lockSeed,
+            fromAddress: lockWalletAddress,
+            to: item.heirAddress,
+            token,
+            amount: item.amount
+          });
+          await itemRef.set(
+            { ...item, status: "VERIFIED", txHash: result.txHash ?? null, updatedAt: now },
+            { merge: true }
+          );
+        } else {
+          const result = await sendXrpPayment({
+            fromSeed: lockSeed,
+            fromAddress: lockWalletAddress,
+            to: item.heirAddress,
+            amountDrops: item.amount
+          });
+          await itemRef.set(
+            { ...item, status: "VERIFIED", txHash: result.txHash ?? null, updatedAt: now },
+            { merge: true }
+          );
+        }
+        successCount += 1;
+      } catch (error: any) {
+        failedCount += 1;
+        await itemRef.set(
+          {
+            ...item,
+            status: "FAILED",
+            attempts: 1,
+            error: error?.message ?? "送金に失敗しました",
+            updatedAt: now
+          },
+          { merge: true }
+        );
+      }
+    }
+
+    const status = failedCount > 0 ? "PARTIAL" : "COMPLETED";
+    await stateRef.set(
+      {
+        status,
+        successCount,
+        failedCount,
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, {
+      status,
+      totalCount: distributionItems.length,
+      successCount,
+      failedCount,
+      skippedCount: 0,
+      escalationCount: 0,
+      startedAt: now,
+      updatedAt: c.get("deps").now()
+    });
+  });
+
+  app.post(":caseId/signer-list/sign", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const body = await c.req.json().catch(() => ({}));
+    const signedBlob =
+      typeof body?.signedBlob === "string" ? body.signedBlob.trim() : "";
+    if (!signedBlob) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "signedBlobは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+    if (caseData.stage !== "IN_PROGRESS") {
+      return jsonError(c, 400, "NOT_READY", "相続実行が開始されていません");
+    }
+
+    const signerRef = caseRef.collection("signerList").doc("state");
+    const signerSnap = await signerRef.get();
+    if (!signerSnap.exists || signerSnap.data()?.status !== "SET") {
+      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "署名準備が完了していません");
+    }
+
+    const walletSnap = await caseRef.collection("heirWallets").doc(auth.uid).get();
+    const wallet = walletSnap.data() ?? {};
+    const address = typeof wallet.address === "string" ? wallet.address : "";
+    const isVerified = wallet.verificationStatus === "VERIFIED";
+    if (!address || !isVerified) {
+      return jsonError(c, 400, "WALLET_NOT_VERIFIED", "ウォレットが未確認です");
+    }
+
+    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    if (!approvalSnap.exists) {
+      return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "署名対象が未生成です");
+    }
+    const approvalData = approvalSnap.data() ?? {};
+    const decoded: any = decodeSignedBlob(signedBlob);
+    const signers = Array.isArray(decoded?.Signers) ? decoded.Signers : [];
+    const hasSigner = signers.some((entry: any) => entry?.Signer?.Account === address);
+    if (!hasSigner) {
+      return jsonError(c, 400, "SIGNER_MISMATCH", "署名者が一致しません");
+    }
+    const memoHex = Buffer.from(String(approvalData.memo ?? ""), "utf8")
+      .toString("hex")
+      .toUpperCase();
+    const memoValue = decoded?.Memos?.[0]?.Memo?.MemoData ?? "";
+    if (memoHex && memoValue !== memoHex) {
+      return jsonError(c, 400, "MEMO_MISMATCH", "署名対象が一致しません");
+    }
+
+    const now = c.get("deps").now();
+    await signerRef.collection("signatures").doc(auth.uid).set({
+      uid: auth.uid,
+      address,
+      signedBlob,
+      createdAt: now
+    });
+
+    const signaturesSnap = await signerRef.collection("signatures").get();
+    const signaturesCount = signaturesSnap.docs.length;
+    const heirCount = Math.max(0, memberUids.length - 1);
+    const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+
+    if (
+      signaturesCount >= requiredCount &&
+      approvalData?.systemSignedBlob &&
+      approvalData?.status === "PREPARED"
+    ) {
+      const blobs = [
+        approvalData.systemSignedBlob,
+        ...signaturesSnap.docs.map((doc) => doc.data()?.signedBlob).filter(Boolean)
+      ];
+      const combined = combineMultisignedBlobs(blobs);
+      const submitResult = await submitMultisignedTx(combined.txJson);
+      await approvalSnap.ref.set(
+        {
+          status: "SUBMITTED",
+          submittedTxHash: submitResult.txHash ?? null,
+          updatedAt: now
+        },
+        { merge: true }
+      );
+    }
+
+    return jsonOk(c, { signaturesCount, requiredCount, signedByMe: true });
   });
 
   app.post(":caseId/assets", async (c) => {
@@ -1236,8 +2522,27 @@ export const casesRoutes = () => {
     if (!caseSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Case not found");
     }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
+    const caseData = caseSnap.data() ?? {};
+    if (caseData.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
+    if (caseData.stage === "IN_PROGRESS") {
+      const walletSnaps = await Promise.all(
+        heirUids.map((uid) => db.collection(`cases/${caseId}/heirWallets`).doc(uid).get())
+      );
+      const heirWallets = walletSnaps.map((snap) => {
+        const data = snap.data() ?? {};
+        const address = typeof data.address === "string" ? data.address : "";
+        const verified = data.verificationStatus === "VERIFIED" && address.length > 0;
+        return { address, verified };
+      });
+      const hasUnverified = heirWallets.some((wallet) => !wallet.verified);
+      if (hasUnverified) {
+        return jsonError(c, 400, "WALLET_NOT_VERIFIED", "相続人ウォレットが未検証です");
+      }
     }
 
     const assetsSnap = await db.collection(`cases/${caseId}/assets`).get();
@@ -1272,6 +2577,49 @@ export const casesRoutes = () => {
       createdAt: now,
       updatedAt: now
     });
+
+    if (caseData.stage === "IN_PROGRESS") {
+      const systemSigner = process.env.XRPL_SYSTEM_SIGNER_ADDRESS ?? "";
+      if (!systemSigner) {
+        return jsonError(c, 500, "SYSTEM_SIGNER_MISSING", "システム署名者が未設定です");
+      }
+      const walletSnaps = await Promise.all(
+        heirUids.map((uid) => db.collection(`cases/${caseId}/heirWallets`).doc(uid).get())
+      );
+      const heirAddresses = walletSnaps
+        .map((snap) => (typeof snap.data()?.address === "string" ? snap.data()?.address : ""))
+        .filter((address) => address);
+      const quorum = heirAddresses.length + (Math.floor(heirAddresses.length / 2) + 1);
+      const signerEntries = [
+        { account: systemSigner, weight: heirAddresses.length },
+        ...heirAddresses.map((address) => ({ account: address, weight: 1 }))
+      ];
+      try {
+        await sendSignerListSet({
+          fromSeed: wallet.seed,
+          fromAddress: wallet.address,
+          signerEntries,
+          quorum
+        });
+        await caseRef.collection("signerList").doc("state").set({
+          status: "SET",
+          quorum,
+          entries: signerEntries,
+          createdAt: now,
+          updatedAt: now
+        });
+      } catch (error: any) {
+        await caseRef.collection("signerList").doc("state").set({
+          status: "FAILED",
+          quorum,
+          entries: signerEntries,
+          error: error?.message ?? "SignerListSet failed",
+          createdAt: now,
+          updatedAt: now
+        });
+        return jsonError(c, 500, "SIGNER_LIST_FAILED", "SignerListSetに失敗しました");
+      }
+    }
 
     const items: Array<Record<string, any>> = [];
     for (const doc of assetsSnap.docs) {
@@ -2206,13 +3554,15 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const snapshot = isOwner
-      ? await db.collection(`cases/${caseId}/plans`).get()
-      : await db
-          .collection(`cases/${caseId}/plans`)
-          .where("status", "==", "SHARED")
-          .get();
-    const data = snapshot.docs.map((doc) => ({ planId: doc.id, ...doc.data() }));
+    const snapshot = await db.collection(`cases/${caseId}/plans`).get();
+    const data: Array<Record<string, any>> = snapshot.docs
+      .map((doc) => ({ planId: doc.id, ...(doc.data() as Record<string, any>) }))
+      .filter((plan) => {
+        if (isOwner) return true;
+        const planData = plan as Record<string, any>;
+        const heirUids = Array.isArray(planData.heirUids) ? planData.heirUids : [];
+        return heirUids.includes(auth.uid);
+      });
     return jsonOk(c, data);
   });
 
@@ -2241,7 +3591,8 @@ export const casesRoutes = () => {
     if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
       return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -2276,7 +3627,8 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -2550,7 +3902,8 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if (!isOwner && planSnap.data()?.status !== "SHARED") {
+    const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
+    if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
@@ -2787,118 +4140,6 @@ export const casesRoutes = () => {
       }
     });
     return jsonOk(c);
-  });
-
-  app.post(":caseId/plans/:planId/share", async (c) => {
-    const auth = c.get("auth");
-    const caseId = c.req.param("caseId");
-    const planId = c.req.param("planId");
-    const db = getFirestore();
-    const caseRef = db.collection("cases").doc(caseId);
-    const caseSnap = await caseRef.get();
-    if (!caseSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Case not found");
-    }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-
-    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-
-    const currentAssets = await db.collection(`cases/${caseId}/plans/${planId}/assets`).get();
-    const currentAssetIds = new Set(
-      currentAssets.docs.map((doc) => String(doc.data()?.assetId ?? ""))
-    );
-
-    const sharedPlans = await db
-      .collection(`cases/${caseId}/plans`)
-      .where("status", "==", "SHARED")
-      .get();
-    for (const sharedPlan of sharedPlans.docs) {
-      if (sharedPlan.id === planId) continue;
-      const sharedAssets = await db
-        .collection(`cases/${caseId}/plans/${sharedPlan.id}/assets`)
-        .get();
-      const hasOverlap = sharedAssets.docs.some((doc) =>
-        currentAssetIds.has(String(doc.data()?.assetId ?? ""))
-      );
-      if (hasOverlap) {
-        return jsonError(c, 400, "VALIDATION_ERROR", "資産が他の共有済み指図と重複しています");
-      }
-    }
-
-    const now = c.get("deps").now();
-    await planRef.set(
-      {
-        status: "SHARED",
-        sharedAt: now,
-        updatedAt: now
-      },
-      { merge: true }
-    );
-    await appendPlanHistory(planRef, {
-      type: "PLAN_SHARED",
-      title: "指図を共有しました",
-      detail: planSnap.data()?.title ? `タイトル: ${planSnap.data()?.title}` : null,
-      actorUid: auth.uid,
-      actorEmail: auth.email ?? null,
-      createdAt: now,
-      meta: {
-        prevStatus: planSnap.data()?.status ?? "DRAFT",
-        nextStatus: "SHARED"
-      }
-    });
-
-    return jsonOk(c, { status: "SHARED" });
-  });
-
-  app.post(":caseId/plans/:planId/unshare", async (c) => {
-    const auth = c.get("auth");
-    const caseId = c.req.param("caseId");
-    const planId = c.req.param("planId");
-    const db = getFirestore();
-    const caseRef = db.collection("cases").doc(caseId);
-    const caseSnap = await caseRef.get();
-    if (!caseSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Case not found");
-    }
-    if (caseSnap.data()?.ownerUid !== auth.uid) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-
-    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-
-    const now = c.get("deps").now();
-    await planRef.set(
-      {
-        status: "DRAFT",
-        sharedAt: null,
-        updatedAt: now
-      },
-      { merge: true }
-    );
-    await appendPlanHistory(planRef, {
-      type: "PLAN_UNSHARED",
-      title: "共有を解除しました",
-      detail: planSnap.data()?.title ? `タイトル: ${planSnap.data()?.title}` : null,
-      actorUid: auth.uid,
-      actorEmail: auth.email ?? null,
-      createdAt: now,
-      meta: {
-        prevStatus: planSnap.data()?.status ?? "DRAFT",
-        nextStatus: "DRAFT"
-      }
-    });
-
-    return jsonOk(c, { status: "DRAFT" });
   });
 
   return app;

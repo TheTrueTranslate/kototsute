@@ -3,6 +3,7 @@ version: "3"
 vars:
   ROOT: "."
   WEB_DIR: "apps/web"
+  ADMIN_DIR: "apps/admin"
   FUNCTIONS_DIR: "apps/functions"
   SHARED_DIR: "packages/shared"
   PROJECT_ID: "kototsute"
@@ -31,14 +32,31 @@ tasks:
       - pnpm -C {{.FUNCTIONS_DIR}} install
 
   dev:
-    desc: "Run Vite dev server with Firebase emulators (core)"
+    desc: "Run Vite dev servers with Firebase emulators (web + admin)"
     cmds:
-      - task -p firebase:emulate dev:app functions:watch
+      - task -p firebase:emulate dev:app dev:admin functions:watch
 
   dev:app:
     desc: "Run Vite dev server"
     cmds:
       - pnpm -C {{.WEB_DIR}} dev -- --open
+
+  dev:admin:
+    desc: "Run Admin Vite dev server"
+    cmds:
+      - pnpm -C {{.ADMIN_DIR}} dev
+
+  tools:admin:
+    desc: "Run admin grant tool"
+    cmds:
+      - pnpm -C packages/internal build
+      - node packages/internal/dist/cli/admin.js
+
+  tools:xrpl:
+    desc: "Run XRPL tool"
+    cmds:
+      - pnpm -C packages/internal build
+      - node packages/internal/dist/cli/xrpl.js
 
   build:
     desc: "Build shared, functions, and web"

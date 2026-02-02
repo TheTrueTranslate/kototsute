@@ -164,7 +164,7 @@ export const plansRoutes = () => {
     const auth = c.get("auth");
     const body = await c.req.json().catch(() => ({}));
     const nextStatus = body?.status;
-    if (nextStatus !== "DRAFT" && nextStatus !== "SHARED" && nextStatus !== "INACTIVE") {
+    if (nextStatus !== "DRAFT" && nextStatus !== "INACTIVE") {
       return jsonError(c, 400, "VALIDATION_ERROR", "statusが不正です");
     }
 
@@ -185,44 +185,14 @@ export const plansRoutes = () => {
       status: nextStatus,
       updatedAt: now
     };
-    if (nextStatus === "SHARED") {
-      updates.sharedAt = now;
-    }
     if (nextStatus === "DRAFT") {
       updates.sharedAt = null;
     }
     await planRef.set(updates, { merge: true });
 
-    if (nextStatus === "SHARED" && currentStatus !== "SHARED") {
-      const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
-      await Promise.all(
-        heirUids.map(async (heirUid: string) => {
-          const notificationRef = db.collection("notifications").doc();
-          await notificationRef.set({
-            receiverUid: heirUid,
-            type: "PLAN_SHARED",
-            title: "指図が共有されました",
-            body: plan.title ? `「${plan.title}」が共有されました。` : "指図が共有されました。",
-            related: { kind: "plan", id: planId },
-            isRead: false,
-            createdAt: now
-          });
-        })
-      );
-    }
-
-    const historyType =
-      nextStatus === "SHARED"
-        ? "PLAN_SHARED"
-        : nextStatus === "INACTIVE"
-          ? "PLAN_INACTIVATED"
-          : "PLAN_STATUS_CHANGED";
+    const historyType = nextStatus === "INACTIVE" ? "PLAN_INACTIVATED" : "PLAN_STATUS_CHANGED";
     const historyTitle =
-      nextStatus === "SHARED"
-        ? "指図を共有しました"
-        : nextStatus === "INACTIVE"
-          ? "指図を無効にしました"
-          : "指図のステータスを変更しました";
+      nextStatus === "INACTIVE" ? "指図を無効にしました" : "指図のステータスを変更しました";
     await appendPlanHistory(planRef, {
       type: historyType,
       title: historyTitle,
@@ -549,59 +519,6 @@ export const plansRoutes = () => {
             : assignedTotal
       }
     });
-    return jsonOk(c);
-  });
-
-  app.post(":planId/share", async (c) => {
-    const planId = c.req.param("planId");
-    const auth = c.get("auth");
-    const db = getFirestore();
-    const planRef = db.collection("plans").doc(planId);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-    const plan = planSnap.data() ?? {};
-    if (plan.ownerUid !== auth.uid) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-
-    const now = c.get("deps").now();
-    await planRef.set(
-      {
-        status: "SHARED",
-        sharedAt: now,
-        updatedAt: now
-      },
-      { merge: true }
-    );
-    await appendPlanHistory(planRef, {
-      type: "PLAN_SHARED",
-      title: "指図を共有しました",
-      detail: plan.title ? `タイトル: ${plan.title}` : null,
-      actorUid: auth.uid,
-      actorEmail: auth.email ?? null,
-      createdAt: now,
-      meta: {
-        prevStatus: plan.status ?? "DRAFT",
-        nextStatus: "SHARED"
-      }
-    });
-    const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
-    await Promise.all(
-      heirUids.map(async (heirUid: string) => {
-        const notificationRef = db.collection("notifications").doc();
-        await notificationRef.set({
-          receiverUid: heirUid,
-          type: "PLAN_SHARED",
-          title: "指図が共有されました",
-          body: plan.title ? `「${plan.title}」が共有されました。` : "指図が共有されました。",
-          related: { kind: "plan", id: planId },
-          isRead: false,
-          createdAt: now
-        });
-      })
-    );
     return jsonOk(c);
   });
 

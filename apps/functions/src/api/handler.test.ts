@@ -15,7 +15,14 @@ const authState = {
   existingEmails: new Set<string>(),
   users: new Map<string, { email?: string | null }>()
 };
-const authTokens = new Map<string, { uid: string; email?: string | null }>();
+const authTokens = new Map<string, { uid: string; email?: string | null; admin?: boolean }>();
+const storageMocks = vi.hoisted(() => {
+  const getSignedUrl = vi.fn(async () => ["https://storage.example.com/signed"]);
+  const download = vi.fn(async () => [Buffer.from("dummy-file")]);
+  const file = vi.fn(() => ({ getSignedUrl, download }));
+  const bucket = vi.fn(() => ({ file }));
+  return { getSignedUrl, download, file, bucket };
+});
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -211,14 +218,63 @@ vi.mock("firebase-admin/auth", () => ({
   })
 }));
 
-vi.mock("./utils/xrpl-wallet.js", () => ({
-  sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
-  sendTokenPayment: async () => ({ txHash: "tx-token" }),
-  getWalletAddressFromSeed: vi.fn(() => "rDest"),
-  createLocalXrplWallet: vi.fn(() => ({
-    address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-    seed: "sLocal"
+vi.mock("firebase-admin/storage", () => ({
+  getStorage: () => ({
+    bucket: storageMocks.bucket
+  })
+}));
+
+vi.mock("@kototsute/shared", async () => {
+  const actual = await vi.importActual<typeof import("@kototsute/shared")>(
+    "@kototsute/shared"
+  );
+  return {
+    ...actual,
+    sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
+    sendTokenPayment: async () => ({ txHash: "tx-token" }),
+    sendSignerListSet: async () => ({ txHash: "tx-signer" }),
+    getWalletAddressFromSeed: vi.fn(() => "rDest"),
+    createLocalXrplWallet: vi.fn(() => ({
+      address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+      seed: "sLocal"
+    }))
+  };
+});
+
+vi.mock("./utils/xrpl", async () => {
+  const actual = await vi.importActual<typeof import("./utils/xrpl")>("./utils/xrpl");
+  return {
+    ...actual,
+    createChallenge: () => "memo_123"
+  };
+});
+
+const prepareApprovalTxMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    TransactionType: "Payment",
+    Account: "rLock",
+    Destination: "rVerify",
+    Amount: "1"
   }))
+);
+
+vi.mock("./utils/xrpl-multisign", () => ({
+  prepareApprovalTx: prepareApprovalTxMock,
+  signForMultisign: () => ({ blob: "blob-system", hash: "hash-system" }),
+  decodeSignedBlob: () => ({
+    TransactionType: "Payment",
+    Account: "rLock",
+    Destination: "rVerify",
+    Amount: "1",
+    Memos: [{ Memo: { MemoData: "6D656D6F5F616263" } }],
+    Signers: [{ Signer: { Account: "rHeir" } }],
+    SigningPubKey: ""
+  }),
+  combineMultisignedBlobs: () => ({
+    blob: "blob-combined",
+    txJson: { TransactionType: "Payment" }
+  }),
+  submitMultisignedTx: async () => ({ txHash: "tx-final" })
 }));
 
 class InMemoryAssetRepository implements AssetRepository {
@@ -272,6 +328,16 @@ const createRes = (): MockRes => {
       return this;
     },
     json(body: any) {
+      this.body = body;
+      return this;
+    }
+  };
+};
+
+const createResWithSend = (): MockRes & { send: (body: any) => MockRes } => {
+  return {
+    ...createRes(),
+    send(body: any) {
       this.body = body;
       return this;
     }
@@ -494,7 +560,7 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.length).toBe(1);
   });
 
-  it("adds heir from accepted invite and shares plan", async () => {
+  it("adds heir from accepted invite", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -529,15 +595,8 @@ describe("createApiHandler", () => {
     const resAdd = createRes();
     await handler(addReq as any, resAdd as any);
 
-    const shareReq: MockReq = authedReq("owner_1", "owner@example.com", {
-      method: "POST",
-      path: `/v1/plans/${planId}/share`
-    });
-    const resShare = createRes();
-    await handler(shareReq as any, resShare as any);
-
     const planSnap = await db.collection("plans").doc(planId).get();
-    expect(planSnap.data()?.status).toBe("SHARED");
+    expect(planSnap.data()?.status).toBe("DRAFT");
     expect(planSnap.data()?.heirUids).toContain("heir_1");
   });
 
@@ -984,6 +1043,49 @@ describe("createApiHandler", () => {
 
     const caseSnap = await getFirestore().collection("cases").doc(caseId).get();
     expect(caseSnap.data()?.memberUids ?? []).toContain("heir_1");
+  });
+
+  it("rejects case invite when heir limit exceeded", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const invitesRef = getFirestore().collection(`cases/${caseId}/invites`);
+    for (let i = 0; i < 30; i++) {
+      await invitesRef.doc(`invite_${i}`).set({
+        email: `heir${i}@example.com`,
+        status: "pending"
+      });
+    }
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites`,
+        body: { email: "extra@example.com", relationLabel: "長男" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("HEIR_LIMIT_REACHED");
   });
 
   it("lists case heirs", async () => {
@@ -1509,6 +1611,46 @@ describe("createApiHandler", () => {
     const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
     expect(itemsSnap.docs.length).toBe(2);
     (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("blocks asset lock start when heir wallet not verified after death confirmed", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rAddr1",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_2").set({
+      address: "rAddr2",
+      verificationStatus: null
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "B" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("WALLET_NOT_VERIFIED");
   });
 
   it("falls back when wallet propose returns invalid address", async () => {
@@ -2363,7 +2505,7 @@ describe("createApiHandler", () => {
   it("rejects execute when regular key seed does not match wallet address", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     vi.mocked(
-      await import("./utils/xrpl-wallet.js")
+      await import("@kototsute/shared")
     ).getWalletAddressFromSeed.mockReturnValueOnce("rOther");
 
     const handler = createApiHandler({
@@ -2966,98 +3108,6 @@ describe("createApiHandler", () => {
     expect(delRes.body?.data?.relatedPlans?.length).toBe(1);
   });
 
-  it("prevents sharing when assets overlap with shared plans", async () => {
-    const caseRepo = new FirestoreCaseRepository();
-    const handler = createApiHandler({
-      repo: new InMemoryAssetRepository(),
-      caseRepo,
-      now: () => new Date("2024-01-01T00:00:00.000Z"),
-      getAuthUser,
-      getOwnerUidForRead: async (uid) => uid
-    });
-
-    const caseRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: "/v1/cases",
-        body: { ownerDisplayName: "山田" }
-      }) as any,
-      caseRes as any
-    );
-    const caseId = caseRes.body?.data?.caseId;
-
-    const assetRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/assets`,
-        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
-      }) as any,
-      assetRes as any
-    );
-    const assetId = assetRes.body?.data?.assetId;
-
-    const planARes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans`,
-        body: { title: "A" }
-      }) as any,
-      planARes as any
-    );
-    const planAId = planARes.body?.data?.planId;
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/assets`,
-        body: { assetId }
-      }) as any,
-      createRes() as any
-    );
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/share`
-      }) as any,
-      createRes() as any
-    );
-
-    const planBRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans`,
-        body: { title: "B" }
-      }) as any,
-      planBRes as any
-    );
-    const planBId = planBRes.body?.data?.planId;
-
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planBId}/assets`,
-        body: { assetId }
-      }) as any,
-      createRes() as any
-    );
-
-    const shareBRes = createRes();
-    await handler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planBId}/share`
-      }) as any,
-      shareBRes as any
-    );
-
-    expect(shareBRes.statusCode).toBe(400);
-  });
-
   it("lists case plan assets", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
@@ -3167,7 +3217,7 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.length).toBe(1);
   });
 
-  it("lists shared plans for case members", async () => {
+  it("lists plans that include the member as heir", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const ownerHandler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -3210,13 +3260,16 @@ describe("createApiHandler", () => {
     );
     const planBId = planBRes.body?.data?.planId;
 
-    await ownerHandler(
-      authedReq("owner_1", "owner@example.com", {
-        method: "POST",
-        path: `/v1/cases/${caseId}/plans/${planAId}/share`
-      }) as any,
-      createRes() as any
-    );
+    await getFirestore()
+      .collection(`cases/${caseId}/plans`)
+      .doc(planAId)
+      .set(
+        {
+          heirUids: ["heir_1"],
+          heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+        },
+        { merge: true }
+      );
 
     await getFirestore()
       .collection("cases")
@@ -3265,5 +3318,1449 @@ describe("createApiHandler", () => {
     );
 
     expect(blockedRes.statusCode).toBe(403);
+  });
+
+  it("rejects share/unshare endpoints", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    await getFirestore().collection("cases").doc("case_1").set({
+      caseId: "case_1",
+      ownerUid: "owner_1",
+      memberUids: ["owner_1"],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await getFirestore().collection("cases/case_1/plans").doc("plan_1").set({
+      planId: "plan_1",
+      ownerUid: "owner_1",
+      title: "A",
+      status: "DRAFT",
+      heirUids: [],
+      heirs: []
+    });
+
+    const shareRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases/case_1/plans/plan_1/share"
+      }) as any,
+      shareRes as any
+    );
+
+    expect(shareRes.statusCode).toBe(404);
+  });
+
+  it("creates death claim and returns latest", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      ownerDisplayName: "Owner",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const submitRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims`
+      }) as any,
+      submitRes as any
+    );
+
+    expect(submitRes.statusCode).toBe(200);
+
+    const listRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/death-claims`
+      }) as any,
+      listRes as any
+    );
+
+    expect(listRes.body?.data?.claim?.status).toBe("SUBMITTED");
+    expect(listRes.body?.data?.files?.length ?? 0).toBe(0);
+  });
+
+  it("issues upload request and registers file", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc("claim_1");
+    await claimRef.set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const issueRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/upload-requests`,
+        body: { fileName: "death.pdf", contentType: "application/pdf", size: 1024 }
+      }) as any,
+      issueRes as any
+    );
+
+    expect(issueRes.body?.data?.requestId).toBeTruthy();
+
+    const fileRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/files`,
+        body: { requestId: issueRes.body?.data?.requestId }
+      }) as any,
+      fileRes as any
+    );
+
+    expect(fileRes.statusCode).toBe(200);
+  });
+
+  it("allows upload request when claim is rejected", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const claimRef = db.collection(`cases/${caseId}/deathClaims`).doc("claim_1");
+    await claimRef.set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_REJECTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const issueRes = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/upload-requests`,
+        body: { fileName: "death.pdf", contentType: "application/pdf", size: 1024 }
+      }) as any,
+      issueRes as any
+    );
+
+    expect(issueRes.statusCode).toBe(200);
+    expect(issueRes.body?.data?.requestId).toBeTruthy();
+  });
+
+  it("allows case member to download death claim file", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims/${claimId}/files`).doc(fileId).set({
+      fileName: "death.pdf",
+      contentType: "application/pdf",
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${fileId}`,
+      createdAt: new Date()
+    });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/death-claims/${claimId}/files/${fileId}/download`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.dataBase64).toBeTruthy();
+  });
+
+  it("allows owner to download even if not in member list", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/deathClaims/${claimId}/files`).doc(fileId).set({
+      fileName: "death.pdf",
+      contentType: "application/pdf",
+      storagePath: `cases/${caseId}/death-claims/${claimId}/${fileId}`,
+      createdAt: new Date()
+    });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/death-claims/${claimId}/files/${fileId}/download`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("allows admin to approve death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/admin-approve`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("allows admin to reject death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/admin-reject`,
+      body: { note: "差し戻し理由" }
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("ADMIN_REJECTED");
+    expect(claimSnap.data()?.adminReview?.status).toBe("REJECTED");
+    expect(claimSnap.data()?.adminReview?.note).toBe("差し戻し理由");
+  });
+
+  it("rejects admin prepare approval tx endpoint", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [
+        { account: "rSystem", weight: 1 },
+        { account: "rHeir", weight: 1 }
+      ]
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "POST",
+      path: `/v1/admin/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(404);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(false);
+  });
+
+  it("allows heir to prepare approval tx", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(true);
+  });
+
+  it("prepares approval tx even when txJson contains undefined fields", async () => {
+    prepareApprovalTxMock.mockResolvedValueOnce({
+      TransactionType: "Payment",
+      Account: "rLock",
+      Destination: "rVerify",
+      Amount: "1",
+      NetworkID: undefined
+    });
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir_undefined";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const approvalSnap = await db
+      .collection(`cases/${caseId}/signerList`)
+      .doc("approvalTx")
+      .get();
+    expect(approvalSnap.exists).toBe(true);
+  });
+
+  it("returns default distribution state when missing", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_distribution_default";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "GET",
+      path: `/v1/cases/${caseId}/distribution`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("PENDING");
+    expect(res.body?.data?.totalCount).toBe(0);
+  });
+
+  it("creates distribution items when plan includes heirs even if status is DRAFT", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "1000000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_single";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
+      planId: "plan-1",
+      status: "DRAFT",
+      title: "指図A",
+      ownerUid: "owner_1",
+      heirUids: ["heir_1"],
+      heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+    });
+    await db.collection(`cases/${caseId}/plans/plan-1/assets`).doc("plan-asset-1").set({
+      planAssetId: "plan-asset-1",
+      assetId: "asset-1",
+      unitType: "PERCENT",
+      allocations: [{ heirUid: "heir_1", value: 100 }]
+    });
+    await db.collection(`cases/${caseId}/assetLockItems`).doc("item-1").set({
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      token: null,
+      plannedAmount: "100"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("COMPLETED");
+    expect(res.body?.data?.totalCount).toBe(1);
+
+    const stateSnap = await db.collection(`cases/${caseId}/distribution`).doc("state").get();
+    expect(stateSnap.data()?.totalCount).toBe(1);
+    const itemsSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .get();
+    expect(itemsSnap.docs.length).toBe(1);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("scales down xrp distribution when balance is insufficient", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "50000000", OwnerCount: 1 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_scale";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
+      planId: "plan-1",
+      status: "DRAFT",
+      title: "指図A",
+      ownerUid: "owner_1",
+      heirUids: ["heir_1"],
+      heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+    });
+    await db.collection(`cases/${caseId}/plans/plan-1/assets`).doc("plan-asset-1").set({
+      planAssetId: "plan-asset-1",
+      assetId: "asset-1",
+      unitType: "PERCENT",
+      allocations: [{ heirUid: "heir_1", value: 100 }]
+    });
+    await db.collection(`cases/${caseId}/assetLockItems`).doc("item-1").set({
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      token: null,
+      plannedAmount: "100000000"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const itemsSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .get();
+    const item = itemsSnap.docs[0]?.data() ?? {};
+    expect(Number(item.amount ?? "0")).toBeLessThan(100000000);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("scales down xrp on retry when balance is insufficient", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "50000000", OwnerCount: 1 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_retry_scale";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/distribution`).doc("state").set({
+      status: "FAILED",
+      totalCount: 1,
+      successCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+      escalationCount: 0,
+      retryLimit: 3
+    });
+    await db.collection(`cases/${caseId}/distribution/state/items`).doc("item-1").set({
+      status: "FAILED",
+      planId: "plan-1",
+      planTitle: "指図A",
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      heirUid: "heir-1",
+      heirAddress: "rHeir",
+      token: null,
+      amount: "100000000",
+      attempts: 1
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const itemSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .doc("item-1")
+      .get();
+    expect(Number(itemSnap.data()?.amount ?? "0")).toBeLessThan(100000000);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("skips items after retry limit and escalates", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_retry";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+
+    const stateRef = db.collection(`cases/${caseId}/distribution`).doc("state");
+    await stateRef.set({
+      status: "RUNNING",
+      retryLimit: 2,
+      totalCount: 1,
+      successCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+      escalationCount: 0
+    });
+    await stateRef.collection("items").doc("item-1").set({
+      status: "FAILED",
+      attempts: 2,
+      heirUid: "heir_1",
+      heirAddress: "rHeir",
+      token: null,
+      amount: "100"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    const itemSnap = await stateRef.collection("items").doc("item-1").get();
+    expect(itemSnap.data()?.status).toBe("SKIPPED");
+    const stateSnap = await stateRef.get();
+    expect(stateSnap.data()?.escalationCount).toBe(1);
+  });
+
+  it("rejects prepare when heir wallets are unverified", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    process.env.XRPL_SYSTEM_SIGNER_SEED = "sSystem";
+    process.env.XRPL_VERIFY_ADDRESS = "rVerify";
+
+    const db = getFirestore();
+    const caseId = "case_approval_heir_unverified";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      assetLockStatus: "LOCKED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: {
+        address: "rLock",
+        seedEncrypted: encryptPayload("sLock")
+      }
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "PENDING"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/signer-list/prepare`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "heir_1", email: "heir@example.com" });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("HEIR_WALLET_UNVERIFIED");
+  });
+
+  it("allows heir to resubmit rejected death claim", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_1";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_REJECTED",
+      adminReview: {
+        status: "REJECTED",
+        note: "差し戻し",
+        reviewedByUid: "admin_1",
+        reviewedAt: new Date("2024-01-01T00:00:00.000Z")
+      },
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db.collection(`cases/${caseId}/deathClaims/claim_1/confirmations`).doc("heir_2").set({
+      uid: "heir_2",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/death-claims/claim_1/resubmit`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("SUBMITTED");
+    expect(claimSnap.data()?.adminReview ?? null).toBeNull();
+    const confirmationsSnap = await db
+      .collection(`cases/${caseId}/deathClaims/claim_1/confirmations`)
+      .get();
+    expect(confirmationsSnap.docs.length).toBe(0);
+  });
+
+  it("confirms death after admin approve and majority consent", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2", "heir_3"],
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "ADMIN_APPROVED",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const res1 = createRes();
+    await handler(
+      authedReq("heir_1", "heir1@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/confirm`
+      }) as any,
+      res1 as any
+    );
+    expect(res1.statusCode).toBe(200);
+
+    const res2 = createRes();
+    await handler(
+      authedReq("heir_2", "heir2@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/death-claims/claim_1/confirm`
+      }) as any,
+      res2 as any
+    );
+    expect(res2.statusCode).toBe(200);
+
+    const claimSnap = await db.collection(`cases/${caseId}/deathClaims`).doc("claim_1").get();
+    expect(claimSnap.data()?.status).toBe("CONFIRMED");
+  });
+
+  it("lists submitted death claims for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    await db.collection("cases").doc("case_1").set({ caseId: "case_1" });
+    await db.collection("cases").doc("case_2").set({ caseId: "case_2" });
+    await db.collection("cases/case_1/deathClaims").doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db.collection("cases/case_2/deathClaims").doc("claim_2").set({
+      submittedByUid: "heir_2",
+      status: "ADMIN_APPROVED",
+      createdAt: new Date("2024-01-02T00:00:00.000Z")
+    });
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: "/v1/admin/death-claims",
+      query: { status: "SUBMITTED" }
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.length).toBe(1);
+    expect(res.body?.data?.[0]?.claimId).toBe("claim_1");
+  });
+
+  it("returns death claim detail for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    await db.collection("cases").doc("case_1").set({
+      caseId: "case_1",
+      ownerDisplayName: "山田",
+      stage: "WAITING",
+      assetLockStatus: "LOCKED",
+      memberUids: ["heir_1", "heir_2"],
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db.collection("cases/case_1/deathClaims").doc("claim_1").set({
+      submittedByUid: "heir_1",
+      status: "SUBMITTED",
+      createdAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+    await db
+      .collection("cases/case_1/deathClaims/claim_1/files")
+      .doc("file_1")
+      .set({
+        fileName: "death.pdf",
+        contentType: "application/pdf",
+        size: 1024,
+        storagePath: "cases/case_1/death-claims/claim_1/file_1",
+        uploadedByUid: "heir_1",
+        createdAt: new Date("2024-01-02T00:00:00.000Z")
+      });
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: "/v1/admin/death-claims/case_1/claim_1"
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.claim?.claimId).toBe("claim_1");
+    expect(res.body?.data?.files?.length).toBe(1);
+    expect(res.body?.data?.case?.ownerDisplayName).toBe("山田");
+    expect(res.body?.data?.case?.memberCount).toBe(2);
+    expect(res.body?.data?.files?.[0]?.storagePath).toContain("cases/case_1");
+    expect(res.body?.data?.files?.[0]?.uploadedByUid).toBe("heir_1");
+    expect(res.body?.data?.files?.[0]?.downloadUrl).toBe(
+      "http://127.0.0.1:9199/v0/b/kototsute.firebasestorage.app/o/cases%2Fcase_1%2Fdeath-claims%2Fclaim_1%2Ffile_1?alt=media"
+    );
+    delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    delete process.env.STORAGE_BUCKET;
+  });
+
+  it("returns base64 file data for admin", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const claimId = "claim_1";
+    const fileId = "file_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      ownerUid: "owner_1",
+      memberUids: ["heir_1"]
+    });
+    await db.collection(`cases/${caseId}/deathClaims`).doc(claimId).set({
+      status: "SUBMITTED",
+      submittedByUid: "heir_1"
+    });
+    await db
+      .collection(`cases/${caseId}/deathClaims/${claimId}/files`)
+      .doc(fileId)
+      .set({
+        storagePath: `cases/${caseId}/death-claims/${claimId}/req_1`,
+        fileName: "report.pdf",
+        contentType: "application/pdf"
+      });
+
+    process.env.STORAGE_BUCKET = "kototsute.firebasestorage.app";
+
+    const req = authedReq("admin_1", "admin@example.com", {
+      method: "GET",
+      path: `/v1/admin/death-claims/${caseId}/${claimId}/files/${fileId}/download`
+    });
+    const token = String(req.headers?.Authorization ?? "").replace("Bearer ", "");
+    authTokens.set(token, { uid: "admin_1", email: "admin@example.com", admin: true });
+
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.fileName).toBe("report.pdf");
+    expect(res.body?.data?.contentType).toBe("application/pdf");
+    expect(res.body?.data?.dataBase64).toBe("ZHVtbXktZmlsZQ==");
+
+    delete process.env.STORAGE_BUCKET;
+  });
+
+  it("returns signer list status and counts", async () => {
+    process.env.XRPL_SYSTEM_SIGNER_ADDRESS = "rSystem";
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [{ account: "rSystem", weight: 2 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db
+      .collection(`cases/${caseId}/signerList/state/signatures`)
+      .doc("heir_1")
+      .set({ uid: "heir_1", address: "rHeir", txHash: "tx1", createdAt: new Date() });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.status).toBe("SET");
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    expect(res.body?.data?.requiredCount).toBe(2);
+    expect(res.body?.data?.signedByMe).toBe(true);
+    expect(res.body?.data?.entries).toEqual([{ account: "rSystem", weight: 2 }]);
+    expect(res.body?.data?.systemSignerAddress).toBe("rSystem");
+  });
+
+  it("returns approval tx for heir", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_approval";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "PREPARED"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.memo).toBe("memo_abc");
+  });
+
+  it("returns approval tx verification status when submitted", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          validated: true,
+          meta: { TransactionResult: "tesSUCCESS" }
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_1"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.submittedTxHash).toBe("tx_hash_1");
+    expect(res.body?.data?.networkStatus).toBe("VALIDATED");
+    expect(res.body?.data?.networkResult).toBe("tesSUCCESS");
+
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns approval tx expired status when last ledger is passed", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { validated: false, LastLedgerSequence: 10 }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { state: { validated_ledger: { seq: 20 } } }
+        })
+      });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted_expired";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_2"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.networkStatus).toBe("EXPIRED");
+
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("accepts signed blob and records signature", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_1";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1", "heir_2"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 2,
+      entries: [{ account: "rSystem", weight: 2 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      systemSignedBlob: "blob-system",
+      status: "PREPARED"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/signer-list/sign`,
+        body: { signedBlob: "blob-heir" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    const sigSnap = await db
+      .collection(`cases/${caseId}/signerList/state/signatures`)
+      .doc("heir_1")
+      .get();
+    expect(sigSnap.data()?.signedBlob).toBe("blob-heir");
   });
 });

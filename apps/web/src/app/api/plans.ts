@@ -1,6 +1,6 @@
 import { apiFetch } from "../../features/shared/lib/api";
 
-export type PlanStatus = "DRAFT" | "SHARED" | "INACTIVE";
+export type PlanStatus = "DRAFT" | "INACTIVE";
 
 export type PlanListItem = {
   planId: string;
@@ -136,14 +136,6 @@ export const updatePlanAllocations = async (
     method: "POST",
     body: JSON.stringify(input)
   });
-};
-
-export const sharePlan = async (caseId: string, planId: string) => {
-  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/share`, { method: "POST" });
-};
-
-export const unsharePlan = async (caseId: string, planId: string) => {
-  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/unshare`, { method: "POST" });
 };
 
 export const inactivatePlan = async (caseId: string, planId: string) => {

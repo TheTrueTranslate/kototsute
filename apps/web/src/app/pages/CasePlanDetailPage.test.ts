@@ -20,10 +20,10 @@ vi.mock("../api/cases", () => ({
 vi.mock("../api/plans", () => ({
   getPlan: async () => ({
     planId: "plan-1",
-    title: "共有プラン",
-    status: "SHARED",
+    title: "指図プラン",
+    status: "DRAFT",
     ownerUid: "owner",
-    sharedAt: "2024-01-01",
+    sharedAt: null,
     updatedAt: "2024-01-02"
   }),
   listPlanAssets: async () => [],

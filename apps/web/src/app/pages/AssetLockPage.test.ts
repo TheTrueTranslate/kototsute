@@ -95,8 +95,8 @@ it("shows plan previews and confirm button for owner", async () => {
           {
             planId: "plan-2",
             title: "分配プランB",
-            status: "SHARED",
-            sharedAt: "2024-01-02",
+            status: "DRAFT",
+            sharedAt: null,
             updatedAt: "2024-01-02"
           }
         ],
