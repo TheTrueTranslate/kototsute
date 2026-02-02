@@ -20,4 +20,13 @@ describe("death claims api", () => {
       { method: "POST" }
     );
   });
+
+  it("calls download file", async () => {
+    const { downloadDeathClaimFile } = await import("./death-claims");
+    await downloadDeathClaimFile("case-1", "claim-1", "file-1");
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      "/v1/cases/case-1/death-claims/claim-1/files/file-1/download",
+      { method: "GET" }
+    );
+  });
 });

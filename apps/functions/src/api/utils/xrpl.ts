@@ -22,6 +22,10 @@ export type XrplReserve =
   | { status: "ok"; reserveBaseDrops: string; reserveIncDrops: string }
   | { status: "error"; message: string };
 
+export type XrplValidatedLedgerIndexResult =
+  | { ok: true; ledgerIndex: number }
+  | { ok: false; message: string };
+
 export const XRPL_URL = process.env.XRPL_URL ?? "https://s.altnet.rippletest.net:51234";
 export const XRPL_VERIFY_ADDRESS =
   process.env.XRPL_VERIFY_ADDRESS ?? "rp7W5EetJmFuACL7tT1RJNoLE4S92Pg1JS";
@@ -171,4 +175,34 @@ export const fetchXrplTx = async (txHash: string) => {
     };
   }
   return { ok: true, tx: payload?.result };
+};
+
+export const fetchXrplValidatedLedgerIndex =
+  async (): Promise<XrplValidatedLedgerIndexResult> => {
+  const res = await fetch(XRPL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: "server_state" })
+  });
+  const payload = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok || payload?.result?.error) {
+    return {
+      ok: false,
+      message:
+        payload?.result?.error_message ??
+        payload?.error_message ??
+        "XRPL server_state failed"
+    };
+  }
+  const seqRaw = payload?.result?.state?.validated_ledger?.seq;
+  const seq =
+    typeof seqRaw === "number"
+      ? seqRaw
+      : typeof seqRaw === "string"
+        ? Number(seqRaw)
+        : NaN;
+  if (!Number.isFinite(seq)) {
+    return { ok: false, message: "XRPL validated ledger is unavailable" };
+  }
+  return { ok: true, ledgerIndex: seq };
 };

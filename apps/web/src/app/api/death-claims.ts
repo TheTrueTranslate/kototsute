@@ -75,3 +75,19 @@ export const resubmitDeathClaim = async (caseId: string, claimId: string) => {
   });
   return result.data as { ok?: boolean };
 };
+
+export const downloadDeathClaimFile = async (
+  caseId: string,
+  claimId: string,
+  fileId: string
+) => {
+  const result = await apiFetch(
+    `/v1/cases/${caseId}/death-claims/${claimId}/files/${fileId}/download`,
+    { method: "GET" }
+  );
+  return result.data as {
+    fileName?: string | null;
+    contentType?: string | null;
+    dataBase64?: string | null;
+  };
+};

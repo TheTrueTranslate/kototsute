@@ -1,7 +1,7 @@
 import type { DocumentReference } from "firebase-admin/firestore";
 import { sendSignerListSet } from "@kototsute/shared";
 import { decryptPayload } from "./encryption.js";
-import { createChallenge } from "./xrpl.js";
+import { createChallenge, fetchXrplTx, fetchXrplValidatedLedgerIndex } from "./xrpl.js";
 import { prepareApprovalTx, signForMultisign } from "./xrpl-multisign.js";
 
 type PrepareApprovalSummary = {
@@ -9,6 +9,22 @@ type PrepareApprovalSummary = {
   fromAddress: string;
   destination: string;
   amountDrops: string;
+};
+
+export const removeUndefinedValues = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => removeUndefinedValues(entry))
+      .filter((entry) => entry !== undefined);
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value).reduce<Record<string, any>>((acc, [key, entry]) => {
+      if (entry === undefined) return acc;
+      acc[key] = removeUndefinedValues(entry);
+      return acc;
+    }, {});
+  }
+  return value;
 };
 
 export type PrepareInheritanceResult =
@@ -38,8 +54,9 @@ export const prepareInheritanceExecution = async (input: {
   caseRef: DocumentReference;
   caseData: Record<string, any>;
   now: Date;
+  force?: boolean;
 }): Promise<PrepareInheritanceResult> => {
-  const { caseRef, caseData, now } = input;
+  const { caseRef, caseData, now, force } = input;
   if (caseData.stage !== "IN_PROGRESS") {
     return { status: "SKIPPED", reason: "NOT_IN_PROGRESS" };
   }
@@ -128,15 +145,47 @@ export const prepareInheritanceExecution = async (input: {
   const approvalRef = caseRef.collection("signerList").doc("approvalTx");
   const approvalSnap = await approvalRef.get();
   const approvalData = approvalSnap.data() ?? {};
-  if (approvalData.status === "PREPARED" || approvalData.status === "SUBMITTED") {
-    return {
-      status: "PREPARED",
-      approvalTx: resolveApprovalSummary(
-        approvalData.txJson ?? {},
-        approvalData.memo ?? "",
-        walletAddress
-      )
-    };
+  const isAlreadyPrepared =
+    approvalData.status === "PREPARED" || approvalData.status === "SUBMITTED";
+  if (isAlreadyPrepared) {
+    if (force && approvalData.status === "SUBMITTED") {
+      const submittedHash =
+        typeof approvalData.submittedTxHash === "string"
+          ? approvalData.submittedTxHash
+          : "";
+      const isExpired = await (async () => {
+        if (!submittedHash) return false;
+        const txResult = await fetchXrplTx(submittedHash);
+        if (!txResult.ok) return false;
+        const tx = txResult.tx as any;
+        if (tx?.validated) return false;
+        const lastLedgerRaw = tx?.LastLedgerSequence;
+        const lastLedger =
+          typeof lastLedgerRaw === "number"
+            ? lastLedgerRaw
+            : typeof lastLedgerRaw === "string"
+              ? Number(lastLedgerRaw)
+              : NaN;
+        if (!Number.isFinite(lastLedger)) return false;
+        const ledgerResult = await fetchXrplValidatedLedgerIndex();
+        if (!ledgerResult.ok) return false;
+        return ledgerResult.ledgerIndex >= lastLedger;
+      })();
+      if (!isExpired) {
+        return { status: "SKIPPED", reason: "APPROVAL_NOT_EXPIRED" };
+      }
+      const signaturesSnap = await signerRef.collection("signatures").get();
+      await Promise.all(signaturesSnap.docs.map((doc) => doc.ref.delete()));
+    } else {
+      return {
+        status: "PREPARED",
+        approvalTx: resolveApprovalSummary(
+          approvalData.txJson ?? {},
+          approvalData.memo ?? "",
+          walletAddress
+        )
+      };
+    }
   }
 
   const systemSeed = process.env.XRPL_SYSTEM_SIGNER_SEED ?? "";
@@ -158,15 +207,16 @@ export const prepareInheritanceExecution = async (input: {
     memoHex,
     signersCount
   });
-  const systemSigned = signForMultisign(txJson, systemSeed);
+  const sanitizedTxJson = removeUndefinedValues(txJson);
+  const systemSigned = signForMultisign(sanitizedTxJson, systemSeed);
   await approvalRef.set({
     memo,
-    txJson,
+    txJson: sanitizedTxJson,
     systemSignedBlob: systemSigned.blob,
     systemSignedHash: systemSigned.hash,
     status: "PREPARED",
     submittedTxHash: null,
-    createdAt: approvalData.createdAt ?? now,
+    createdAt: force ? now : approvalData.createdAt ?? now,
     updatedAt: now
   });
 

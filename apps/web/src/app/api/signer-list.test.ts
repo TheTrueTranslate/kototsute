@@ -33,7 +33,17 @@ describe("signer list api", () => {
     const { prepareApprovalTx } = await import("./signer-list");
     await prepareApprovalTx("case-1");
     expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/signer-list/prepare", {
-      method: "POST"
+      method: "POST",
+      body: undefined
+    });
+  });
+
+  it("prepares approval tx with force", async () => {
+    const { prepareApprovalTx } = await import("./signer-list");
+    await prepareApprovalTx("case-1", { force: true });
+    expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/signer-list/prepare", {
+      method: "POST",
+      body: JSON.stringify({ force: true })
     });
   });
 });
