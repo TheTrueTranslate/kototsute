@@ -95,6 +95,12 @@ const walletStatusLabels: Record<string, string> = {
   VERIFIED: "確認済み"
 };
 
+const assetVerificationLabels: Record<AssetListItem["verificationStatus"], string> = {
+  UNVERIFIED: "未検証",
+  PENDING: "検証失敗",
+  VERIFIED: "検証成功"
+};
+
 const signerStatusLabels: Record<string, string> = {
   NOT_READY: "準備中",
   SET: "署名受付中",
@@ -352,7 +358,14 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
         <div className={styles.rowTitle}>{asset.label}</div>
         <div className={styles.rowMeta}>{asset.address}</div>
       </div>
-      <div className={styles.rowSide}>{formatDate(asset.createdAt)}</div>
+      <div className={styles.rowSide}>
+        <div className={styles.rowBadgeStack}>
+          <span className={styles.statusBadge}>
+            {assetVerificationLabels[asset.verificationStatus]}
+          </span>
+          <span className={styles.badgeMuted}>{formatDate(asset.createdAt)}</span>
+        </div>
+      </div>
     </div>
   );
 
