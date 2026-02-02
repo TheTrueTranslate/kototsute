@@ -515,6 +515,53 @@ describe("CaseDetailPage", () => {
     ).toBe(false);
   });
 
+  it("allows task updates after asset lock", async () => {
+    const { canUpdateTaskProgress } = await import("./CaseDetailPage");
+    expect(canUpdateTaskProgress({ isLocked: true })).toBe(true);
+  });
+
+  it("formats distribution progress with success count", async () => {
+    const { formatDistributionProgressText } = await import("./CaseDetailPage");
+    expect(
+      formatDistributionProgressText({
+        status: "RUNNING",
+        totalCount: 5,
+        successCount: 2,
+        failedCount: 1,
+        skippedCount: 0,
+        escalationCount: 0
+      })
+    ).toBe("成功 2 / 5 件");
+  });
+
+  it("disables distribution when completed", async () => {
+    const { resolveDistributionDisabledReason } = await import("./CaseDetailPage");
+    const reason = resolveDistributionDisabledReason({
+      caseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      approvalCompleted: true,
+      totalHeirCount: 1,
+      unverifiedHeirCount: 0,
+      distributionLoading: false,
+      distribution: {
+        status: "COMPLETED",
+        totalCount: 2,
+        successCount: 2,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0
+      }
+    });
+    expect(reason).toBe("分配は完了しています。");
+  });
+
   it("builds signer entry display list with roles", async () => {
     const { buildSignerEntryDisplayList } = await import("./CaseDetailPage");
     const result = buildSignerEntryDisplayList({

@@ -123,6 +123,51 @@ const distributionStatusLabels: Record<string, string> = {
   FAILED: "失敗"
 };
 
+export const formatDistributionProgressText = (
+  distribution: DistributionState | null
+) => {
+  if (!distribution?.totalCount) return "-";
+  return `成功 ${distribution.successCount} / ${distribution.totalCount} 件`;
+};
+
+export const canUpdateTaskProgress = (input: { isLocked: boolean }) => {
+  void input;
+  return true;
+};
+
+export const resolveDistributionDisabledReason = (input: {
+  caseData: CaseSummary | null;
+  approvalCompleted: boolean;
+  totalHeirCount: number;
+  unverifiedHeirCount: number;
+  distribution: DistributionState | null;
+  distributionLoading: boolean;
+}) => {
+  if (!input.caseData) return "ケース情報が取得できません。";
+  if (input.caseData.stage !== "IN_PROGRESS") {
+    return "相続中になると分配を実行できます。";
+  }
+  if (!input.approvalCompleted) {
+    return "相続実行の同意が完了すると分配を実行できます。";
+  }
+  if (input.totalHeirCount === 0) {
+    return "相続人が登録されていないため実行できません。";
+  }
+  if (input.unverifiedHeirCount > 0) {
+    return `相続人の受取用ウォレットが全員分確認済みになると実行できます。未確認: ${input.unverifiedHeirCount}人`;
+  }
+  if (input.distributionLoading) {
+    return "分配状況を取得中です。";
+  }
+  if (input.distribution?.status === "COMPLETED") {
+    return "分配は完了しています。";
+  }
+  if (input.distribution?.status === "RUNNING") {
+    return "分配処理が進行中です。";
+  }
+  return null;
+};
+
 export const shouldFetchApprovalTx = (input: {
   isHeir: boolean;
   tab: string | null;
@@ -465,6 +510,7 @@ export default function CaseDetailPage({
   const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
   const isHeir = isOwner === false;
   const isLocked = caseData?.assetLockStatus === "LOCKED";
+  const canUpdateTasks = canUpdateTaskProgress({ isLocked });
   const canAccessDeathClaims =
     caseData?.stage === "WAITING" ||
     caseData?.stage === "IN_PROGRESS" ||
@@ -596,32 +642,20 @@ export default function CaseDetailPage({
     ? distributionStatusLabels[distribution.status] ?? distribution.status
     : "未取得";
   const distributionDisabledReason = useMemo(() => {
-    if (!caseData) return "ケース情報が取得できません。";
-    if (caseData.stage !== "IN_PROGRESS") {
-      return "相続中になると分配を実行できます。";
-    }
-    if (!approvalCompleted) {
-      return "相続実行の同意が完了すると分配を実行できます。";
-    }
-    if (totalHeirCount === 0) {
-      return "相続人が登録されていないため実行できません。";
-    }
-    if (unverifiedHeirCount > 0) {
-      return `相続人の受取用ウォレットが全員分確認済みになると実行できます。未確認: ${unverifiedHeirCount}人`;
-    }
-    if (distributionLoading) {
-      return "分配状況を取得中です。";
-    }
-    if (distribution?.status === "RUNNING") {
-      return "分配処理が進行中です。";
-    }
-    return null;
+    return resolveDistributionDisabledReason({
+      caseData,
+      approvalCompleted,
+      totalHeirCount,
+      unverifiedHeirCount,
+      distribution,
+      distributionLoading
+    });
   }, [
     caseData,
     approvalCompleted,
     totalHeirCount,
     unverifiedHeirCount,
-    distribution?.status,
+    distribution,
     distributionLoading
   ]);
   const canExecuteDistribution =
@@ -1284,7 +1318,7 @@ export default function CaseDetailPage({
   };
 
   const handleTogglePersonalTask = async (taskId: string, checked: boolean) => {
-    if (isLocked) return;
+    if (!canUpdateTasks) return;
     if (!caseId) return;
     const prev = userCompletedTaskIds;
     const next = buildNextTaskIds(prev, taskId, checked);
@@ -1901,11 +1935,9 @@ export default function CaseDetailPage({
               ) : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>進捗</div>
+                  <div className={styles.signerLabel}>成功</div>
                   <div className={styles.signerValue}>
-                    {distribution?.totalCount
-                      ? `${distribution.successCount} / ${distribution.totalCount} 件`
-                      : "-"}
+                    {formatDistributionProgressText(distribution)}
                   </div>
                 </div>
                 <div className={styles.signerRow}>
@@ -2357,9 +2389,6 @@ export default function CaseDetailPage({
             <h2 className={styles.panelTitle}>タスク</h2>
             <span className={styles.badgeMuted}>進捗には影響しません</span>
           </div>
-          {isLocked ? (
-            <div className={styles.badgeMuted}>資産ロック後は閲覧のみです。</div>
-          ) : null}
           {taskError ? <FormAlert variant="error">{taskError}</FormAlert> : null}
           {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
           <div className={styles.taskSection}>
@@ -2385,7 +2414,7 @@ export default function CaseDetailPage({
                         type="checkbox"
                         className={styles.taskCheckbox}
                         checked={checked}
-                        disabled={isLocked}
+                        disabled={!canUpdateTasks}
                         onChange={(event) =>
                           handleTogglePersonalTask(task.id, event.target.checked)
                         }
