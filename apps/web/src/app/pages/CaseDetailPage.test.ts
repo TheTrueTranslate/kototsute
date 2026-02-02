@@ -714,9 +714,14 @@ describe("CaseDetailPage", () => {
       initialWalletDialogOpen: true,
       initialWalletDialogMode: "verify"
     });
-    expect(html).toContain("Amount (drops)");
-    expect(html).toContain("Amount (XRP)");
-    expect(html).toContain("Memo");
+    expect(html).toContain("Destination（運営確認用ウォレット）");
+    expect(html).toContain("システムの検証用アドレス");
+    expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).not.toContain("Amount (drops)");
+    expect(html).not.toContain("Amount (XRP)");
+    expect(html).not.toContain("取引ハッシュ");
+    expect(html).not.toContain("Destinationをコピー");
+    expect(html).not.toContain("Memoをコピー");
   });
 
 });
