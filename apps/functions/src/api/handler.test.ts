@@ -3875,6 +3875,31 @@ describe("createApiHandler", () => {
   });
 
   it("creates distribution items when plan includes heirs even if status is DRAFT", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "1000000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
       caseRepo: new InMemoryCaseRepository(),
@@ -3942,6 +3967,99 @@ describe("createApiHandler", () => {
       .collection("items")
       .get();
     expect(itemsSnap.docs.length).toBe(1);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("scales down xrp distribution when balance is insufficient", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "50000000", OwnerCount: 1 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_scale";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
+      planId: "plan-1",
+      status: "DRAFT",
+      title: "指図A",
+      ownerUid: "owner_1",
+      heirUids: ["heir_1"],
+      heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+    });
+    await db.collection(`cases/${caseId}/plans/plan-1/assets`).doc("plan-asset-1").set({
+      planAssetId: "plan-asset-1",
+      assetId: "asset-1",
+      unitType: "PERCENT",
+      allocations: [{ heirUid: "heir_1", value: 100 }]
+    });
+    await db.collection(`cases/${caseId}/assetLockItems`).doc("item-1").set({
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      token: null,
+      plannedAmount: "100000000"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const itemsSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .get();
+    const item = itemsSnap.docs[0]?.data() ?? {};
+    expect(Number(item.amount ?? "0")).toBeLessThan(100000000);
+    (globalThis as any).fetch = fetchOriginal;
   });
 
   it("skips items after retry limit and escalates", async () => {

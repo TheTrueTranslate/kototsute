@@ -1685,6 +1685,54 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "NOT_READY", "分配対象がありません");
     }
 
+    const feePerTxDrops = 12n;
+    const reserveInfo = await fetchXrplReserve();
+    const reserveBaseDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveBaseDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_BASE_XRP ?? "10"));
+    const reserveIncDrops =
+      reserveInfo.status === "ok"
+        ? BigInt(reserveInfo.reserveIncDrops)
+        : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
+    const accountInfo = await fetchXrplAccountInfo(lockWalletAddress);
+    if (accountInfo.status !== "ok") {
+      return jsonError(c, 400, "XRPL_ACCOUNT_INFO_FAILED", accountInfo.message);
+    }
+    const ownerCount =
+      typeof accountInfo.ownerCount === "number" && Number.isFinite(accountInfo.ownerCount)
+        ? accountInfo.ownerCount
+        : 0;
+    const balanceDrops = BigInt(toDrops(accountInfo.balanceXrp));
+    const requiredReserveDrops = reserveBaseDrops + reserveIncDrops * BigInt(ownerCount);
+    const feeDrops = BigInt(distributionItems.length) * feePerTxDrops;
+    const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
+    if (availableDrops <= 0n) {
+      return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+    }
+    const totalXrpDrops = distributionItems.reduce((total, item) => {
+      if (item.token) return total;
+      const amountDrops = BigInt(item.amount ?? "0");
+      return total + amountDrops;
+    }, 0n);
+    if (totalXrpDrops > availableDrops && totalXrpDrops > 0n) {
+      const scaledItems: Array<Record<string, any>> = [];
+      for (const item of distributionItems) {
+        if (item.token) {
+          scaledItems.push(item);
+          continue;
+        }
+        const amountDrops = BigInt(item.amount ?? "0");
+        const adjustedDrops = (amountDrops * availableDrops) / totalXrpDrops;
+        if (adjustedDrops <= 0n) {
+          continue;
+        }
+        scaledItems.push({ ...item, amount: adjustedDrops.toString() });
+      }
+      distributionItems.length = 0;
+      distributionItems.push(...scaledItems);
+    }
+
     const existingItemsSnap = await itemsRef.get();
     if (!existingItemsSnap.empty) {
       await Promise.all(existingItemsSnap.docs.map((doc) => doc.ref.delete()));
