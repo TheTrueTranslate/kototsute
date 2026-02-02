@@ -1442,6 +1442,27 @@ describe("createApiHandler", () => {
     );
     const caseId = createCaseRes.body?.data?.caseId;
 
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
     const assetCreateRes = createRes();
     await handler(
       authedReq("owner_1", "owner@example.com", {
@@ -1487,6 +1508,27 @@ describe("createApiHandler", () => {
     );
     const caseId = createCaseRes.body?.data?.caseId;
 
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
     const assetCreateRes = createRes();
     await handler(
       authedReq("owner_1", "owner@example.com", {
@@ -1527,6 +1569,116 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.xrpl?.syncedAt).toBeTruthy();
   });
 
+  it("blocks asset lock start when no active plans", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+          master_seed: "sTestSeed"
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "A" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("NOT_READY");
+    expect(res.body?.message).toBe("相続対象の指図がありません");
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("blocks asset lock start when an active plan has no heirs", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+          master_seed: "sTestSeed"
+        }
+      })
+    }));
+    (globalThis as any).fetch = fetchMock;
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: [],
+      heirs: [],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "A" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body?.code).toBe("NOT_READY");
+    expect(res.body?.message).toBe("相続人が未設定の指図があります");
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
   it("starts asset lock and creates items", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     const fetchOriginal = (globalThis as any).fetch;
@@ -1558,6 +1710,27 @@ describe("createApiHandler", () => {
       createCaseRes as any
     );
     const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
 
     const assetCreateRes = createRes();
     await handler(
@@ -1630,6 +1803,26 @@ describe("createApiHandler", () => {
       memberUids: ["owner_1", "heir_1", "heir_2"],
       stage: "IN_PROGRESS"
     });
+    const planRef = db.collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
     await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
       address: "rAddr1",
       verificationStatus: "VERIFIED"
@@ -1684,6 +1877,27 @@ describe("createApiHandler", () => {
       createCaseRes as any
     );
     const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
 
     const startRes = createRes();
     await handler(
@@ -1762,6 +1976,27 @@ describe("createApiHandler", () => {
       createCaseRes as any
     );
     const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
 
     const assetCreateRes = createRes();
     await handler(
@@ -1846,6 +2081,27 @@ describe("createApiHandler", () => {
       createCaseRes as any
     );
     const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
 
     const assetCreateRes = createRes();
     await handler(
@@ -1933,6 +2189,27 @@ describe("createApiHandler", () => {
       createCaseRes as any
     );
     const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      status: "DRAFT",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
 
     const assetCreateRes = createRes();
     await handler(

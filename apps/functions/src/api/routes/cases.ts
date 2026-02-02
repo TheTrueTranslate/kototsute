@@ -2527,6 +2527,21 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
+    const plansSnap = await caseRef.collection("plans").get();
+    const activePlans = plansSnap.docs
+      .map((doc) => doc.data() ?? {})
+      .filter((plan) => (plan.status ?? "DRAFT") !== "INACTIVE");
+    if (activePlans.length === 0) {
+      return jsonError(c, 400, "NOT_READY", "相続対象の指図がありません");
+    }
+    const hasMissingHeirs = activePlans.some((plan) => {
+      const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+      return heirUids.length === 0;
+    });
+    if (hasMissingHeirs) {
+      return jsonError(c, 400, "NOT_READY", "相続人が未設定の指図があります");
+    }
+
     const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
     const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
     if (caseData.stage === "IN_PROGRESS") {
