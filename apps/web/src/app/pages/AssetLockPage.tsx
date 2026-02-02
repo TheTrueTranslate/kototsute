@@ -170,6 +170,22 @@ export default function AssetLockPage({
   const canComplete =
     (lockState?.items ?? []).length > 0 &&
     (lockState?.items ?? []).every((item) => item.status === "VERIFIED");
+  const activePlans = useMemo(
+    () => plans.filter((plan) => plan.status !== "INACTIVE"),
+    [plans]
+  );
+  const isPlanDataReady =
+    !planLoading &&
+    activePlans.every((plan) => planHeirsById[plan.planId] !== undefined);
+  const planValidationError = useMemo(() => {
+    if (!isPlanDataReady) return null;
+    if (activePlans.length === 0) return "相続対象の指図がありません";
+    const hasMissingHeirs = activePlans.some(
+      (plan) => (planHeirsById[plan.planId]?.length ?? 0) === 0
+    );
+    if (hasMissingHeirs) return "相続人が未設定の指図があります";
+    return null;
+  }, [activePlans, isPlanDataReady, planHeirsById]);
 
   const formatBalanceLabel = (entry: {
     status: "ok" | "error";
@@ -696,13 +712,20 @@ export default function AssetLockPage({
             </div>
             {isOwner === true ? (
               <div className={styles.methodActions}>
-                <Button type="button" onClick={handleConfirmPreparation} disabled={loading}>
+                <Button
+                  type="button"
+                  onClick={handleConfirmPreparation}
+                  disabled={loading || !!planValidationError}
+                >
                   {loading ? "記録中..." : "確認しました"}
                 </Button>
               </div>
             ) : (
               <div className={styles.planHint}>被相続人の確認待ちです。</div>
             )}
+            {planValidationError ? (
+              <FormAlert variant="error">{planValidationError}</FormAlert>
+            ) : null}
           </div>
         ) : null}
         {current.id === "method" ? (
@@ -762,8 +785,11 @@ export default function AssetLockPage({
                 </ul>
               </label>
             </div>
+            {planValidationError ? (
+              <FormAlert variant="error">{planValidationError}</FormAlert>
+            ) : null}
             <div className={styles.methodActions}>
-              <Button type="button" onClick={handleStart} disabled={loading}>
+              <Button type="button" onClick={handleStart} disabled={loading || !!planValidationError}>
                 {loading ? "開始中..." : "ロックを開始"}
               </Button>
             </div>
