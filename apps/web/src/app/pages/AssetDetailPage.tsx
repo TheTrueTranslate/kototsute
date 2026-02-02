@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Copy, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -29,7 +29,6 @@ import {
   type AssetReserveToken
 } from "../api/assets";
 import { getCase, type CaseSummary } from "../api/cases";
-import { copyText } from "../../features/shared/lib/copy-text";
 import { autoVerifyAssetOwnership } from "../../features/assets/asset-verify";
 import {
   createPaymentTx,
@@ -112,7 +111,6 @@ export default function AssetDetailPage({
   const [verifySecret, setVerifySecret] = useState("");
   const [verifySending, setVerifySending] = useState(false);
   const [verifyChallengeLoading, setVerifyChallengeLoading] = useState(false);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<
     | {
         challenge: string;
@@ -353,14 +351,6 @@ export default function AssetDetailPage({
       setReserveError(err?.message ?? "留保設定の更新に失敗しました");
     } finally {
       setReserveSaving(false);
-    }
-  };
-
-  const handleCopy = async (label: string, value: string) => {
-    const result = await copyText(label, value);
-    setCopyMessage(result.message);
-    if (result.ok) {
-      window.setTimeout(() => setCopyMessage(null), 1500);
     }
   };
 
@@ -710,23 +700,15 @@ export default function AssetDetailPage({
                   </DialogHeader>
                   {verifyError ? <FormAlert variant="error">{verifyError}</FormAlert> : null}
                   {verifySuccess ? <FormAlert variant="success">{verifySuccess}</FormAlert> : null}
-                  {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
 
                   <div className={styles.verifyBlock}>
                     <div className={styles.verifyRow}>
                       <div>
-                        <div className={styles.metaLabel}>Destination</div>
+                        <div className={styles.metaLabel}>
+                          Destination（運営確認用ウォレット）
+                        </div>
                         <div className={styles.metaValue}>{asset.verificationAddress}</div>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className={styles.copyButton}
-                        onClick={() => handleCopy("Destination", asset.verificationAddress)}
-                        aria-label="Destinationをコピー"
-                      >
-                        <Copy />
-                      </Button>
                     </div>
                     <div className={styles.verifyHint}>
                       送金先はシステムの検証用アドレスです。
@@ -737,16 +719,6 @@ export default function AssetDetailPage({
                         <div className={styles.metaLabel}>Memo</div>
                         <div className={styles.metaValue}>{memoDisplay}</div>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className={styles.copyButton}
-                        onClick={() => handleCopy("Memo", memoValue)}
-                        aria-label="Memoをコピー"
-                        disabled={!memoValue}
-                      >
-                        <Copy />
-                      </Button>
                     </div>
                     <div className={styles.verifyHint}>1 drops (=0.000001 XRP) を送信します。</div>
                   </div>

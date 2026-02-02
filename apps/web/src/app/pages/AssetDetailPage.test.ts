@@ -176,8 +176,11 @@ describe("AssetDetailPage", () => {
   it("renders auto verify guidance without tx hash input", async () => {
     const html = await render();
     expect(html).toContain("シークレットで自動検証");
+    expect(html).toContain("Destination（運営確認用ウォレット）");
     expect(html).toContain("システムの検証用アドレス");
     expect(html).toContain("1 drops (=0.000001 XRP)");
     expect(html).not.toContain("TX Hash");
+    expect(html).not.toContain("Destinationをコピー");
+    expect(html).not.toContain("Memoをコピー");
   });
 });
