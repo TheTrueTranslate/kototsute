@@ -19,6 +19,7 @@ import { listInvitesReceivedAll } from "../../../app/api/invites";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../../auth/auth-provider";
+import { useTranslation } from "react-i18next";
 import FormAlert from "./form-alert";
 import { Button } from "./ui/button";
 import {
@@ -34,17 +35,17 @@ import {
 
 const mainItems = [
   {
-    title: "ケース",
+    labelKey: "nav.cases",
     url: "/cases",
     icon: Folder
   },
   {
-    title: "招待",
+    labelKey: "nav.invites",
     url: "/invites",
     icon: Mail
   },
   {
-    title: "通知",
+    labelKey: "nav.notifications",
     url: "/notifications",
     icon: Bell
   }
@@ -52,7 +53,7 @@ const mainItems = [
 
 const accountItems = [
   {
-    title: "マイページ",
+    labelKey: "nav.myPage",
     url: "/me",
     icon: CircleUser
   }
@@ -80,6 +81,7 @@ export const getSidebarTriggerClass = (state: "expanded" | "collapsed") =>
 
 export default function AppSidebar() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state } = useSidebar();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -144,7 +146,7 @@ export default function AppSidebar() {
       navigate("/login");
       return true;
     } catch (err: any) {
-      setLogoutError(err?.message ?? "ログアウトに失敗しました。");
+      setLogoutError(err?.message ?? t("sidebar.logout.error"));
       return false;
     }
   };
@@ -159,13 +161,13 @@ export default function AppSidebar() {
       <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>メニュー</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.menu")}</SidebarGroupLabel>
           <SidebarMenu>
             {mainItems.map((item) => (
               <SidebarMenuItem key={item.url}>
                 <SidebarMenuButton
                   asChild
-                  tooltip={item.title}
+                  tooltip={t(item.labelKey)}
                   className="h-11 text-[0.95rem] font-medium"
                 >
                   <Link to={item.url}>
@@ -179,7 +181,9 @@ export default function AppSidebar() {
                               return (
                                 <span
                                   className={getNotificationBadgeClass("dot")}
-                                  aria-label={`未読${unreadCount}件`}
+                                  aria-label={t("sidebar.notifications.unread", {
+                                    count: unreadCount
+                                  })}
                                   role="status"
                                 />
                               );
@@ -199,7 +203,9 @@ export default function AppSidebar() {
                               return (
                                 <span
                                   className={getNotificationBadgeClass("dot")}
-                                  aria-label={`招待${inviteCount}件`}
+                                  aria-label={t("sidebar.invites.pending", {
+                                    count: inviteCount
+                                  })}
                                   role="status"
                                 />
                               );
@@ -212,7 +218,7 @@ export default function AppSidebar() {
                           })()
                         : null}
                     </span>
-                    <span>{item.title}</span>
+                    <span>{t(item.labelKey)}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -222,12 +228,12 @@ export default function AppSidebar() {
               <SidebarMenuItem key={item.url}>
                 <SidebarMenuButton
                   asChild
-                  tooltip={item.title}
+                  tooltip={t(item.labelKey)}
                   className="h-11 text-[0.95rem] font-medium"
                 >
                   <Link to={item.url}>
                     <item.icon className="size-5" />
-                    <span>{item.title}</span>
+                    <span>{t(item.labelKey)}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -237,19 +243,21 @@ export default function AppSidebar() {
                 <DialogTrigger asChild>
                   <SidebarMenuButton className="h-11 text-[0.95rem] font-medium">
                     <LogOut className="size-5" />
-                    <span>ログアウト</span>
+                    <span>{t("common.logout")}</span>
                   </SidebarMenuButton>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>ログアウトしますか？</DialogTitle>
-                    <DialogDescription>現在のセッションを終了します。</DialogDescription>
+                    <DialogTitle>{t("sidebar.logout.title")}</DialogTitle>
+                    <DialogDescription>{t("sidebar.logout.description")}</DialogDescription>
                   </DialogHeader>
-                  {logoutError ? <FormAlert variant="error">{logoutError}</FormAlert> : null}
+                  {logoutError ? (
+                    <FormAlert variant="error">{t(logoutError)}</FormAlert>
+                  ) : null}
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button type="button" variant="outline">
-                        キャンセル
+                        {t("common.cancel")}
                       </Button>
                     </DialogClose>
                     <Button
@@ -261,7 +269,7 @@ export default function AppSidebar() {
                         }
                       }}
                     >
-                      ログアウト
+                      {t("common.logout")}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

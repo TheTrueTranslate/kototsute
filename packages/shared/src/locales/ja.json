@@ -2,6 +2,7 @@
   "common": {
     "ok": "OK",
     "cancel": "キャンセル",
+    "close": "閉じる",
     "loading": "読み込み中...",
     "logout": "ログアウト"
   },
@@ -55,6 +56,52 @@
       "label": "表示言語",
       "ja": "日本語",
       "en": "English"
+    }
+  },
+  "nav": {
+    "home": "ホーム",
+    "menu": "メニュー",
+    "mainMenu": "メインメニュー",
+    "openMenu": "メニューを開く",
+    "breadcrumbs": "パンくずリスト",
+    "cases": "ケース",
+    "notifications": "通知",
+    "invites": "招待",
+    "login": "ログイン",
+    "register": "新規登録",
+    "reset": "パスワードリセット",
+    "myPage": "マイページ"
+  },
+  "sidebar": {
+    "notifications": {
+      "unread": "未読{{count}}件"
+    },
+    "invites": {
+      "pending": "招待{{count}}件"
+    },
+    "logout": {
+      "title": "ログアウトしますか？",
+      "description": "現在のセッションを終了します。",
+      "error": "ログアウトに失敗しました。"
+    }
+  },
+  "footer": {
+    "note": "© 2026 Kototsute"
+  },
+  "walletVerify": {
+    "destination": {
+      "label": "Destination（運営確認用ウォレット）",
+      "hint": "送金先はシステムの検証用アドレスです。"
+    },
+    "memo": {
+      "label": "Memo",
+      "hint": "1 drops (=0.000001 XRP) を送信します。"
+    },
+    "secret": {
+      "label": "シークレット",
+      "hint": "シークレットは一時的に利用し、保存しません。",
+      "submitting": "自動検証中...",
+      "submit": "シークレットで自動検証"
     }
   }
 }

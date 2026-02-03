@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import styles from "./site-header.module.css";
 import { Menu } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function SiteHeader({
   onMenuClick,
   className
 }: HeaderProps) {
+  const { t } = useTranslation();
   const classes = [styles.header, className].filter(Boolean).join(" ");
 
   return (
@@ -39,7 +41,7 @@ export default function SiteHeader({
               type="button"
               className={styles.menuButton}
               onClick={onMenuClick}
-              aria-label="メニューを開く"
+              aria-label={t("nav.openMenu")}
             >
               <Menu className={styles.menuIcon} />
             </button>
@@ -50,7 +52,7 @@ export default function SiteHeader({
           </Link>
         </div>
         {showNav ? (
-          <nav className={styles.nav} aria-label="メインメニュー">
+          <nav className={styles.nav} aria-label={t("nav.mainMenu")}>
             {navItems.map((item) => (
               <Link key={item.href} to={item.href} className={styles.navLink}>
                 {item.label}

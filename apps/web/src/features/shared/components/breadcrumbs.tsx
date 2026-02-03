@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import styles from "./breadcrumbs.module.css";
 
 export type BreadcrumbItem = {
@@ -12,40 +13,41 @@ type BreadcrumbsProps = {
   className?: string;
 };
 
-const routeLabels: Record<string, string> = {
-  "/": "ケース",
-  "/cases": "ケース",
-  "/notifications": "通知",
-  "/invites": "招待",
-  "/login": "ログイン",
-  "/register": "新規登録",
-  "/reset": "パスワードリセット",
-  "/me": "マイページ"
-};
-
-const buildItemsFromPath = (pathname: string): BreadcrumbItem[] => {
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) {
-    return [{ label: routeLabels["/"] ?? "ホーム" }];
-  }
-
-  const items: BreadcrumbItem[] = [];
-  let current = "";
-  for (const segment of segments) {
-    current += `/${segment}`;
-    const label = routeLabels[current] ?? segment;
-    items.push({ label, href: current });
-  }
-  return items;
-};
-
 export default function Breadcrumbs({ items, className }: BreadcrumbsProps) {
   const { pathname } = useLocation();
+  const { t } = useTranslation();
+  const routeLabels: Record<string, string> = {
+    "/": t("nav.cases"),
+    "/cases": t("nav.cases"),
+    "/notifications": t("nav.notifications"),
+    "/invites": t("nav.invites"),
+    "/login": t("nav.login"),
+    "/register": t("nav.register"),
+    "/reset": t("nav.reset"),
+    "/me": t("nav.myPage")
+  };
+
+  const buildItemsFromPath = (path: string): BreadcrumbItem[] => {
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return [{ label: routeLabels["/"] ?? t("nav.home") }];
+    }
+
+    const builtItems: BreadcrumbItem[] = [];
+    let current = "";
+    for (const segment of segments) {
+      current += `/${segment}`;
+      const label = routeLabels[current] ?? segment;
+      builtItems.push({ label, href: current });
+    }
+    return builtItems;
+  };
+
   const resolved = items ?? buildItemsFromPath(pathname);
   const classes = [styles.breadcrumbs, className].filter(Boolean).join(" ");
 
   return (
-    <nav className={classes} aria-label="パンくずリスト">
+    <nav className={classes} aria-label={t("nav.breadcrumbs")}>
       <ol className={styles.list}>
         {resolved.map((item, index) => {
           const isLast = index === resolved.length - 1;

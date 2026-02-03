@@ -2,6 +2,7 @@
   "common": {
     "ok": "OK",
     "cancel": "Cancel",
+    "close": "Close",
     "loading": "Loading...",
     "logout": "Sign out"
   },
@@ -55,6 +56,52 @@
       "label": "Language",
       "ja": "Japanese",
       "en": "English"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "menu": "Menu",
+    "mainMenu": "Main menu",
+    "openMenu": "Open menu",
+    "breadcrumbs": "Breadcrumbs",
+    "cases": "Cases",
+    "notifications": "Notifications",
+    "invites": "Invites",
+    "login": "Sign in",
+    "register": "Sign up",
+    "reset": "Reset password",
+    "myPage": "My page"
+  },
+  "sidebar": {
+    "notifications": {
+      "unread": "{{count}} unread"
+    },
+    "invites": {
+      "pending": "{{count}} pending invites"
+    },
+    "logout": {
+      "title": "Sign out?",
+      "description": "This will end the current session.",
+      "error": "Failed to sign out."
+    }
+  },
+  "footer": {
+    "note": "© 2026 Kototsute"
+  },
+  "walletVerify": {
+    "destination": {
+      "label": "Destination (Verification wallet)",
+      "hint": "Destination is the system verification address."
+    },
+    "memo": {
+      "label": "Memo",
+      "hint": "We will send 1 drops (=0.000001 XRP)."
+    },
+    "secret": {
+      "label": "Secret",
+      "hint": "The secret is used temporarily and not stored.",
+      "submitting": "Verifying...",
+      "submit": "Verify with secret"
     }
   }
 }
