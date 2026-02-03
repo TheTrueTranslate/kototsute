@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import ja from "../locales/ja.json";
-import en from "../locales/en.json";
+import ja from "./consts/ja.json";
+import en from "./consts/en.json";
 
 const flattenKeys = (input: Record<string, any>, prefix = ""): string[] => {
   return Object.entries(input).flatMap(([key, value]) => {

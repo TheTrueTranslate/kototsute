@@ -2,8 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const srcDir = path.join(root, "src", "locales");
-const distDir = path.join(root, "dist", "locales");
+const srcDir = path.join(root, "src", "i18n", "consts");
+const distDir = path.join(root, "dist", "i18n", "consts");
 
 if (!fs.existsSync(srcDir)) {
   process.exit(0);

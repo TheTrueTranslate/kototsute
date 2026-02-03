@@ -1,6 +1,6 @@
 import i18next, { type i18n, type Module } from "i18next";
-import ja from "../locales/ja.json" assert { type: "json" };
-import en from "../locales/en.json" assert { type: "json" };
+import ja from "./consts/ja.json" assert { type: "json" };
+import en from "./consts/en.json" assert { type: "json" };
 
 export const supportedLocales = ["ja", "en"] as const;
 export type SupportedLocale = (typeof supportedLocales)[number];

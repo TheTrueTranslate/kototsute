@@ -1,0 +1,1143 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close",
+    "unset": "Not set",
+    "unregistered": "Unregistered",
+    "loading": "Loading...",
+    "logout": "Sign out"
+  },
+  "errors": {
+    "UNAUTHORIZED": "Authentication required",
+    "FORBIDDEN": "You do not have permission",
+    "NOT_FOUND": "Not found",
+    "INTERNAL_ERROR": "Internal server error",
+    "VALIDATION_ERROR": "Invalid input",
+    "CONFLICT": "Already processed"
+  },
+  "validation": {
+    "displayName": {
+      "required": "Display name is required",
+      "max": "Display name must be 50 characters or fewer"
+    },
+    "email": { "invalid": "Please enter a valid email address" },
+    "relation": { "required": "Relation is required" },
+    "relationOther": { "required": "Please enter the relation" },
+    "memo": { "max": "Memo must be 400 characters or fewer" },
+    "asset": {
+      "label": { "required": "Label is required" },
+      "address": {
+        "required": "Address is required",
+        "invalid": "Invalid XRP address"
+      },
+      "token": {
+        "currency": "Currency code is required",
+        "duplicate": "Each token must be unique"
+      },
+      "numeric": "Please enter a number"
+    },
+    "plan": {
+      "title": { "required": "Title is required" },
+      "allocation": {
+        "min": "Allocation must be 0 or greater",
+        "percentMax": "Total percentage must be 100% or less"
+      }
+    }
+  },
+  "relations": {
+    "spouse": "Spouse",
+    "commonLaw": "Common-law spouse",
+    "eldestSon": "Eldest son",
+    "eldestDaughter": "Eldest daughter",
+    "secondSon": "Second son",
+    "secondDaughter": "Second daughter",
+    "childOther": "Child (other)",
+    "father": "Father",
+    "mother": "Mother",
+    "grandfather": "Grandfather",
+    "grandmother": "Grandmother",
+    "grandchild": "Grandchild",
+    "olderBrother": "Older brother",
+    "olderSister": "Older sister",
+    "youngerBrother": "Younger brother",
+    "youngerSister": "Younger sister",
+    "fatherInLaw": "Father-in-law",
+    "motherInLaw": "Mother-in-law",
+    "olderBrotherInLaw": "Brother-in-law (older)",
+    "olderSisterInLaw": "Sister-in-law (older)",
+    "youngerBrotherInLaw": "Brother-in-law (younger)",
+    "youngerSisterInLaw": "Sister-in-law (younger)",
+    "nephew": "Nephew",
+    "niece": "Niece",
+    "uncle": "Uncle",
+    "aunt": "Aunt",
+    "cousin": "Cousin",
+    "relative": "Relative",
+    "friend": "Friend",
+    "other": "Other"
+  },
+  "authErrors": {
+    "default": "Authentication failed. Please try again.",
+    "emailAlreadyInUse": "This email is already registered",
+    "invalidEmail": "Please enter a valid email address",
+    "weakPassword": "Password must be at least 8 characters",
+    "userNotFound": "Email or password is incorrect",
+    "tooManyRequests": "Too many attempts. Please try again later."
+  },
+  "auth": {
+    "common": {
+      "email": "Email",
+      "emailPlaceholder": "example@kototsute.jp",
+      "password": "Password",
+      "passwordPlaceholder": "8 characters or more"
+    },
+    "login": {
+      "title": "Sign in",
+      "lead": "Sign in with your registered email.",
+      "footer": {
+        "reset": "Forgot password",
+        "register": "Sign up"
+      },
+      "submit": "Sign in",
+      "submitting": "Signing in...",
+      "registered": "Registration completed. Please sign in."
+    },
+    "register": {
+      "title": "Sign up",
+      "lead": "Create an account with email and password.",
+      "footer": {
+        "login": "Back to sign in",
+        "reset": "Reset password"
+      },
+      "form": {
+        "displayName": "Display name",
+        "displayNamePlaceholder": "e.g. Taro Yamada",
+        "confirmPassword": "Confirm password",
+        "confirmPasswordPlaceholder": "Re-enter the password"
+      },
+      "submit": "Create account",
+      "submitting": "Creating..."
+    },
+    "reset": {
+      "title": "Reset password",
+      "lead": "We will send a reset link to your registered email.",
+      "footer": {
+        "login": "Back to sign in",
+        "register": "Sign up"
+      },
+      "submit": "Send reset email",
+      "submitting": "Sending...",
+      "success": "Password reset email sent."
+    }
+  },
+  "home": {
+    "title": "Post-login Home (WIP)",
+    "lead": "The authenticated home is under construction.",
+    "footer": {
+      "login": "Back to sign in",
+      "register": "Sign up"
+    },
+    "placeholder": {
+      "lead": "We plan to add entry points for inviting heirs here.",
+      "items": {
+        "invite": "Issue invite links",
+        "cases": "List of inheritance cases",
+        "timeline": "Status timeline"
+      }
+    }
+  },
+  "cases": {
+    "title": "Cases",
+    "detail": {
+      "title": "Case details",
+      "updatedAt": "Updated: {{date}}",
+      "tabs": {
+        "assets": "Assets",
+        "plans": "Plans",
+        "tasks": "Tasks",
+        "heirs": "Heirs",
+        "deathClaims": "Inheritance",
+        "wallet": "Receiving wallet"
+      },
+      "assets": {
+        "title": "Assets",
+        "actions": {
+          "lock": "Lock assets",
+          "add": "Add asset"
+        },
+        "empty": {
+          "heirOnly": {
+            "title": "Assets are visible only to the owner",
+            "body": "Assets are not shown in cases you joined as an heir."
+          },
+          "none": {
+            "title": "No assets yet",
+            "body": "You can add assets from Add asset."
+          }
+        },
+        "verification": {
+          "unverified": "Unverified",
+          "pending": "Verification failed",
+          "verified": "Verified"
+        }
+      },
+      "plans": {
+        "title": "Plans",
+        "actions": {
+          "create": "Create plan"
+        },
+        "empty": {
+          "heir": {
+            "title": "No plans",
+            "body": "Plans will appear here once created."
+          },
+          "owner": {
+            "title": "No plans yet",
+            "body": "You can create your first plan."
+          }
+        },
+        "updatedAt": "Updated: {{date}}"
+      },
+      "deathClaims": {
+        "title": "Inheritance",
+        "nextAction": {
+          "title": "Next action"
+        },
+        "documents": {
+          "title": "Death certificate",
+          "hint": "Check status / resubmit"
+        },
+        "approval": {
+          "title": "Consent for inheritance execution",
+          "hint": "Inheritance execution proceeds when system + majority of heirs sign."
+        },
+        "unavailable": {
+          "title": "Unavailable until waiting stage",
+          "body": "Once the case is in waiting, you can proceed with inheritance execution."
+        }
+      },
+      "distribution": {
+        "title": "Execute distribution",
+        "hint": "Funds are sent from the inheritance wallet to receiving wallets.",
+        "labels": {
+          "success": "Success",
+          "failed": "Failed",
+          "skipped": "Skipped",
+          "escalation": "Escalation"
+        },
+        "count": "{{count}} items",
+        "progress": "Success {{success}} / {{total}} items",
+        "actions": {
+          "execute": "Run distribution",
+          "executing": "Running...",
+          "resume": "Resume"
+        },
+        "note": {
+          "refresh": "Auto refreshes every minute."
+        },
+        "status": {
+          "pending": "Not started",
+          "running": "Running",
+          "partial": "Partially failed",
+          "completed": "Completed",
+          "failed": "Failed",
+          "unset": "Not loaded"
+        },
+        "disabled": {
+          "noCase": "Case info is unavailable.",
+          "notInProgress": "You can run distribution once inheritance is in progress.",
+          "approvalIncomplete": "You can run distribution once consent is completed.",
+          "noHeirs": "Cannot run because no heirs are registered.",
+          "unverified": "You can run once all heir receiving wallets are verified. Unverified: {{count}}",
+          "loading": "Loading distribution status.",
+          "completed": "Distribution is complete.",
+          "running": "Distribution is in progress."
+        },
+        "error": {
+          "loadFailed": "Failed to load distribution status",
+          "executeFailed": "Failed to execute distribution"
+        }
+      },
+      "signer": {
+        "status": {
+          "label": "Signing status",
+          "notReady": "Preparing",
+          "set": "Accepting signatures",
+          "failed": "Preparation failed"
+        },
+        "approvalStatus": {
+          "prepared": "Prepared",
+          "submitted": "Submitted",
+          "failed": "Failed",
+          "unset": "Not generated"
+        },
+        "networkStatus": {
+          "pending": "Pending",
+          "validated": "Validated (success)",
+          "failed": "Validated (failed)",
+          "notFound": "Not reflected",
+          "expired": "Expired"
+        },
+        "prepare": {
+          "title": "Prepare consent",
+          "hint": "Create signable payload for heirs' consent.",
+          "action": "Start preparing consent",
+          "loading": "Preparing...",
+          "success": "Preparation completed. Enter your secret to proceed.",
+          "reprepareSuccess": "Re-preparation completed. Enter your secret to proceed.",
+          "error": {
+            "failed": "Failed to prepare consent",
+            "reprepareFailed": "Failed to re-prepare consent",
+            "submitted": "Cannot re-prepare while submitted."
+          }
+        },
+        "disabled": {
+          "noCase": "Case info is unavailable.",
+          "notInProgress": "Signing can be submitted once inheritance is in progress.",
+          "failed": "Signing preparation failed. Please contact support.",
+          "preparing": "Preparing signatures.",
+          "loading": "Loading signable payload.",
+          "loadFailed": "Failed to load signable payload.",
+          "notGenerated": "Signable payload not generated.",
+          "prepareFailed": "Failed to generate signable payload.",
+          "expired": "Submission expired. Re-prepare is required.",
+          "submitted": "Inheritance execution already submitted{{network}}.",
+          "walletRequired": "Receiving wallet registration is required.",
+          "walletVerifyRequired": "Ownership verification of receiving wallet is required.",
+          "signed": "Already signed.",
+          "completed": "Required signatures collected."
+        },
+        "error": {
+          "statusLoadFailed": "Failed to load signing status",
+          "loadFailed": "Failed to load signable payload",
+          "txMissing": "Signable transaction is unavailable",
+          "signFailed": "Failed to create signature",
+          "signedBlobRequired": "Please enter signed data",
+          "submitFailed": "Failed to submit signature"
+        },
+        "fromLabel": "From: Owner's inheritance wallet",
+        "fromValue": "Owner's inheritance wallet",
+        "toLabel": "To: System wallet",
+        "toValue": "System wallet",
+        "labels": {
+          "from": "From",
+          "to": "To",
+          "signers": "Signers",
+          "system": "System signer",
+          "mine": "Your receiving wallet",
+          "heir": "Heir receiving wallet"
+        },
+        "multiSign": {
+          "title": "MultiSign overview (addresses)",
+          "empty": "Shown once preparation is complete."
+        },
+        "multiSignNote": {
+          "withCount": "Valid when {{count}}+ heir approvals and system signature are collected.",
+          "default": "Valid when a majority of heir approvals and system signature are collected."
+        },
+        "txSummary": "From: {{from}} / To: {{to}} / Amount: {{amount}}",
+        "tx": {
+          "title": "Signing details",
+          "hint": "Confirm the transfer details and Memo.",
+          "sentLabel": "Submitted Tx",
+          "afterLabel": "Status after submit",
+          "afterTitle": "Status after submit",
+          "afterHint": "You can check network confirmation status.",
+          "actions": {
+            "reprepare": "Re-prepare",
+            "reload": "Reload"
+          },
+          "note": {
+            "expired": "Expired. Re-prepare is required.",
+            "refresh": "Auto refreshes every minute."
+          },
+          "loading": "Loading signable payload...",
+          "details": {
+            "title": "Review signing details"
+          },
+          "memoLabel": "Memo",
+          "amount": {
+            "dropsLabel": "Amount (drops)",
+            "xrpLabel": "Amount (XRP)"
+          },
+          "copy": {
+            "sentTx": "Copy submitted Tx",
+            "from": "Copy from",
+            "to": "Copy to",
+            "memo": "Copy memo",
+            "amountDrops": "Copy Amount (drops)",
+            "amountXrp": "Copy Amount (XRP)"
+          },
+          "empty": "Signable payload not generated."
+        },
+        "guide": {
+          "title": "Signing flow",
+          "steps": {
+            "tx": "The signable payload is an XRPL transaction that distributes from the inheritance wallet (created at asset lock) to heirs.",
+            "multisign": "MultiSign with registered heir wallets.",
+            "secret": "Enter your secret to auto-create the signature (not sent to server).",
+            "submit": "Submit the signature to record consent.",
+            "autoExecute": "Once required signatures are collected, submission is automated."
+          }
+        },
+        "secret": {
+          "label": "Secret",
+          "note": "The secret is used only on this device."
+        },
+        "autoNote": {
+          "signing": "Creating signature...",
+          "ready": "Signature is ready.",
+          "hint": "Enter your secret to auto-create the signature."
+        },
+        "actions": {
+          "submit": "Submit signature",
+          "submitting": "Submitting..."
+        },
+        "mySignature": {
+          "label": "Your signature",
+          "signed": "Signed",
+          "unsigned": "Unsigned"
+        },
+        "inheritance": {
+          "label": "Inheritance status",
+          "completed": "Inheritance completed"
+        }
+      },
+      "inheritance": {
+        "steps": {
+          "adminApproved": {
+            "title": "Admin approved",
+            "description": "Heir consent is required. Proceed with death certificate consent."
+          },
+          "preparing": {
+            "title": "Preparing heir consent",
+            "description": "Start preparing consent."
+          },
+          "awaitingSign": {
+            "title": "Heir consent in progress",
+            "description": "Review and sign."
+          },
+          "signerCompleted": {
+            "title": "Consent complete (awaiting execution)",
+            "description": "Consent is complete. Waiting for execution."
+          }
+        }
+      },
+      "prepare": {
+        "disabled": {
+          "noCase": "Case info is unavailable.",
+          "notInProgress": "Preparation is available once inheritance is in progress.",
+          "failed": "Preparation failed. Please contact support.",
+          "completed": "Preparation is already complete.",
+          "noHeirs": "Cannot prepare because no heirs are registered.",
+          "unverified": "Preparation is available once all heir receiving wallets are verified. Unverified: {{count}}"
+        }
+      },
+      "heirs": {
+        "title": "Heirs",
+        "form": {
+          "email": "Email",
+          "relation": "Relation",
+          "relationOther": "Relation (free input)",
+          "relationOtherPlaceholder": "e.g. Roommate",
+          "memo": "Memo (optional)",
+          "memoPlaceholder": "e.g. Contact from before",
+          "submit": "Send invite",
+          "submitting": "Sending..."
+        },
+        "relationLabel": "Relation",
+        "locked": {
+          "title": "Read-only after asset lock",
+          "body": "You cannot add or edit heirs."
+        },
+        "invites": {
+          "empty": {
+            "title": "No invites yet",
+            "body": "You can send invites to heirs."
+          },
+          "status": {
+            "pending": "Inviting",
+            "accepted": "Joined",
+            "declined": "Declined"
+          },
+          "error": {
+            "sendFailed": "Failed to send invite"
+          }
+        },
+        "empty": {
+          "title": "No heirs registered",
+          "body": "Approved heirs will appear here."
+        },
+        "status": {
+          "accepted": "Approved"
+        },
+        "walletStatus": {
+          "unregistered": "Unregistered",
+          "pending": "Unverified",
+          "verified": "Verified"
+        }
+      },
+      "wallet": {
+        "title": "Receiving wallet",
+        "statusLabel": "Status",
+        "status": {
+          "verified": "Ownership verified",
+          "pending": "Unverified",
+          "unregistered": "Unregistered"
+        },
+        "loading": "Loading wallet info...",
+        "addressLabel": "Wallet address",
+        "actions": {
+          "register": "Register/Update",
+          "verify": "Verify ownership"
+        },
+        "dialog": {
+          "verifyTitle": "Verify receiving wallet ownership",
+          "registerTitle": "Register receiving wallet",
+          "description": "Register a wallet address and verify ownership.",
+          "empty": {
+            "title": "Register first",
+            "body": "You can verify ownership after registering the receiving wallet."
+          }
+        },
+        "form": {
+          "addressLabel": "Wallet address",
+          "save": "Register",
+          "saving": "Saving...",
+          "startVerify": "Start verification"
+        },
+        "memoIssuing": "Issuing...",
+        "memoEmpty": "Not issued",
+        "notice": {
+          "register": "Wallet registration is required",
+          "verify": "Ownership verification is required"
+        },
+        "unavailable": {
+          "title": "Only heirs can operate",
+          "body": "Only the heir can register a receiving wallet."
+        },
+        "error": {
+          "loadFailed": "Failed to load wallet",
+          "addressRequired": "Please enter a wallet address",
+          "saveFailed": "Failed to register wallet",
+          "challengeFailed": "Failed to get verification code",
+          "caseIdMissing": "Case ID is unavailable",
+          "addressMissing": "Wallet address is unavailable"
+        },
+        "verify": {
+          "success": "Ownership verification completed",
+          "error": "Ownership verification failed"
+        }
+      },
+      "tasks": {
+        "title": "Tasks",
+        "note": "Does not affect progress",
+        "role": {
+          "owner": "Owner",
+          "heir": "Heir"
+        },
+        "personal": {
+          "title": "Personal tasks",
+          "empty": {
+            "title": "No personal tasks",
+            "body": "Shown when Todo master is updated."
+          }
+        },
+        "error": {
+          "loadFailed": "Failed to load tasks",
+          "updateFailed": "Failed to update tasks"
+        }
+      },
+      "error": {
+        "caseIdMissing": "Case ID is unavailable",
+        "loadFailed": "Failed to load case",
+        "noCase": "Case info is unavailable."
+      }
+    },
+    "section": {
+      "created": "Created cases",
+      "received": "Invited cases"
+    },
+    "status": {
+      "draft": "Draft",
+      "waiting": "Waiting",
+      "inProgress": "In progress",
+      "completed": "Completed"
+    },
+    "owner": {
+      "anonymous": "User",
+      "anonymousWithId": "User-{{id}}"
+    },
+    "create": {
+      "submit": "Create case",
+      "submitting": "Creating..."
+    },
+    "updatedAt": "Last updated: {{date}}",
+    "empty": {
+      "received": {
+        "title": "No invites yet",
+        "body": "Invited cases will appear here."
+      }
+    },
+    "error": {
+      "load": "Failed to load cases",
+      "create": "Failed to create case",
+      "unauthorized": "Login info is unavailable. Please sign in again."
+    }
+  },
+  "assets": {
+    "types": {
+      "xrp": {
+        "label": "XRP wallet",
+        "desc": "Register a wallet address"
+      },
+      "bank": {
+        "label": "Bank account",
+        "desc": "Coming soon"
+      },
+      "securities": {
+        "label": "Securities account",
+        "desc": "Coming soon"
+      },
+      "realEstate": {
+        "label": "Real estate",
+        "desc": "Coming soon"
+      }
+    },
+    "new": {
+      "title": "Add asset",
+      "section": {
+        "type": "Asset type"
+      },
+      "type": {
+        "unavailable": "Coming soon",
+        "next": "Next",
+        "change": "Change",
+        "unselected": "Not selected"
+      },
+      "form": {
+        "label": "Label",
+        "labelPlaceholder": "e.g. My wallet",
+        "address": "XRP address",
+        "addressPlaceholder": "r...",
+        "submit": "Register"
+      },
+      "error": {
+        "caseIdMissing": "Case ID is missing",
+        "createFailed": "Failed to register asset"
+      }
+    },
+    "detail": {
+      "title": "Asset details",
+      "breadcrumb": "Asset details",
+      "tabs": {
+        "overview": "Overview",
+        "history": "History"
+      },
+      "status": {
+        "unverified": "Unverified",
+        "pending": "Pending verification",
+        "verified": "Verified"
+      },
+      "actions": {
+        "sync": "Sync latest data",
+        "syncing": "Syncing...",
+        "verifyOwnership": "Verify ownership",
+        "delete": "Delete asset",
+        "deleting": "Deleting...",
+        "confirmDelete": "Delete"
+      },
+      "overview": {
+        "title": "Overview",
+        "createdAt": "Registered",
+        "updatedAt": "Updated",
+        "status": "Status"
+      },
+      "wallet": {
+        "title": "Wallet info",
+        "lastSynced": "Last synced: {{date}}",
+        "balance": "Balance (XRP)",
+        "ledger": "Ledger",
+        "tokenBalance": "Balance",
+        "emptyTokens": "No tokens.",
+        "empty": "Wallet info has not been fetched yet."
+      },
+      "token": {
+        "native": "native"
+      },
+      "reserve": {
+        "title": "Planned inheritance & reserves",
+        "hint": "Planned inheritance is shown after subtracting reserves.",
+        "inheritanceTitle": "Planned inheritance",
+        "balanceMeta": "Balance {{balance}} XRP / Reserve {{reserve}} XRP",
+        "tokensLabel": "Tokens",
+        "tokenMeta": "Balance {{balance}} / Reserve {{reserve}}",
+        "plannedLabel": "Planned",
+        "syncHint": "Sync wallet info to see this section.",
+        "settingsTitle": "Reserve settings",
+        "xrpLabel": "XRP reserve amount (XRP)",
+        "tokenLabel": "Token reserve",
+        "tokenHint": "Available after syncing with XRPL.",
+        "save": "Save reserves",
+        "saving": "Saving...",
+        "success": "Reserve settings saved",
+        "error": "Failed to update reserve settings"
+      },
+      "verify": {
+        "title": "XRPL verification",
+        "description": "Send with your secret to verify automatically.",
+        "memoIssuing": "Issuing...",
+        "memoEmpty": "Not issued",
+        "challengeError": "Failed to get verification code",
+        "success": "Verification completed",
+        "error": "Automatic verification failed"
+      },
+      "history": {
+        "title": "History",
+        "hint": "Latest 50",
+        "empty": "No history.",
+        "emptyDetail": "No details.",
+        "actor": "Actor: {{name}}",
+        "types": {
+          "created": "Registered",
+          "deleted": "Deleted",
+          "reserve": "Reserve",
+          "verifyRequested": "Verification started",
+          "verifyConfirmed": "Verification completed",
+          "synced": "Synced",
+          "syncLog": "Sync log"
+        }
+      },
+      "delete": {
+        "title": "Delete this asset?",
+        "description": "You cannot delete assets linked to a plan.",
+        "relatedError": "Cannot delete because it is linked to a plan",
+        "error": "Failed to delete asset"
+      },
+      "error": {
+        "assetIdMissing": "Asset ID is missing",
+        "fetchFailed": "Failed to fetch asset",
+        "historyFailed": "Failed to fetch history",
+        "xrplFailed": "Failed to fetch XRPL data"
+      }
+    }
+  },
+  "assetLock": {
+    "breadcrumb": "Asset lock",
+    "header": {
+      "label": "Asset lock",
+      "title": "Asset lock process",
+      "stepLabel": "STEP"
+    },
+    "steps": {
+      "prepare": "Preparation",
+      "method": "Select method",
+      "transfer": "Send / input",
+      "verify": "Verify transfer"
+    },
+    "completed": "Asset lock completed. Returning to case details in {{seconds}} seconds.",
+    "validation": {
+      "noPlans": "No plans available for inheritance",
+      "missingHeirs": "Some plans have no heirs set",
+      "pendingSync": "Pending sync (account activation may take time)"
+    },
+    "error": {
+      "balanceFetch": "Failed to fetch balances",
+      "lockFetch": "Failed to fetch asset lock info",
+      "planFetch": "Failed to fetch plans",
+      "startFailed": "Failed to start asset lock",
+      "txHashRequired": "Please enter TX hash",
+      "verifyFailed": "Failed to verify transfer",
+      "autoTransferFailed": "Automatic transfer failed",
+      "completeFailed": "Failed to complete asset lock",
+      "backToRegularKeyFailed": "Failed to return to RegularKey check",
+      "confirmFailed": "Failed to record confirmation",
+      "regularKeyFailed": "Failed to verify RegularKey",
+      "stepUpdateFailed": "Failed to update step"
+    },
+    "prepare": {
+      "description": "Check assets, reserves, and heirs.",
+      "confirm": "Confirmed",
+      "confirming": "Recording...",
+      "waitingOwner": "Waiting for the owner's confirmation."
+    },
+    "planPreview": {
+      "title": "Plan preview",
+      "empty": "No plans",
+      "statusInactive": "Inactive",
+      "statusActive": "In progress",
+      "rulesTitle": "Allocation rules",
+      "rulesEmpty": "Allocation rules are not set",
+      "allocationsEmpty": "No allocations set",
+      "rulesLoading": "Loading allocation rules...",
+      "unit": {
+        "percent": "Percent",
+        "amount": "Amount"
+      }
+    },
+    "method": {
+      "a": {
+        "title": "Method A (manual transfer)",
+        "description": "Send from your wallet to the distribution wallet.",
+        "bullets": {
+          "verify": "Enter the TX hash after sending to verify.",
+          "eachAsset": "Transfers are required for each asset.",
+          "signatures": "Requires more signatures."
+        }
+      },
+      "b": {
+        "title": "Method B (auto transfer, single signature)",
+        "badge": "Recommended",
+        "description": "Temporarily set a RegularKey and auto-transfer to the distribution wallet.",
+        "bullets": {
+          "singleSignature": "Only one signature is required.",
+          "lessSteps": "Fewer steps, less room for errors.",
+          "recommended": "Recommended: Method B reaches lock faster."
+        }
+      }
+    },
+    "actions": {
+      "start": "Start lock",
+      "starting": "Starting...",
+      "executeAuto": "Execute auto transfer",
+      "executing": "Transferring...",
+      "complete": "Complete",
+      "completing": "Completing...",
+      "completed": "Completed",
+      "back": "Back"
+    },
+    "methodSteps": {
+      "regularKeySet": {
+        "title": "Set RegularKey",
+        "description": "Assign a RegularKey with the owner's signature."
+      },
+      "autoTransfer": {
+        "title": "Execute auto transfer",
+        "description": "The server transfers to the distribution wallet."
+      },
+      "transferDone": {
+        "title": "Confirm transfer completion",
+        "description": "Check transfer results and sync."
+      },
+      "regularKeyCleared": {
+        "title": "Clear RegularKey",
+        "description": "Clear the RegularKey for safety."
+      },
+      "inProgress": "In progress"
+    },
+    "regularKey": {
+      "title": "RegularKey signature",
+      "description": "Set RegularKey in the owner's wallet and confirm after signing.",
+      "statusLabel": "Status",
+      "note": "You can't proceed until confirmation completes.",
+      "confirm": "Confirm",
+      "resultTitle": "RegularKey results",
+      "back": "Back to RegularKey"
+    },
+    "status": {
+      "regularKey": {
+        "verified": "Verified",
+        "error": "Error",
+        "unverified": "Not verified"
+      },
+      "item": {
+        "verified": "Verified",
+        "failed": "Failed",
+        "sent": "Sent",
+        "unverified": "Unverified"
+      }
+    },
+    "transfer": {
+      "hint": "Method A uses manual transfer/verification; Method B uses automatic transfer (after RegularKey confirmation).",
+      "autoTransferNote": "You can't go back after executing auto transfer.",
+      "emptyTargets": "No transfer targets.",
+      "type": {
+        "token": "Token transfer",
+        "xrp": "XRP transfer"
+      },
+      "planned": "Planned {{amount}}",
+      "txHashLabel": "TX Hash",
+      "appSend": "Send in app",
+      "verifyAction": "Verify",
+      "errors": {
+        "destinationMissing": "Destination address is missing",
+        "fromMissing": "Please enter a source address",
+        "secretMissing": "Please enter a secret",
+        "issuerMissing": "Token issuer is missing",
+        "sendFailed": "Transfer failed"
+      },
+      "success": {
+        "sent": "Transfer submitted. TX hash entered."
+      }
+    },
+    "verify": {
+      "title": "Transfer verification results",
+      "balanceTitle": "Wallet balance (XRP)",
+      "reload": "Refresh",
+      "note": "It may take time to reflect. Refresh if needed.",
+      "loadingBalances": "Loading balances...",
+      "destination": "Destination",
+      "source": "Source",
+      "empty": "No verification results."
+    },
+    "transferDialog": {
+      "title": "Send in app",
+      "description": "The secret is used only on this device and is not sent to the server.",
+      "fromLabel": "From address",
+      "toLabel": "To address",
+      "toCopyLabel": "Copy destination address",
+      "amountLabel": "Amount",
+      "secretLabel": "Secret",
+      "send": "Send and fill TX hash",
+      "sending": "Sending...",
+      "empty": "Select a transfer target."
+    },
+    "regularKeyDialog": {
+      "title": "Set RegularKey",
+      "description": "Run AccountSet in your wallet app and set the distribution wallet as RegularKey.",
+      "addressLabel": "RegularKey address",
+      "addressEmpty": "Not issued",
+      "copyLabel": "RegularKey",
+      "copyAriaLabel": "Copy RegularKey address",
+      "confirm": "Confirm",
+      "confirming": "Recording..."
+    },
+    "autoTransferDialog": {
+      "title": "Execute auto transfer",
+      "description": "You can't go back after executing auto transfer. Please confirm before proceeding.",
+      "confirm": "Execute"
+    },
+    "heir": {
+      "defaultLabel": "Heir",
+      "unassigned": "Unassigned"
+    }
+  },
+  "plans": {
+    "status": {
+      "draft": "Draft",
+      "shared": "Active",
+      "inactive": "Inactive"
+    },
+    "new": {
+      "title": "Create plan",
+      "form": {
+        "title": "Title",
+        "titlePlaceholder": "e.g. Distribution plan"
+      },
+      "actions": {
+        "back": "Back",
+        "submit": "Create",
+        "submitting": "Creating..."
+      },
+      "error": {
+        "caseIdMissing": "Case ID is missing",
+        "planIdMissing": "Created plan ID is missing",
+        "createFailed": "Failed to create plan"
+      }
+    },
+    "edit": {
+      "title": "Edit plan",
+      "updatedAt": "Updated: {{date}}",
+      "actions": {
+        "backToDetail": "Back to plan details"
+      },
+      "flow": {
+        "title": "Edit flow",
+        "text": "Basic info → Heirs → Assets → Allocation"
+      },
+      "section": {
+        "basic": "1. Basic info",
+        "heirs": "2. Heirs",
+        "assets": "3. Assets to include",
+        "allocations": "4. Allocation"
+      },
+      "form": {
+        "title": "Title",
+        "titlePlaceholder": "e.g. Distribution plan",
+        "saveTitle": "Update title",
+        "saving": "Saving..."
+      },
+      "heir": {
+        "helper": "Add approved heirs to the plan.",
+        "add": "Add heir",
+        "addConfirm": "Add",
+        "adding": "Adding...",
+        "remove": "Remove",
+        "removing": "Removing...",
+        "emptyAvailable": {
+          "title": "No heirs available",
+          "body": "Approved invites will appear here."
+        },
+        "emptySelected": {
+          "title": "No heirs added",
+          "body": "Please add heirs first."
+        },
+        "defaultLabel": "Heir",
+        "other": "Other"
+      },
+      "assets": {
+        "helper": "Add registered assets from the case.",
+        "add": "Add asset",
+        "addConfirm": "Add",
+        "adding": "Adding...",
+        "remove": "Remove",
+        "removing": "Removing...",
+        "emptyAvailable": {
+          "title": "No assets available",
+          "body": "Assets will appear here once registered."
+        },
+        "emptySelected": {
+          "title": "No assets added",
+          "body": "Please add assets to the plan."
+        },
+        "unset": "Unset"
+      },
+      "allocations": {
+        "emptyPlan": {
+          "title": "Plan cannot be loaded",
+          "body": "Reload and try again."
+        },
+        "emptyAssets": {
+          "title": "No assets to allocate",
+          "body": "Please add assets to the plan first."
+        },
+        "emptyHeirs": {
+          "title": "No heirs added",
+          "body": "Please add heirs before setting allocation."
+        },
+        "unit": {
+          "percent": "Percent",
+          "amount": "Amount"
+        },
+        "save": "Save allocation",
+        "saving": "Saving...",
+        "unallocated": "Unallocated",
+        "totalPercent": "Total: {{total}}% / Unallocated: {{unallocated}}%",
+        "totalAmount": "Total: {{total}}"
+      },
+      "error": {
+        "planIdMissing": "Plan ID is missing",
+        "loadFailed": "Failed to load plan",
+        "titleUpdateFailed": "Failed to update plan title",
+        "addAssetFailed": "Failed to add asset",
+        "removeAssetFailed": "Failed to remove asset",
+        "addHeirFailed": "Failed to add heir",
+        "removeHeirFailed": "Failed to remove heir",
+        "allocationUpdateFailed": "Failed to update allocation"
+      }
+    },
+    "detail": {
+      "title": "Plan details",
+      "breadcrumb": "Plan",
+      "updatedAt": "Updated: {{date}}",
+      "actions": {
+        "edit": "Edit",
+        "delete": "Delete plan",
+        "confirmDelete": "Delete",
+        "deleting": "Deleting..."
+      },
+      "deleteDialog": {
+        "title": "Delete this plan?",
+        "description": "Only plans without assets can be deleted."
+      },
+      "deleteLocked": "This plan can't be deleted because assets have been added.",
+      "tabs": {
+        "summary": "Summary",
+        "assets": "Assets",
+        "heirs": "Heirs",
+        "history": "History"
+      },
+      "summary": {
+        "title": "Summary",
+        "updatedAt": "Last updated",
+        "empty": {
+          "title": "Plan not found",
+          "body": "Please check your access permissions."
+        }
+      },
+      "assets": {
+        "title": "Assets",
+        "empty": {
+          "title": "No assets in this plan",
+          "body": "Assets added to the plan will appear here."
+        },
+        "allocationsEmpty": "No allocations have been set."
+      },
+      "heirs": {
+        "title": "Heirs",
+        "relation": "Relation",
+        "accepted": "Accepted",
+        "empty": {
+          "title": "No accepted heirs",
+          "body": "Accepted invites will appear here."
+        }
+      },
+      "history": {
+        "title": "History",
+        "empty": {
+          "title": "No history yet",
+          "body": "Plan activity will appear here."
+        }
+      },
+      "error": {
+        "planIdMissing": "Plan ID is missing",
+        "fetchFailed": "Failed to fetch plan",
+        "deleteFailed": "Failed to delete plan"
+      }
+    }
+  },
+  "myPage": {
+    "language": {
+      "label": "Language",
+      "ja": "Japanese",
+      "en": "English"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "menu": "Menu",
+    "mainMenu": "Main menu",
+    "openMenu": "Open menu",
+    "breadcrumbs": "Breadcrumbs",
+    "cases": "Cases",
+    "notifications": "Notifications",
+    "invites": "Invites",
+    "login": "Sign in",
+    "register": "Sign up",
+    "reset": "Reset password",
+    "myPage": "My page"
+  },
+  "sidebar": {
+    "notifications": {
+      "unread": "{{count}} unread"
+    },
+    "invites": {
+      "pending": "{{count}} pending invites"
+    },
+    "logout": {
+      "title": "Sign out?",
+      "description": "This will end the current session.",
+      "error": "Failed to sign out."
+    }
+  },
+  "footer": {
+    "note": "© 2026 Kototsute"
+  },
+  "walletVerify": {
+    "destination": {
+      "label": "Destination (Verification wallet)",
+      "hint": "Destination is the system verification address."
+    },
+    "memo": {
+      "label": "Memo",
+      "hint": "We will send 1 drops (=0.000001 XRP)."
+    },
+    "secret": {
+      "label": "Secret",
+      "hint": "The secret is used temporarily and not stored.",
+      "submitting": "Verifying...",
+      "submit": "Verify with secret"
+    }
+  }
+}
