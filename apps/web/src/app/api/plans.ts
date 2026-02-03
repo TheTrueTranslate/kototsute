@@ -141,3 +141,7 @@ export const updatePlanAllocations = async (
 export const inactivatePlan = async (caseId: string, planId: string) => {
   await apiFetch(`/v1/cases/${caseId}/plans/${planId}/inactivate`, { method: "POST" });
 };
+
+export const deletePlan = async (caseId: string, planId: string) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}`, { method: "DELETE" });
+};

@@ -12,6 +12,7 @@ let caseData = {
   createdAt: "2024-01-01",
   updatedAt: "2024-01-01"
 };
+let planAssets: any[] = [];
 
 vi.mock("../api/cases", () => ({
   getCase: async () => caseData
@@ -26,8 +27,9 @@ vi.mock("../api/plans", () => ({
     sharedAt: null,
     updatedAt: "2024-01-02"
   }),
-  listPlanAssets: async () => [],
-  listPlanHistory: async () => []
+  listPlanAssets: async () => planAssets,
+  listPlanHistory: async () => [],
+  deletePlan: async () => {}
 }));
 
 vi.mock("../api/invites", () => ({
@@ -62,9 +64,17 @@ describe("CasePlanDetailPage", () => {
     expect(html).toContain("指図詳細");
   });
 
+  it("shows delete action for owner", async () => {
+    planAssets = [];
+    const html = await render({ initialCaseData: caseData });
+    expect(html).toContain("指図を削除");
+  });
+
   it("hides edit button when locked", async () => {
     caseData = { ...caseData, stage: "WAITING", assetLockStatus: "LOCKED" };
+    planAssets = [];
     const html = await render({ initialCaseData: caseData });
     expect(html).not.toContain("編集する");
+    expect(html).not.toContain("指図を削除");
   });
 });

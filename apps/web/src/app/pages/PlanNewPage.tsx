@@ -25,8 +25,11 @@ export default function PlanNewPage() {
         setLoading(false);
         return;
       }
-      await createPlan(caseId, { title });
-      navigate(`/cases/${caseId}`);
+      const createdPlan = await createPlan(caseId, { title });
+      if (!createdPlan?.planId) {
+        throw new Error("作成した指図IDが取得できません");
+      }
+      navigate(`/cases/${caseId}/plans/${createdPlan.planId}`);
     } catch (err: any) {
       setError(err?.message ?? "指図の作成に失敗しました");
     } finally {

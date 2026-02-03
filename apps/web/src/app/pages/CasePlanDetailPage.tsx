@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import Tabs from "../../features/shared/components/tabs";
 import { Button } from "../../features/shared/components/ui/button";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "../../features/shared/components/ui/dialog";
+import {
+  deletePlan,
   getPlan,
   listPlanAssets,
   listPlanHistory,
@@ -57,6 +68,7 @@ type CasePlanDetailPageProps = {
 
 export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanDetailPageProps) {
   const { caseId, planId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
@@ -66,10 +78,23 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   const [tab, setTab] = useState<TabKey>("summary");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const title = useMemo(() => plan?.title ?? "指図詳細", [plan]);
-  const isOwner = plan?.ownerUid && user?.uid ? plan.ownerUid === user.uid : false;
+  const isOwner = useMemo(() => {
+    if (plan?.ownerUid && user?.uid) {
+      return plan.ownerUid === user.uid;
+    }
+    if (caseData?.ownerUid && user?.uid) {
+      return caseData.ownerUid === user.uid;
+    }
+    return false;
+  }, [plan?.ownerUid, caseData?.ownerUid, user?.uid]);
   const isLocked = caseData?.assetLockStatus === "LOCKED";
+  const hasAssets = assets.length > 0;
+  const canDelete = !loading && !hasAssets;
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -105,6 +130,23 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
     load();
   }, [caseId, planId]);
 
+  const handleDelete = async () => {
+    if (!caseId || !planId) {
+      setDeleteError("指図IDが取得できません");
+      return;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await deletePlan(caseId, planId);
+      navigate(`/cases/${caseId}`);
+    } catch (err: any) {
+      setDeleteError(err?.message ?? "指図の削除に失敗しました");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -132,9 +174,46 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
               <Button asChild size="sm">
                 <Link to={`/cases/${caseId}/plans/${planId}/edit`}>編集する</Link>
               </Button>
+              <Dialog
+                open={deleteOpen}
+                onOpenChange={(open) => {
+                  setDeleteOpen(open);
+                  if (!open) setDeleteError(null);
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="destructive" disabled={!canDelete || deleting}>
+                    指図を削除
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>指図を削除しますか？</DialogTitle>
+                    <DialogDescription>
+                      資産が追加されていない指図のみ削除できます。
+                    </DialogDescription>
+                  </DialogHeader>
+                  {deleteError ? <FormAlert variant="error">{deleteError}</FormAlert> : null}
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="ghost">キャンセル</Button>
+                    </DialogClose>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDelete}
+                      disabled={!canDelete || deleting}
+                    >
+                      {deleting ? "削除中..." : "削除する"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           ) : null}
         </div>
+        {isOwner && !isLocked && hasAssets ? (
+          <div className={styles.muted}>資産が追加されているため削除できません。</div>
+        ) : null}
       </header>
 
       {error ? <FormAlert variant="error">{error}</FormAlert> : null}

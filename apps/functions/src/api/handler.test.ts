@@ -3451,6 +3451,117 @@ describe("createApiHandler", () => {
     expect(listRes.body?.data?.[0]?.assetLabel).toBe("XRP Wallet");
   });
 
+  it("deletes case plan when no assets", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const planRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "A" }
+      }) as any,
+      planRes as any
+    );
+    const planId = planRes.body?.data?.planId;
+
+    const deleteRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "DELETE",
+        path: `/v1/cases/${caseId}/plans/${planId}`
+      }) as any,
+      deleteRes as any
+    );
+
+    expect(deleteRes.statusCode).toBe(200);
+    const deleted = await getFirestore().collection(`cases/${caseId}/plans`).doc(planId).get();
+    expect(deleted.exists).toBe(false);
+  });
+
+  it("rejects case plan deletion when assets exist", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const assetRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetRes as any
+    );
+    const assetId = assetRes.body?.data?.assetId;
+
+    const planRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans`,
+        body: { title: "A" }
+      }) as any,
+      planRes as any
+    );
+    const planId = planRes.body?.data?.planId;
+
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/plans/${planId}/assets`,
+        body: { assetId }
+      }) as any,
+      createRes() as any
+    );
+
+    const deleteRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "DELETE",
+        path: `/v1/cases/${caseId}/plans/${planId}`
+      }) as any,
+      deleteRes as any
+    );
+
+    expect(deleteRes.statusCode).toBe(400);
+    expect(deleteRes.body?.message).toBe("資産が追加されているため削除できません");
+  });
+
   it("lists case plans", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
