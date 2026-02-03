@@ -590,7 +590,7 @@ export default function AssetLockPage({
 
   const handleCopy = async (label: string, value: string) => {
     const result = await copyText(label, value);
-    setCopyMessage(result.message);
+    setCopyMessage(t(result.messageKey, result.values));
   };
 
   const handleConfirmRegularKey = async () => {

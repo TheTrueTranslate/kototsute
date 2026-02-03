@@ -1139,7 +1139,7 @@ export default function CaseDetailPage({
 
   const handleCopy = async (label: string, value: string) => {
     const result = await copyText(label, value);
-    setCopyMessage(result.message);
+    setCopyMessage(t(result.messageKey, result.values));
     if (result.ok) {
       window.setTimeout(() => setCopyMessage(null), 1500);
     }

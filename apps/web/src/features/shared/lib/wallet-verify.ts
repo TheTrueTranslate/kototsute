@@ -39,10 +39,10 @@ export const autoVerifyWalletOwnership = async (
   const walletAddress = input.walletAddress.trim();
   const secret = input.secret.trim();
   if (!walletAddress) {
-    throw new Error("アドレスが取得できません");
+    throw new Error("cases.detail.wallet.error.addressMissing");
   }
   if (!secret) {
-    throw new Error("シークレットを入力してください");
+    throw new Error("cases.detail.wallet.error.secretRequired");
   }
 
   const challenge = input.challenge ?? (await deps.requestChallenge());
