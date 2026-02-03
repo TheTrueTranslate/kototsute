@@ -1,0 +1,16 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "logout": "Sign out"
+  },
+  "errors": {
+    "UNAUTHORIZED": "Authentication required",
+    "FORBIDDEN": "You do not have permission",
+    "NOT_FOUND": "Not found",
+    "INTERNAL_ERROR": "Internal server error",
+    "VALIDATION_ERROR": "Invalid input",
+    "CONFLICT": "Already processed"
+  }
+}
