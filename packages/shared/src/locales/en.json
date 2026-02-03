@@ -12,5 +12,34 @@
     "INTERNAL_ERROR": "Internal server error",
     "VALIDATION_ERROR": "Invalid input",
     "CONFLICT": "Already processed"
+  },
+  "validation": {
+    "displayName": {
+      "required": "Display name is required",
+      "max": "Display name must be 50 characters or fewer"
+    },
+    "email": { "invalid": "Please enter a valid email address" },
+    "relation": { "required": "Relation is required" },
+    "relationOther": { "required": "Please enter the relation" },
+    "memo": { "max": "Memo must be 400 characters or fewer" },
+    "asset": {
+      "label": { "required": "Label is required" },
+      "address": {
+        "required": "Address is required",
+        "invalid": "Invalid XRP address"
+      },
+      "token": {
+        "currency": "Currency code is required",
+        "duplicate": "Each token must be unique"
+      },
+      "numeric": "Please enter a number"
+    },
+    "plan": {
+      "title": { "required": "Title is required" },
+      "allocation": {
+        "min": "Allocation must be 0 or greater",
+        "percentMax": "Total percentage must be 100% or less"
+      }
+    }
   }
 }

@@ -5,6 +5,7 @@ describe("plan schemas", () => {
   it("rejects empty title", () => {
     const result = planCreateSchema.safeParse({ title: "" });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.plan.title.required");
   });
 
   it("accepts percent allocations with null heir (unallocated)", () => {
@@ -21,6 +22,7 @@ describe("plan schemas", () => {
       allocations: [{ heirUid: "heir_1", value: -1 }]
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.plan.allocation.min");
   });
 
   it("rejects percent allocations over 100", () => {
@@ -32,5 +34,6 @@ describe("plan schemas", () => {
       ]
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.plan.allocation.percentMax");
   });
 });

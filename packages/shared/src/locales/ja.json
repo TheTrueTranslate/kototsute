@@ -12,5 +12,34 @@
     "INTERNAL_ERROR": "サーバーでエラーが発生しました",
     "VALIDATION_ERROR": "入力が不正です",
     "CONFLICT": "既に処理済みです"
+  },
+  "validation": {
+    "displayName": {
+      "required": "表示名を入力してください",
+      "max": "表示名は50文字以内で入力してください"
+    },
+    "email": { "invalid": "正しいメールアドレスを入力してください" },
+    "relation": { "required": "関係は必須です" },
+    "relationOther": { "required": "その他の関係を入力してください" },
+    "memo": { "max": "メモは400文字以内で入力してください" },
+    "asset": {
+      "label": { "required": "ラベルは必須です" },
+      "address": {
+        "required": "アドレスは必須です",
+        "invalid": "XRPアドレスが不正です"
+      },
+      "token": {
+        "currency": "通貨コードは必須です",
+        "duplicate": "同じトークンは1度だけ指定できます"
+      },
+      "numeric": "数値で入力してください"
+    },
+    "plan": {
+      "title": { "required": "タイトルは必須です" },
+      "allocation": {
+        "min": "配分は0以上で入力してください",
+        "percentMax": "割合の合計は100%以下にしてください"
+      }
+    }
   }
 }

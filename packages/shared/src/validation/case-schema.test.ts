@@ -8,6 +8,8 @@ describe("case schema", () => {
   });
 
   it("rejects empty display name", () => {
-    expect(displayNameSchema.safeParse("").success).toBe(false);
+    const result = displayNameSchema.safeParse("");
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.displayName.required");
   });
 });

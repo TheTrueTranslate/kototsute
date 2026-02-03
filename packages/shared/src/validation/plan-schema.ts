@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const planCreateSchema = z.object({
-  title: z.string().min(1, "タイトルは必須です")
+  title: z
+    .string({ required_error: "validation.plan.title.required" })
+    .min(1, "validation.plan.title.required")
 });
 
 export const planAllocationSchema = z
@@ -10,7 +12,7 @@ export const planAllocationSchema = z
     allocations: z.array(
       z.object({
         heirUid: z.string().nullable(),
-        value: z.number().min(0),
+        value: z.number().min(0, "validation.plan.allocation.min"),
         isUnallocated: z.boolean().optional()
       })
     )
@@ -21,7 +23,7 @@ export const planAllocationSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["allocations"],
-        message: "配分は0以上で入力してください"
+        message: "validation.plan.allocation.min"
       });
       return;
     }
@@ -31,7 +33,7 @@ export const planAllocationSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["allocations"],
-          message: "割合の合計は100%以下にしてください"
+          message: "validation.plan.allocation.percentMax"
         });
       }
     }

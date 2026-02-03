@@ -34,10 +34,17 @@ export const relationOptions = [
 ] as const;
 
 const base = z.object({
-  email: z.string().email("正しいメールアドレスを入力してください"),
-  relationLabel: z.string().min(1, "関係は必須です"),
+  email: z
+    .string({ required_error: "validation.email.invalid" })
+    .email("validation.email.invalid"),
+  relationLabel: z
+    .string({ required_error: "validation.relation.required" })
+    .min(1, "validation.relation.required"),
   relationOther: z.string().optional(),
-  memo: z.string().max(400, "メモは400文字以内で入力してください").optional()
+  memo: z
+    .string({ required_error: "validation.memo.max" })
+    .max(400, "validation.memo.max")
+    .optional()
 });
 
 export const inviteCreateSchema = base.superRefine((values, ctx) => {
@@ -45,7 +52,7 @@ export const inviteCreateSchema = base.superRefine((values, ctx) => {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["relationOther"],
-      message: "その他の関係を入力してください"
+      message: "validation.relationOther.required"
     });
   }
 });
