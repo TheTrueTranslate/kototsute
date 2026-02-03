@@ -192,6 +192,121 @@
       }
     }
   },
+  "plans": {
+    "status": {
+      "draft": "Draft",
+      "shared": "Active",
+      "inactive": "Inactive"
+    },
+    "new": {
+      "title": "Create plan",
+      "form": {
+        "title": "Title",
+        "titlePlaceholder": "e.g. Distribution plan"
+      },
+      "actions": {
+        "back": "Back",
+        "submit": "Create",
+        "submitting": "Creating..."
+      },
+      "error": {
+        "caseIdMissing": "Case ID is missing",
+        "planIdMissing": "Created plan ID is missing",
+        "createFailed": "Failed to create plan"
+      }
+    },
+    "edit": {
+      "title": "Edit plan",
+      "updatedAt": "Updated: {{date}}",
+      "actions": {
+        "backToDetail": "Back to plan details"
+      },
+      "flow": {
+        "title": "Edit flow",
+        "text": "Basic info → Heirs → Assets → Allocation"
+      },
+      "section": {
+        "basic": "1. Basic info",
+        "heirs": "2. Heirs",
+        "assets": "3. Assets to include",
+        "allocations": "4. Allocation"
+      },
+      "form": {
+        "title": "Title",
+        "titlePlaceholder": "e.g. Distribution plan",
+        "saveTitle": "Update title",
+        "saving": "Saving..."
+      },
+      "heir": {
+        "helper": "Add approved heirs to the plan.",
+        "add": "Add heir",
+        "addConfirm": "Add",
+        "adding": "Adding...",
+        "remove": "Remove",
+        "removing": "Removing...",
+        "emptyAvailable": {
+          "title": "No heirs available",
+          "body": "Approved invites will appear here."
+        },
+        "emptySelected": {
+          "title": "No heirs added",
+          "body": "Please add heirs first."
+        },
+        "defaultLabel": "Heir",
+        "other": "Other"
+      },
+      "assets": {
+        "helper": "Add registered assets from the case.",
+        "add": "Add asset",
+        "addConfirm": "Add",
+        "adding": "Adding...",
+        "remove": "Remove",
+        "removing": "Removing...",
+        "emptyAvailable": {
+          "title": "No assets available",
+          "body": "Assets will appear here once registered."
+        },
+        "emptySelected": {
+          "title": "No assets added",
+          "body": "Please add assets to the plan."
+        },
+        "unset": "Unset"
+      },
+      "allocations": {
+        "emptyPlan": {
+          "title": "Plan cannot be loaded",
+          "body": "Reload and try again."
+        },
+        "emptyAssets": {
+          "title": "No assets to allocate",
+          "body": "Please add assets to the plan first."
+        },
+        "emptyHeirs": {
+          "title": "No heirs added",
+          "body": "Please add heirs before setting allocation."
+        },
+        "unit": {
+          "percent": "Percent",
+          "amount": "Amount"
+        },
+        "save": "Save allocation",
+        "saving": "Saving...",
+        "unallocated": "Unallocated",
+        "totalPercent": "Total: {{total}}% / Unallocated: {{unallocated}}%",
+        "totalAmount": "Total: {{total}}"
+      },
+      "error": {
+        "planIdMissing": "Plan ID is missing",
+        "loadFailed": "Failed to load plan",
+        "titleUpdateFailed": "Failed to update plan title",
+        "addAssetFailed": "Failed to add asset",
+        "removeAssetFailed": "Failed to remove asset",
+        "addHeirFailed": "Failed to add heir",
+        "removeHeirFailed": "Failed to remove heir",
+        "allocationUpdateFailed": "Failed to update allocation"
+      }
+    }
+  },
   "myPage": {
     "language": {
       "label": "Language",

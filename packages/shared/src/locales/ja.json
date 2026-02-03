@@ -192,6 +192,121 @@
       }
     }
   },
+  "plans": {
+    "status": {
+      "draft": "作成中",
+      "shared": "有効",
+      "inactive": "無効"
+    },
+    "new": {
+      "title": "指図作成",
+      "form": {
+        "title": "タイトル",
+        "titlePlaceholder": "例: 分配プラン"
+      },
+      "actions": {
+        "back": "戻る",
+        "submit": "作成する",
+        "submitting": "作成中..."
+      },
+      "error": {
+        "caseIdMissing": "ケースIDが取得できません",
+        "planIdMissing": "作成した指図IDが取得できません",
+        "createFailed": "指図の作成に失敗しました"
+      }
+    },
+    "edit": {
+      "title": "指図編集",
+      "updatedAt": "更新: {{date}}",
+      "actions": {
+        "backToDetail": "指図詳細へ戻る"
+      },
+      "flow": {
+        "title": "編集の流れ",
+        "text": "基本情報 → 相続人 → 資産 → 配分"
+      },
+      "section": {
+        "basic": "1. 基本情報",
+        "heirs": "2. 相続人",
+        "assets": "3. 含める資産",
+        "allocations": "4. 配分"
+      },
+      "form": {
+        "title": "タイトル",
+        "titlePlaceholder": "例: 分配プラン",
+        "saveTitle": "タイトルを更新",
+        "saving": "保存中..."
+      },
+      "heir": {
+        "helper": "承認済みの相続人を指図に追加します。",
+        "add": "相続人を追加",
+        "addConfirm": "追加する",
+        "adding": "追加中...",
+        "remove": "削除",
+        "removing": "削除中...",
+        "emptyAvailable": {
+          "title": "追加できる相続人がいません",
+          "body": "招待が承認されるとここに表示されます。"
+        },
+        "emptySelected": {
+          "title": "指図に追加された相続人がいません",
+          "body": "まずは相続人を追加してください。"
+        },
+        "defaultLabel": "相続人",
+        "other": "その他"
+      },
+      "assets": {
+        "helper": "ケースに登録済みの資産を追加します。",
+        "add": "資産を追加",
+        "addConfirm": "追加する",
+        "adding": "追加中...",
+        "remove": "削除",
+        "removing": "削除中...",
+        "emptyAvailable": {
+          "title": "追加できる資産がありません",
+          "body": "ケースに資産を登録するとここに表示されます。"
+        },
+        "emptySelected": {
+          "title": "まだ資産が登録されていません",
+          "body": "指図に含める資産を追加してください。"
+        },
+        "unset": "未設定"
+      },
+      "allocations": {
+        "emptyPlan": {
+          "title": "指図が読み込めません",
+          "body": "再読み込みしてからもう一度お試しください。"
+        },
+        "emptyAssets": {
+          "title": "配分できる資産がありません",
+          "body": "まずは指図に資産を追加してください。"
+        },
+        "emptyHeirs": {
+          "title": "相続人が未設定です",
+          "body": "相続人を追加してから配分を設定してください。"
+        },
+        "unit": {
+          "percent": "割合",
+          "amount": "金額"
+        },
+        "save": "配分を保存",
+        "saving": "保存中...",
+        "unallocated": "未分配",
+        "totalPercent": "合計: {{total}}% / 未分配: {{unallocated}}%",
+        "totalAmount": "合計: {{total}}"
+      },
+      "error": {
+        "planIdMissing": "指図IDが取得できません",
+        "loadFailed": "指図の取得に失敗しました",
+        "titleUpdateFailed": "指図タイトルの更新に失敗しました",
+        "addAssetFailed": "資産の追加に失敗しました",
+        "removeAssetFailed": "資産の削除に失敗しました",
+        "addHeirFailed": "相続人の追加に失敗しました",
+        "removeHeirFailed": "相続人の削除に失敗しました",
+        "allocationUpdateFailed": "配分の更新に失敗しました"
+      }
+    }
+  },
   "myPage": {
     "language": {
       "label": "表示言語",

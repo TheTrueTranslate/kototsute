@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { relationOptions } from "@kototsute/shared";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -29,19 +31,6 @@ import {
 } from "../api/plans";
 import styles from "../../styles/plansPage.module.css";
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "作成中",
-  SHARED: "有効",
-  INACTIVE: "無効"
-};
-
-const formatDate = (value: string | null | undefined) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString();
-};
-
 type AllocationDraft = {
   unitType: "PERCENT" | "AMOUNT";
   values: Record<string, string>;
@@ -50,6 +39,7 @@ type AllocationDraft = {
 export default function PlanEditPage() {
   const { caseId, planId } = useParams();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [planAssets, setPlanAssets] = useState<PlanAsset[]>([]);
   const [caseAssets, setCaseAssets] = useState<AssetListItem[]>([]);
@@ -66,6 +56,20 @@ export default function PlanEditPage() {
   const [savingAllocationId, setSavingAllocationId] = useState<string | null>(null);
   const [heirModalOpen, setHeirModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const relationOtherValue = relationOptions[relationOptions.length - 1];
+
+  const statusLabels: Record<string, string> = {
+    DRAFT: t("plans.status.draft"),
+    SHARED: t("plans.status.shared"),
+    INACTIVE: t("plans.status.inactive")
+  };
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString(i18n.language);
+  };
 
   const availableAssets = useMemo(() => {
     const usedIds = new Set(planAssets.map((asset) => asset.assetId));
@@ -85,7 +89,7 @@ export default function PlanEditPage() {
 
   useEffect(() => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       setLoading(false);
       return;
     }
@@ -105,7 +109,7 @@ export default function PlanEditPage() {
         setCaseAssets(caseAssetItems);
         setCaseHeirs(heirItems);
       } catch (err: any) {
-        setError(err?.message ?? "指図の取得に失敗しました");
+        setError(err?.message ?? t("plans.edit.error.loadFailed"));
       } finally {
         setLoading(false);
       }
@@ -145,12 +149,12 @@ export default function PlanEditPage() {
 
   const handleSaveTitle = async () => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     const trimmed = title.trim();
     if (!trimmed) {
-      setError("タイトルは必須です");
+      setError(t("validation.plan.title.required"));
       return;
     }
     setSavingTitle(true);
@@ -159,7 +163,7 @@ export default function PlanEditPage() {
       await updatePlanTitle(caseId, planId, trimmed);
       await refreshPlan();
     } catch (err: any) {
-      setError(err?.message ?? "指図タイトルの更新に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.titleUpdateFailed"));
     } finally {
       setSavingTitle(false);
     }
@@ -167,7 +171,7 @@ export default function PlanEditPage() {
 
   const handleAddAsset = async (assetId: string) => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     if (!assetId) return;
@@ -179,7 +183,7 @@ export default function PlanEditPage() {
       await refreshPlan();
       setAssetModalOpen(false);
     } catch (err: any) {
-      setError(err?.message ?? "資産の追加に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.addAssetFailed"));
     } finally {
       setAddingAssetId(null);
     }
@@ -187,7 +191,7 @@ export default function PlanEditPage() {
 
   const handleRemoveAsset = async (planAssetId: string) => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     setRemovingAssetId(planAssetId);
@@ -197,7 +201,7 @@ export default function PlanEditPage() {
       await refreshAssets();
       await refreshPlan();
     } catch (err: any) {
-      setError(err?.message ?? "資産の削除に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.removeAssetFailed"));
     } finally {
       setRemovingAssetId(null);
     }
@@ -205,7 +209,7 @@ export default function PlanEditPage() {
 
   const handleAddHeir = async (heirUid: string) => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     setAddingHeirUid(heirUid);
@@ -216,7 +220,7 @@ export default function PlanEditPage() {
       await refreshAssets();
       setHeirModalOpen(false);
     } catch (err: any) {
-      setError(err?.message ?? "相続人の追加に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.addHeirFailed"));
     } finally {
       setAddingHeirUid(null);
     }
@@ -224,7 +228,7 @@ export default function PlanEditPage() {
 
   const handleRemoveHeir = async (heirUid: string) => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     setRemovingHeirUid(heirUid);
@@ -234,7 +238,7 @@ export default function PlanEditPage() {
       await refreshPlan();
       await refreshAssets();
     } catch (err: any) {
-      setError(err?.message ?? "相続人の削除に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.removeHeirFailed"));
     } finally {
       setRemovingHeirUid(null);
     }
@@ -278,7 +282,7 @@ export default function PlanEditPage() {
 
   const handleSaveAllocations = async (planAssetId: string) => {
     if (!caseId || !planId || !plan) {
-      setError("指図IDが取得できません");
+      setError(t("plans.edit.error.planIdMissing"));
       return;
     }
     const draft = allocationDrafts[planAssetId];
@@ -296,7 +300,7 @@ export default function PlanEditPage() {
       });
       await refreshAssets();
     } catch (err: any) {
-      setError(err?.message ?? "配分の更新に失敗しました");
+      setError(err?.message ?? t("plans.edit.error.allocationUpdateFailed"));
     } finally {
       setSavingAllocationId(null);
     }
@@ -306,8 +310,8 @@ export default function PlanEditPage() {
     Boolean(title.trim()) && title.trim() !== (plan?.title ?? "") && !savingTitle;
 
   const renderRelationLabel = (relationLabel?: string | null, relationOther?: string | null) => {
-    if (!relationLabel) return "相続人";
-    if (relationLabel === "その他") return relationOther ?? "その他";
+    if (!relationLabel) return t("plans.edit.heir.defaultLabel");
+    if (relationLabel === relationOtherValue) return relationOther ?? t("plans.edit.heir.other");
     return relationLabel;
   };
 
@@ -328,20 +332,24 @@ export default function PlanEditPage() {
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "指図編集" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("plans.edit.title") }
           ]}
         />
         <div className={styles.headerRow}>
           <div className={styles.rowMain}>
-            <h1 className="text-title">{plan?.title ?? "指図編集"}</h1>
+            <h1 className="text-title">{plan?.title ?? t("plans.edit.title")}</h1>
             {plan ? (
               <div className={styles.rowSide}>
                 <span className={styles.statusBadge}>
                   {statusLabels[plan.status] ?? plan.status}
                 </span>
-                <span className={styles.rowMeta}>更新: {formatDate(plan.updatedAt)}</span>
+                <span className={styles.rowMeta}>
+                  {t("plans.edit.updatedAt", { date: formatDate(plan.updatedAt) })}
+                </span>
               </div>
             ) : null}
           </div>
@@ -353,61 +361,61 @@ export default function PlanEditPage() {
                 navigate(caseId && planId ? `/cases/${caseId}/plans/${planId}` : "/cases")
               }
             >
-              指図詳細へ戻る
+              {t("plans.edit.actions.backToDetail")}
             </Button>
           </div>
         </div>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <div className={styles.callout}>
         <div className={styles.calloutIcon}>
           <span className={styles.badgeMuted}>STEP</span>
         </div>
         <div className={styles.calloutBody}>
-          <div className={styles.calloutTitle}>編集の流れ</div>
-          <div className={styles.calloutText}>基本情報 → 相続人 → 資産 → 配分</div>
+          <div className={styles.calloutTitle}>{t("plans.edit.flow.title")}</div>
+          <div className={styles.calloutText}>{t("plans.edit.flow.text")}</div>
         </div>
       </div>
 
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>1. 基本情報</h2>
+        <h2 className={styles.sectionTitle}>{t("plans.edit.section.basic")}</h2>
         <div className={styles.sectionBody}>
-          <FormField label="タイトル">
+          <FormField label={t("plans.edit.form.title")}>
             <Input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="例: 分配プラン"
+              placeholder={t("plans.edit.form.titlePlaceholder")}
             />
           </FormField>
           <div className={styles.inlineRow}>
             <Button type="button" onClick={handleSaveTitle} disabled={!canSaveTitle}>
-              {savingTitle ? "保存中..." : "タイトルを更新"}
+              {savingTitle ? t("plans.edit.form.saving") : t("plans.edit.form.saveTitle")}
             </Button>
           </div>
         </div>
       </div>
 
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>2. 相続人</h2>
+        <h2 className={styles.sectionTitle}>{t("plans.edit.section.heirs")}</h2>
         <div className={styles.assetHeader}>
-          <div className={styles.helper}>承認済みの相続人を指図に追加します。</div>
+          <div className={styles.helper}>{t("plans.edit.heir.helper")}</div>
           <Dialog open={heirModalOpen} onOpenChange={setHeirModalOpen}>
             <DialogTrigger asChild>
               <Button type="button" size="sm">
-                相続人を追加
+                {t("plans.edit.heir.add")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>相続人を追加</DialogTitle>
+                <DialogTitle>{t("plans.edit.heir.add")}</DialogTitle>
               </DialogHeader>
               {availableHeirs.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <div className={styles.emptyTitle}>追加できる相続人がいません</div>
+                  <div className={styles.emptyTitle}>{t("plans.edit.heir.emptyAvailable.title")}</div>
                   <div className={styles.emptyBody}>
-                    招待が承認されるとここに表示されます。
+                    {t("plans.edit.heir.emptyAvailable.body")}
                   </div>
                 </div>
               ) : (
@@ -427,7 +435,9 @@ export default function PlanEditPage() {
                           onClick={() => heir.acceptedByUid && handleAddHeir(heir.acceptedByUid)}
                           disabled={!heir.acceptedByUid || addingHeirUid === heir.acceptedByUid}
                         >
-                          {addingHeirUid === heir.acceptedByUid ? "追加中..." : "追加する"}
+                          {addingHeirUid === heir.acceptedByUid
+                            ? t("plans.edit.heir.adding")
+                            : t("plans.edit.heir.addConfirm")}
                         </Button>
                       </div>
                     </div>
@@ -436,7 +446,7 @@ export default function PlanEditPage() {
               )}
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setHeirModalOpen(false)}>
-                  閉じる
+                  {t("common.close")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -456,7 +466,9 @@ export default function PlanEditPage() {
                     onClick={() => handleRemoveHeir(heir.uid)}
                     disabled={removingHeirUid === heir.uid}
                   >
-                    {removingHeirUid === heir.uid ? "削除中..." : "削除"}
+                    {removingHeirUid === heir.uid
+                      ? t("plans.edit.heir.removing")
+                      : t("plans.edit.heir.remove")}
                   </Button>
                 </div>
                 <div className={styles.rowMeta}>
@@ -467,32 +479,32 @@ export default function PlanEditPage() {
           </div>
         ) : (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>指図に追加された相続人がいません</div>
-            <div className={styles.emptyBody}>まずは相続人を追加してください。</div>
+            <div className={styles.emptyTitle}>{t("plans.edit.heir.emptySelected.title")}</div>
+            <div className={styles.emptyBody}>{t("plans.edit.heir.emptySelected.body")}</div>
           </div>
         )}
 
       </div>
 
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>3. 含める資産</h2>
+        <h2 className={styles.sectionTitle}>{t("plans.edit.section.assets")}</h2>
         <div className={styles.assetHeader}>
-          <div className={styles.helper}>ケースに登録済みの資産を追加します。</div>
+          <div className={styles.helper}>{t("plans.edit.assets.helper")}</div>
           <Dialog open={assetModalOpen} onOpenChange={setAssetModalOpen}>
             <DialogTrigger asChild>
               <Button type="button" size="sm">
-                資産を追加
+                {t("plans.edit.assets.add")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>資産を追加</DialogTitle>
+                <DialogTitle>{t("plans.edit.assets.add")}</DialogTitle>
               </DialogHeader>
               {availableAssets.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <div className={styles.emptyTitle}>追加できる資産がありません</div>
+                  <div className={styles.emptyTitle}>{t("plans.edit.assets.emptyAvailable.title")}</div>
                   <div className={styles.emptyBody}>
-                    ケースに資産を登録するとここに表示されます。
+                    {t("plans.edit.assets.emptyAvailable.body")}
                   </div>
                 </div>
               ) : (
@@ -510,7 +522,9 @@ export default function PlanEditPage() {
                           onClick={() => handleAddAsset(asset.assetId)}
                           disabled={addingAssetId === asset.assetId}
                         >
-                          {addingAssetId === asset.assetId ? "追加中..." : "追加する"}
+                          {addingAssetId === asset.assetId
+                            ? t("plans.edit.assets.adding")
+                            : t("plans.edit.assets.addConfirm")}
                         </Button>
                       </div>
                     </div>
@@ -519,7 +533,7 @@ export default function PlanEditPage() {
               )}
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setAssetModalOpen(false)}>
-                  閉じる
+                  {t("common.close")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -528,15 +542,17 @@ export default function PlanEditPage() {
 
         {loading ? null : planAssets.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ資産が登録されていません</div>
-            <div className={styles.emptyBody}>指図に含める資産を追加してください。</div>
+            <div className={styles.emptyTitle}>{t("plans.edit.assets.emptySelected.title")}</div>
+            <div className={styles.emptyBody}>{t("plans.edit.assets.emptySelected.body")}</div>
           </div>
         ) : (
           <div className={styles.sectionBody}>
             {planAssets.map((asset) => (
               <div key={asset.planAssetId} className={styles.assetCard}>
                 <div className={styles.assetHeader}>
-                  <div className={styles.assetTitle}>{asset.assetLabel || "未設定"}</div>
+                  <div className={styles.assetTitle}>
+                    {asset.assetLabel || t("plans.edit.assets.unset")}
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
@@ -544,7 +560,9 @@ export default function PlanEditPage() {
                     onClick={() => handleRemoveAsset(asset.planAssetId)}
                     disabled={removingAssetId === asset.planAssetId}
                   >
-                    {removingAssetId === asset.planAssetId ? "削除中..." : "削除"}
+                    {removingAssetId === asset.planAssetId
+                      ? t("plans.edit.assets.removing")
+                      : t("plans.edit.assets.remove")}
                   </Button>
                 </div>
                 <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
@@ -555,21 +573,29 @@ export default function PlanEditPage() {
       </div>
 
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>4. 配分</h2>
+        <h2 className={styles.sectionTitle}>{t("plans.edit.section.allocations")}</h2>
         {loading ? null : !plan ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>指図が読み込めません</div>
-            <div className={styles.emptyBody}>再読み込みしてからもう一度お試しください。</div>
+            <div className={styles.emptyTitle}>{t("plans.edit.allocations.emptyPlan.title")}</div>
+            <div className={styles.emptyBody}>{t("plans.edit.allocations.emptyPlan.body")}</div>
           </div>
         ) : planAssets.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>配分できる資産がありません</div>
-            <div className={styles.emptyBody}>まずは指図に資産を追加してください。</div>
+            <div className={styles.emptyTitle}>
+              {t("plans.edit.allocations.emptyAssets.title")}
+            </div>
+            <div className={styles.emptyBody}>
+              {t("plans.edit.allocations.emptyAssets.body")}
+            </div>
           </div>
         ) : plan.heirs.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>相続人が未設定です</div>
-            <div className={styles.emptyBody}>相続人を追加してから配分を設定してください。</div>
+            <div className={styles.emptyTitle}>
+              {t("plans.edit.allocations.emptyHeirs.title")}
+            </div>
+            <div className={styles.emptyBody}>
+              {t("plans.edit.allocations.emptyHeirs.body")}
+            </div>
           </div>
         ) : (
           <div className={styles.sectionBody}>
@@ -606,19 +632,24 @@ export default function PlanEditPage() {
                 unitType === "PERCENT" && unallocated && unallocated > 0
                   ? {
                       key: "unallocated",
-                      label: "未分配",
+                      label: t("plans.edit.allocations.unallocated"),
                       value: unallocated,
                       percent: (unallocated / 100) * 100,
                       color: "#e2e8f0"
                     }
                   : null;
               const isSaving = savingAllocationId === asset.planAssetId;
-              const unitLabel = unitType === "PERCENT" ? "%" : "金額";
+              const unitLabel =
+                unitType === "PERCENT"
+                  ? t("plans.edit.allocations.unit.percent")
+                  : t("plans.edit.allocations.unit.amount");
               return (
                 <div key={asset.planAssetId} className={styles.assetCard}>
                   <div className={styles.assetHeader}>
                     <div>
-                      <div className={styles.assetTitle}>{asset.assetLabel || "未設定"}</div>
+                      <div className={styles.assetTitle}>
+                        {asset.assetLabel || t("plans.edit.assets.unset")}
+                      </div>
                       <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
                     </div>
                     <div className={styles.inlineRow}>
@@ -633,15 +664,17 @@ export default function PlanEditPage() {
                         }
                         disabled={isSaving}
                       >
-                        <option value="PERCENT">割合</option>
-                        <option value="AMOUNT">金額</option>
+                        <option value="PERCENT">{t("plans.edit.allocations.unit.percent")}</option>
+                        <option value="AMOUNT">{t("plans.edit.allocations.unit.amount")}</option>
                       </select>
                       <Button
                         type="button"
                         onClick={() => handleSaveAllocations(asset.planAssetId)}
                         disabled={isSaving}
                       >
-                        {isSaving ? "保存中..." : "配分を保存"}
+                        {isSaving
+                          ? t("plans.edit.allocations.saving")
+                          : t("plans.edit.allocations.save")}
                       </Button>
                     </div>
                   </div>
@@ -700,10 +733,17 @@ export default function PlanEditPage() {
                     ))}
                     {unitType === "PERCENT" ? (
                       <div className={styles.rowMeta}>
-                        合計: {Number(total.toFixed(6))}% / 未分配: {unallocated}%
+                        {t("plans.edit.allocations.totalPercent", {
+                          total: Number(total.toFixed(6)),
+                          unallocated
+                        })}
                       </div>
                     ) : (
-                      <div className={styles.rowMeta}>合計: {Number(total.toFixed(6))}</div>
+                      <div className={styles.rowMeta}>
+                        {t("plans.edit.allocations.totalAmount", {
+                          total: Number(total.toFixed(6))
+                        })}
+                      </div>
                     )}
                   </div>
                 </div>
