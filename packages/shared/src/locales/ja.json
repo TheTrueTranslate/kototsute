@@ -113,6 +113,85 @@
       }
     }
   },
+  "cases": {
+    "title": "ケース",
+    "detail": {
+      "title": "ケース詳細"
+    },
+    "section": {
+      "created": "作成したケース",
+      "received": "招待されたケース"
+    },
+    "status": {
+      "draft": "下書き",
+      "waiting": "相続待ち",
+      "inProgress": "相続中",
+      "completed": "相続完了"
+    },
+    "owner": {
+      "anonymous": "ユーザー",
+      "anonymousWithId": "ユーザー-{{id}}"
+    },
+    "create": {
+      "submit": "ケースを作成",
+      "submitting": "作成中..."
+    },
+    "updatedAt": "最終更新: {{date}}",
+    "empty": {
+      "received": {
+        "title": "まだ招待がありません",
+        "body": "招待されたケースがここに表示されます。"
+      }
+    },
+    "error": {
+      "load": "ケースの取得に失敗しました",
+      "create": "ケースの作成に失敗しました",
+      "unauthorized": "ログイン情報が取得できません。再ログインしてください。"
+    }
+  },
+  "assets": {
+    "types": {
+      "xrp": {
+        "label": "XRPウォレット",
+        "desc": "ウォレットアドレスを登録します"
+      },
+      "bank": {
+        "label": "銀行口座",
+        "desc": "準備中"
+      },
+      "securities": {
+        "label": "証券口座",
+        "desc": "準備中"
+      },
+      "realEstate": {
+        "label": "不動産",
+        "desc": "準備中"
+      }
+    },
+    "new": {
+      "title": "資産登録",
+      "section": {
+        "type": "資産タイプ"
+      },
+      "type": {
+        "unavailable": "準備中",
+        "next": "次へ",
+        "change": "変更する",
+        "unselected": "未選択"
+      },
+      "form": {
+        "label": "ラベル",
+        "labelPlaceholder": "例: 自分のウォレット",
+        "address": "XRPアドレス",
+        "addressPlaceholder": "r...",
+        "submit": "登録する"
+      },
+      "error": {
+        "caseIdMissing": "ケースIDが取得できません",
+        "createFailed": "登録に失敗しました"
+      }
+    }
+  },
   "myPage": {
     "language": {
       "label": "表示言語",

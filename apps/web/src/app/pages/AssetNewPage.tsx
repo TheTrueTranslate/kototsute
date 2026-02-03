@@ -11,6 +11,7 @@ import { Input } from "../../features/shared/components/ui/input";
 import styles from "../../styles/assetsPage.module.css";
 import { useNavigate, useParams } from "react-router-dom";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
+import { useTranslation } from "react-i18next";
 
 type FormValues = z.infer<typeof assetCreateSchema>;
 
@@ -21,35 +22,9 @@ type AssetTypeOption = {
   available: boolean;
 };
 
-const assetTypes: AssetTypeOption[] = [
-  {
-    id: "xrp-wallet",
-    label: "XRPウォレット",
-    description: "ウォレットアドレスを登録します",
-    available: true
-  },
-  {
-    id: "bank",
-    label: "銀行口座",
-    description: "準備中",
-    available: false
-  },
-  {
-    id: "securities",
-    label: "証券口座",
-    description: "準備中",
-    available: false
-  },
-  {
-    id: "real-estate",
-    label: "不動産",
-    description: "準備中",
-    available: false
-  }
-];
-
 export default function AssetNewPage() {
   const { caseId } = useParams();
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<AssetTypeOption["id"]>("xrp-wallet");
@@ -64,32 +39,61 @@ export default function AssetNewPage() {
     setSuccess(null);
     try {
       if (!caseId) {
-        setError("ケースIDが取得できません");
+        setError(t("assets.new.error.caseIdMissing"));
         return;
       }
       await createAsset(caseId, values);
       reset();
       navigate(`/cases/${caseId}`);
     } catch (err: any) {
-      setError(err?.message ?? "登録に失敗しました");
+      setError(err?.message ?? t("assets.new.error.createFailed"));
     }
   });
+
+  const assetTypes: AssetTypeOption[] = [
+    {
+      id: "xrp-wallet",
+      label: t("assets.types.xrp.label"),
+      description: t("assets.types.xrp.desc"),
+      available: true
+    },
+    {
+      id: "bank",
+      label: t("assets.types.bank.label"),
+      description: t("assets.types.bank.desc"),
+      available: false
+    },
+    {
+      id: "securities",
+      label: t("assets.types.securities.label"),
+      description: t("assets.types.securities.desc"),
+      available: false
+    },
+    {
+      id: "real-estate",
+      label: t("assets.types.realEstate.label"),
+      description: t("assets.types.realEstate.desc"),
+      available: false
+    }
+  ];
 
   return (
     <section className={styles.page}>
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "資産登録" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("assets.new.title") }
           ]}
         />
-        <h1 className="text-title">資産登録</h1>
+        <h1 className="text-title">{t("assets.new.title")}</h1>
       </header>
       {step === "type" ? (
         <div>
-          <div className="text-section">資産タイプ</div>
+          <div className="text-section">{t("assets.new.section.type")}</div>
           <div className={styles.typeGrid}>
             {assetTypes.map((type) => {
               const isActive = type.id === selectedType;
@@ -113,23 +117,26 @@ export default function AssetNewPage() {
                 >
                   <span className={styles.typeLabel}>{type.label}</span>
                   <span className={styles.typeMeta}>{type.description}</span>
-                  {!type.available ? <span className={styles.typeBadge}>準備中</span> : null}
+                  {!type.available ? (
+                    <span className={styles.typeBadge}>{t("assets.new.type.unavailable")}</span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
           <div className={styles.stepActions}>
             <Button type="button" onClick={() => setStep("form")}>
-              次へ
+              {t("assets.new.type.next")}
             </Button>
           </div>
         </div>
       ) : (
         <div>
-          <div className="text-section">資産タイプ</div>
+          <div className="text-section">{t("assets.new.section.type")}</div>
           <div className={styles.typeSummary}>
             <div className={styles.typeSummaryText}>
-              {assetTypes.find((type) => type.id === selectedType)?.label ?? "未選択"}
+              {assetTypes.find((type) => type.id === selectedType)?.label ??
+                t("assets.new.type.unselected")}
             </div>
             <Button
               type="button"
@@ -140,22 +147,25 @@ export default function AssetNewPage() {
                 setSuccess(null);
               }}
             >
-              変更する
+              {t("assets.new.type.change")}
             </Button>
           </div>
         </div>
       )}
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
       {success ? <FormAlert variant="success">{success}</FormAlert> : null}
       {step === "form" && selectedType === "xrp-wallet" ? (
         <form className={styles.form} onSubmit={onSubmit}>
-          <FormField label="ラベル" error={formState.errors.label?.message}>
-            <Input {...register("label")} placeholder="例: 自分のウォレット" />
+          <FormField label={t("assets.new.form.label")} error={formState.errors.label?.message}>
+            <Input {...register("label")} placeholder={t("assets.new.form.labelPlaceholder")} />
           </FormField>
-          <FormField label="XRPアドレス" error={formState.errors.address?.message}>
-            <Input {...register("address")} placeholder="r..." />
+          <FormField
+            label={t("assets.new.form.address")}
+            error={formState.errors.address?.message}
+          >
+            <Input {...register("address")} placeholder={t("assets.new.form.addressPlaceholder")} />
           </FormField>
-          <Button type="submit">登録する</Button>
+          <Button type="submit">{t("assets.new.form.submit")}</Button>
         </form>
       ) : null}
     </section>

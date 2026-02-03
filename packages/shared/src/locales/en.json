@@ -113,6 +113,85 @@
       }
     }
   },
+  "cases": {
+    "title": "Cases",
+    "detail": {
+      "title": "Case details"
+    },
+    "section": {
+      "created": "Created cases",
+      "received": "Invited cases"
+    },
+    "status": {
+      "draft": "Draft",
+      "waiting": "Waiting",
+      "inProgress": "In progress",
+      "completed": "Completed"
+    },
+    "owner": {
+      "anonymous": "User",
+      "anonymousWithId": "User-{{id}}"
+    },
+    "create": {
+      "submit": "Create case",
+      "submitting": "Creating..."
+    },
+    "updatedAt": "Last updated: {{date}}",
+    "empty": {
+      "received": {
+        "title": "No invites yet",
+        "body": "Invited cases will appear here."
+      }
+    },
+    "error": {
+      "load": "Failed to load cases",
+      "create": "Failed to create case",
+      "unauthorized": "Login info is unavailable. Please sign in again."
+    }
+  },
+  "assets": {
+    "types": {
+      "xrp": {
+        "label": "XRP wallet",
+        "desc": "Register a wallet address"
+      },
+      "bank": {
+        "label": "Bank account",
+        "desc": "Coming soon"
+      },
+      "securities": {
+        "label": "Securities account",
+        "desc": "Coming soon"
+      },
+      "realEstate": {
+        "label": "Real estate",
+        "desc": "Coming soon"
+      }
+    },
+    "new": {
+      "title": "Add asset",
+      "section": {
+        "type": "Asset type"
+      },
+      "type": {
+        "unavailable": "Coming soon",
+        "next": "Next",
+        "change": "Change",
+        "unselected": "Not selected"
+      },
+      "form": {
+        "label": "Label",
+        "labelPlaceholder": "e.g. My wallet",
+        "address": "XRP address",
+        "addressPlaceholder": "r...",
+        "submit": "Register"
+      },
+      "error": {
+        "caseIdMissing": "Case ID is missing",
+        "createFailed": "Failed to register asset"
+      }
+    }
+  },
   "myPage": {
     "language": {
       "label": "Language",
