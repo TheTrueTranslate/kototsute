@@ -1,12 +1,12 @@
-const DEFAULT_MESSAGE = "認証に失敗しました。もう一度お試しください。";
+const DEFAULT_MESSAGE = "authErrors.default";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  "auth/email-already-in-use": "このメールアドレスは既に登録されています",
-  "auth/invalid-email": "正しいメールアドレスを入力してください",
-  "auth/weak-password": "パスワードは8文字以上で入力してください",
-  "auth/user-not-found": "メールアドレスまたはパスワードが正しくありません",
-  "auth/wrong-password": "メールアドレスまたはパスワードが正しくありません",
-  "auth/too-many-requests": "試行回数が多すぎます。しばらく待って再度お試しください"
+  "auth/email-already-in-use": "authErrors.emailAlreadyInUse",
+  "auth/invalid-email": "authErrors.invalidEmail",
+  "auth/weak-password": "authErrors.weakPassword",
+  "auth/user-not-found": "authErrors.userNotFound",
+  "auth/wrong-password": "authErrors.userNotFound",
+  "auth/too-many-requests": "authErrors.tooManyRequests"
 };
 
 type AuthErrorLike = {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { signOut, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { displayNameSchema } from "@kototsute/shared";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../../features/auth/auth-provider";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Button } from "../../features/shared/components/ui/button";
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "../../features/shared/components/ui/dialog";
+import { useLocale } from "../../features/shared/providers/LocaleProvider";
 
 type FormStatus = {
   type: "success" | "error";
@@ -27,6 +29,8 @@ type FormStatus = {
 
 export default function MyPage() {
   const { user } = useAuth();
+  const { locale, updateLocale } = useLocale();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [lastSavedName, setLastSavedName] = useState(user?.displayName ?? "");
@@ -46,12 +50,15 @@ export default function MyPage() {
     if (!parsed.success) {
       setStatus({
         type: "error",
-        message: parsed.error.issues[0]?.message ?? "入力が不正です"
+        message: t(parsed.error.issues[0]?.message ?? "errors.VALIDATION_ERROR")
       });
       return;
     }
     if (!auth.currentUser) {
-      setStatus({ type: "error", message: "ログイン情報が取得できません。再ログインしてください。" });
+      setStatus({
+        type: "error",
+        message: t("myPage.error.authMissing")
+      });
       return;
     }
     if (parsed.data === lastSavedName) {
@@ -70,9 +77,12 @@ export default function MyPage() {
         { merge: true }
       );
       setLastSavedName(parsed.data);
-      setStatus({ type: "success", message: "表示名を更新しました。" });
+      setStatus({ type: "success", message: t("myPage.status.displayNameUpdated") });
     } catch (err: any) {
-      setStatus({ type: "error", message: err?.message ?? "表示名の更新に失敗しました。" });
+      setStatus({
+        type: "error",
+        message: err?.message ?? t("myPage.error.displayNameUpdateFailed")
+      });
     } finally {
       setSaving(false);
     }
@@ -85,7 +95,7 @@ export default function MyPage() {
       navigate("/login");
       return true;
     } catch (err: any) {
-      setLogoutError(err?.message ?? "ログアウトに失敗しました。");
+      setLogoutError(err?.message ?? t("myPage.error.logoutFailed"));
       return false;
     }
   };
@@ -93,17 +103,17 @@ export default function MyPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <h1 className="text-title">マイページ</h1>
-        <p className={styles.lead}>登録情報の確認とプロフィールの管理ができます。</p>
+        <h1 className="text-title">{t("myPage.title")}</h1>
+        <p className={styles.lead}>{t("myPage.lead")}</p>
       </header>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>アカウント</div>
+        <div className={styles.sectionTitle}>{t("myPage.section.account")}</div>
         <div className={styles.card}>
           {status ? <FormAlert variant={status.type}>{status.message}</FormAlert> : null}
           <div className={styles.row}>
-            <span className={styles.label}>メールアドレス</span>
-            <span className={styles.value}>{user?.email ?? "未設定"}</span>
+            <span className={styles.label}>{t("myPage.labels.email")}</span>
+            <span className={styles.value}>{user?.email ?? t("common.unset")}</span>
           </div>
           <form
             className={styles.row}
@@ -112,14 +122,14 @@ export default function MyPage() {
               void saveDisplayName();
             }}
           >
-            <span className={styles.label}>表示名</span>
+            <span className={styles.label}>{t("myPage.labels.displayName")}</span>
             <div className={styles.editRow}>
               <div className={styles.editField}>
                 <Input
-                  aria-label="表示名"
+                  aria-label={t("myPage.labels.displayName")}
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
-                  placeholder="例: 山田 太郎"
+                  placeholder={t("myPage.placeholders.displayName")}
                 />
               </div>
               <Button
@@ -127,33 +137,54 @@ export default function MyPage() {
                 size="sm"
                 disabled={saving || !displayName.trim() || displayName.trim() === lastSavedName.trim()}
               >
-                {saving ? "更新中..." : "更新"}
+                {saving ? t("myPage.actions.updating") : t("myPage.actions.update")}
               </Button>
             </div>
           </form>
           <div className={styles.row}>
-            <span className={styles.label}>UID</span>
+            <span className={styles.label}>{t("myPage.language.label")}</span>
+            <div className={styles.actionsInline}>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "ja" ? "default" : "outline"}
+                onClick={() => updateLocale("ja")}
+              >
+                {t("myPage.language.ja")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "en" ? "default" : "outline"}
+                onClick={() => updateLocale("en")}
+              >
+                {t("myPage.language.en")}
+              </Button>
+            </div>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>{t("myPage.labels.uid")}</span>
             <span className={styles.valueMono}>{user?.uid ?? "-"}</span>
           </div>
           <div className={styles.row}>
-            <span className={styles.label}>ログアウト</span>
+            <span className={styles.label}>{t("myPage.labels.logout")}</span>
             <div className={styles.actionsInline}>
               <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
                 <DialogTrigger asChild>
                   <Button type="button" variant="outline">
-                    ログアウト
+                    {t("myPage.logout.confirm")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>ログアウトしますか？</DialogTitle>
-                    <DialogDescription>現在のセッションを終了します。</DialogDescription>
+                    <DialogTitle>{t("myPage.logout.title")}</DialogTitle>
+                    <DialogDescription>{t("myPage.logout.description")}</DialogDescription>
                   </DialogHeader>
                   {logoutError ? <FormAlert variant="error">{logoutError}</FormAlert> : null}
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button type="button" variant="outline">
-                        キャンセル
+                        {t("myPage.logout.cancel")}
                       </Button>
                     </DialogClose>
                     <Button
@@ -165,7 +196,7 @@ export default function MyPage() {
                         }
                       }}
                     >
-                      ログアウト
+                      {t("myPage.logout.confirm")}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

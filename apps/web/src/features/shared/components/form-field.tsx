@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { Label } from "./ui/label";
 import { cn } from "../lib/utils";
 
@@ -19,6 +20,7 @@ export default function FormField({
   className,
   children
 }: FormFieldProps) {
+  const { t } = useTranslation();
   return (
     <div className={cn("grid gap-2", className)}>
       <div className="flex items-center justify-between">
@@ -30,7 +32,7 @@ export default function FormField({
       {children}
       {error ? (
         <p className="text-meta text-danger" role="alert">
-          {error}
+          {t(error)}
         </p>
       ) : null}
     </div>

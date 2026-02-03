@@ -5,31 +5,33 @@ import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Button } from "../../features/shared/components/ui/button";
 import { useAuth } from "../../features/auth/auth-provider";
+import { useTranslation } from "react-i18next";
 import styles from "../../styles/casesPage.module.css";
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "下書き",
-  WAITING: "相続待ち",
-  IN_PROGRESS: "相続中",
-  COMPLETED: "相続完了"
-};
-
-const formatDate = (value: string) => {
-  try {
-    return new Date(value).toLocaleDateString();
-  } catch {
-    return "-";
-  }
-};
 
 export default function CasesPage() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation();
   const [created, setCreated] = useState<CaseSummary[]>([]);
   const [received, setReceived] = useState<CaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const displayName = useMemo(() => user?.displayName ?? "", [user]);
+
+  const statusLabels: Record<string, string> = {
+    DRAFT: t("cases.status.draft"),
+    WAITING: t("cases.status.waiting"),
+    IN_PROGRESS: t("cases.status.inProgress"),
+    COMPLETED: t("cases.status.completed")
+  };
+
+  const formatDate = (value: string) => {
+    try {
+      return new Date(value).toLocaleDateString(i18n.language);
+    } catch {
+      return "-";
+    }
+  };
 
   const load = async () => {
     try {
@@ -42,7 +44,7 @@ export default function CasesPage() {
         setReceived([]);
         return;
       }
-      setError(err?.message ?? "ケースの取得に失敗しました");
+      setError(err?.message ?? t("cases.error.load"));
     } finally {
       setLoading(false);
     }
@@ -55,8 +57,10 @@ export default function CasesPage() {
   const resolveOwnerDisplayName = () => {
     const trimmed = displayName.trim();
     if (trimmed) return trimmed;
-    if (user?.uid) return `ユーザー-${user.uid.slice(0, 6)}`;
-    return "ユーザー";
+    if (user?.uid) {
+      return t("cases.owner.anonymousWithId", { id: user.uid.slice(0, 6) });
+    }
+    return t("cases.owner.anonymous");
   };
 
   const handleCreate = async () => {
@@ -64,13 +68,13 @@ export default function CasesPage() {
     setError(null);
     try {
       if (!user) {
-        setError("ログイン情報が取得できません。再ログインしてください。");
+        setError(t("cases.error.unauthorized"));
         return;
       }
       const createdCase = await createCase({ ownerDisplayName: resolveOwnerDisplayName() });
       setCreated([createdCase]);
     } catch (err: any) {
-      setError(err?.message ?? "ケースの作成に失敗しました");
+      setError(err?.message ?? t("cases.error.create"));
     } finally {
       setCreating(false);
     }
@@ -79,21 +83,21 @@ export default function CasesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <Breadcrumbs items={[{ label: "ケース" }]} />
+        <Breadcrumbs items={[{ label: t("nav.cases") }]} />
         <div className={styles.headerRow}>
-          <h1 className="text-title">ケース</h1>
+          <h1 className="text-title">{t("cases.title")}</h1>
         </div>
       </header>
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>作成したケース</h2>
+          <h2 className={styles.sectionTitle}>{t("cases.section.created")}</h2>
         </div>
         {loading ? null : created.length === 0 ? (
           <div className={styles.centerAction}>
             <Button type="button" onClick={handleCreate} disabled={creating}>
-              {creating ? "作成中..." : "ケースを作成"}
+              {creating ? t("cases.create.submitting") : t("cases.create.submit")}
             </Button>
           </div>
         ) : (
@@ -103,7 +107,9 @@ export default function CasesPage() {
                 <div className={styles.row}>
                   <div className={styles.rowMain}>
                     <div className={styles.rowTitle}>{item.ownerDisplayName}</div>
-                    <div className={styles.rowMeta}>最終更新: {formatDate(item.updatedAt)}</div>
+                    <div className={styles.rowMeta}>
+                      {t("cases.updatedAt", { date: formatDate(item.updatedAt) })}
+                    </div>
                   </div>
                   <div className={styles.rowSide}>
                     <span className={styles.statusBadge}>{statusLabels[item.stage] ?? item.stage}</span>
@@ -117,12 +123,12 @@ export default function CasesPage() {
 
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>招待されたケース</h2>
+          <h2 className={styles.sectionTitle}>{t("cases.section.received")}</h2>
         </div>
         {loading ? null : received.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ招待がありません</div>
-            <div className={styles.emptyBody}>招待されたケースがここに表示されます。</div>
+            <div className={styles.emptyTitle}>{t("cases.empty.received.title")}</div>
+            <div className={styles.emptyBody}>{t("cases.empty.received.body")}</div>
           </div>
         ) : (
           <div className={styles.list}>
@@ -131,7 +137,9 @@ export default function CasesPage() {
                 <div className={styles.row}>
                   <div className={styles.rowMain}>
                     <div className={styles.rowTitle}>{item.ownerDisplayName}</div>
-                    <div className={styles.rowMeta}>最終更新: {formatDate(item.updatedAt)}</div>
+                    <div className={styles.rowMeta}>
+                      {t("cases.updatedAt", { date: formatDate(item.updatedAt) })}
+                    </div>
                   </div>
                   <div className={styles.rowSide}>
                     <span className={styles.statusBadge}>{statusLabels[item.stage] ?? item.stage}</span>

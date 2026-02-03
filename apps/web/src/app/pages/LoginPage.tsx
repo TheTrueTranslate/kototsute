@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -32,6 +33,7 @@ export default function LoginPage({ className }: PageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [status, setStatus] = useState<FormStatus | null>(null);
+  const { t } = useTranslation();
 
   const {
     register,
@@ -47,7 +49,7 @@ export default function LoginPage({ className }: PageProps) {
     if (state?.registered) {
       setStatus({
         type: "success",
-        message: "登録が完了しました。ログインしてください。"
+        message: t("auth.login.registered")
       });
     }
   }, [location.state]);
@@ -58,22 +60,22 @@ export default function LoginPage({ className }: PageProps) {
       await signInWithEmailAndPassword(auth, data.email, data.password);
       navigate("/");
     } catch (error) {
-      setStatus({ type: "error", message: getAuthErrorMessage(error) });
+      setStatus({ type: "error", message: t(getAuthErrorMessage(error)) });
     }
   });
 
   return (
     <AuthLayout
-      title="ログイン"
-      lead="登録済みのメールアドレスでログインしてください。"
+      title={t("auth.login.title")}
+      lead={t("auth.login.lead")}
       className={className}
       footer={
         <div className={styles.footerActions}>
           <Button asChild variant="ghost">
-            <Link to="/reset">パスワードを忘れた方</Link>
+            <Link to="/reset">{t("auth.login.footer.reset")}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/register">新規登録</Link>
+            <Link to="/register">{t("auth.login.footer.register")}</Link>
           </Button>
         </div>
       }
@@ -82,26 +84,30 @@ export default function LoginPage({ className }: PageProps) {
         {status ? (
           <FormAlert variant={status.type}>{status.message}</FormAlert>
         ) : null}
-        <FormField label="メールアドレス" error={errors.email?.message} htmlFor={emailId}>
+        <FormField label={t("auth.common.email")} error={errors.email?.message} htmlFor={emailId}>
           <Input
             id={emailId}
             type="email"
             autoComplete="email"
-            placeholder="example@kototsute.jp"
+            placeholder={t("auth.common.emailPlaceholder")}
             {...register("email")}
           />
         </FormField>
-        <FormField label="パスワード" error={errors.password?.message} htmlFor={passwordId}>
+        <FormField
+          label={t("auth.common.password")}
+          error={errors.password?.message}
+          htmlFor={passwordId}
+        >
           <Input
             id={passwordId}
             type="password"
             autoComplete="current-password"
-            placeholder="8文字以上"
+            placeholder={t("auth.common.passwordPlaceholder")}
             {...register("password")}
           />
         </FormField>
         <Button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "ログイン中..." : "ログイン"}
+          {isSubmitting ? t("auth.login.submitting") : t("auth.login.submit")}
         </Button>
       </form>
     </AuthLayout>

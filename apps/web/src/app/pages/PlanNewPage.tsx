@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -10,6 +11,7 @@ import styles from "../../styles/plansPage.module.css";
 
 export default function PlanNewPage() {
   const { caseId } = useParams();
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,17 +23,17 @@ export default function PlanNewPage() {
     setLoading(true);
     try {
       if (!caseId) {
-        setError("ケースIDが取得できません");
+        setError(t("plans.new.error.caseIdMissing"));
         setLoading(false);
         return;
       }
       const createdPlan = await createPlan(caseId, { title });
       if (!createdPlan?.planId) {
-        throw new Error("作成した指図IDが取得できません");
+        throw new Error(t("plans.new.error.planIdMissing"));
       }
       navigate(`/cases/${caseId}/plans/${createdPlan.planId}`);
     } catch (err: any) {
-      setError(err?.message ?? "指図の作成に失敗しました");
+      setError(err?.message ?? t("plans.new.error.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -42,22 +44,24 @@ export default function PlanNewPage() {
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "指図作成" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("plans.new.title") }
           ]}
         />
-        <h1 className="text-title">指図作成</h1>
+        <h1 className="text-title">{t("plans.new.title")}</h1>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <form className={styles.form} onSubmit={handleSubmit}>
-        <FormField label="タイトル">
+        <FormField label={t("plans.new.form.title")}>
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="例: 分配プラン"
+            placeholder={t("plans.new.form.titlePlaceholder")}
           />
         </FormField>
         <div className={styles.headerActions}>
@@ -66,10 +70,10 @@ export default function PlanNewPage() {
             variant="outline"
             onClick={() => navigate(caseId ? `/cases/${caseId}` : "/cases")}
           >
-            戻る
+            {t("plans.new.actions.back")}
           </Button>
           <Button type="submit" disabled={!title.trim() || loading}>
-            作成する
+            {loading ? t("plans.new.actions.submitting") : t("plans.new.actions.submit")}
           </Button>
         </div>
       </form>

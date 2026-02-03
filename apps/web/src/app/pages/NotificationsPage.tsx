@@ -9,12 +9,13 @@ import {
   type NotificationItem
 } from "../api/notifications";
 import styles from "../../styles/notificationsPage.module.css";
+import { useTranslation } from "react-i18next";
 
-const formatDate = (value?: string | null) => {
+const formatDate = (value?: string | null, locale?: string) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(locale);
 };
 
 type NotificationsTableProps = {
@@ -23,12 +24,13 @@ type NotificationsTableProps = {
 };
 
 export function NotificationsTable({ notifications, onRead }: NotificationsTableProps) {
+  const { t, i18n } = useTranslation();
   return (
     <div className={styles.table}>
       <div className={styles.tableHeader}>
-        <div>内容</div>
-        <div>受信日時</div>
-        <div className={styles.tableHeaderAction}>操作</div>
+        <div>{t("notifications.table.content")}</div>
+        <div>{t("notifications.table.receivedAt")}</div>
+        <div className={styles.tableHeaderAction}>{t("notifications.table.action")}</div>
       </div>
       {notifications.map((notification) => (
         <div
@@ -39,7 +41,9 @@ export function NotificationsTable({ notifications, onRead }: NotificationsTable
             <div className={styles.cellTitle}>{notification.title}</div>
             <div className={styles.cellBody}>{notification.body}</div>
           </div>
-          <div className={styles.cellMeta}>{formatDate(notification.createdAt)}</div>
+          <div className={styles.cellMeta}>
+            {formatDate(notification.createdAt, i18n.language)}
+          </div>
           <div className={styles.cellAction}>
             {notification.isRead ? null : (
               <Button
@@ -48,7 +52,7 @@ export function NotificationsTable({ notifications, onRead }: NotificationsTable
                 size="sm"
                 onClick={() => onRead(notification.notificationId)}
               >
-                既読にする
+                {t("notifications.actions.markRead")}
               </Button>
             )}
           </div>
@@ -59,6 +63,7 @@ export function NotificationsTable({ notifications, onRead }: NotificationsTable
 }
 
 export default function NotificationsPage() {
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +75,7 @@ export default function NotificationsPage() {
       const data = await listNotifications();
       setNotifications(data);
     } catch (err: any) {
-      setError(err?.message ?? "通知の取得に失敗しました");
+      setError(err?.message ?? "notifications.error.loadFailed");
     } finally {
       setLoading(false);
     }
@@ -86,7 +91,7 @@ export default function NotificationsPage() {
       await markNotificationRead(notificationId);
       await loadNotifications();
     } catch (err: any) {
-      setError(err?.message ?? "既読更新に失敗しました");
+      setError(err?.message ?? "notifications.error.markReadFailed");
     }
   };
 
@@ -96,33 +101,33 @@ export default function NotificationsPage() {
       await readAllNotifications();
       await loadNotifications();
     } catch (err: any) {
-      setError(err?.message ?? "一括既読に失敗しました");
+      setError(err?.message ?? "notifications.error.markAllFailed");
     }
   };
 
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <Breadcrumbs items={[{ label: "通知" }]} />
+        <Breadcrumbs items={[{ label: t("notifications.title") }]} />
         <div className={styles.headerRow}>
-          <h1 className="text-title">通知</h1>
+          <h1 className="text-title">{t("notifications.title")}</h1>
           <div className={styles.headerActions}>
             <Button type="button" variant="outline" onClick={loadNotifications} disabled={loading}>
-              再読み込み
+              {t("notifications.actions.reload")}
             </Button>
             <Button type="button" onClick={handleReadAll} disabled={notifications.length === 0}>
-              すべて既読
+              {t("notifications.actions.markAll")}
             </Button>
           </div>
         </div>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       {notifications.length === 0 ? (
         <div className={styles.emptyState}>
-          <div className={styles.emptyTitle}>通知はまだありません</div>
-          <p className={styles.emptyBody}>招待や指図の更新があると表示されます。</p>
+          <div className={styles.emptyTitle}>{t("notifications.empty.title")}</div>
+          <p className={styles.emptyBody}>{t("notifications.empty.body")}</p>
         </div>
       ) : (
         <NotificationsTable notifications={notifications} onRead={handleRead} />

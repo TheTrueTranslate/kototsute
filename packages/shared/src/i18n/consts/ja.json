@@ -1,0 +1,1359 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "unset": "未設定",
+    "unregistered": "未登録",
+    "loading": "読み込み中...",
+    "logout": "ログアウト",
+    "copy": {
+      "empty": "コピーできる値がありません",
+      "success": "{{label}}をコピーしました",
+      "failed": "コピーに失敗しました"
+    }
+  },
+  "errors": {
+    "UNAUTHORIZED": "認証が必要です",
+    "FORBIDDEN": "権限がありません",
+    "NOT_FOUND": "見つかりませんでした",
+    "INTERNAL_ERROR": "サーバーでエラーが発生しました",
+    "VALIDATION_ERROR": "入力が不正です",
+    "CONFLICT": "既に処理済みです"
+  },
+  "validation": {
+    "displayName": {
+      "required": "表示名を入力してください",
+      "max": "表示名は50文字以内で入力してください"
+    },
+    "email": {
+      "required": "メールアドレスを入力してください",
+      "invalid": "正しいメールアドレスを入力してください"
+    },
+    "password": {
+      "min": "パスワードは8文字以上で入力してください",
+      "mismatch": "パスワードが一致しません"
+    },
+    "relation": { "required": "関係は必須です" },
+    "relationOther": { "required": "その他の関係を入力してください" },
+    "memo": { "max": "メモは400文字以内で入力してください" },
+    "asset": {
+      "label": { "required": "ラベルは必須です" },
+      "address": {
+        "required": "アドレスは必須です",
+        "invalid": "XRPアドレスが不正です"
+      },
+      "token": {
+        "currency": "通貨コードは必須です",
+        "duplicate": "同じトークンは1度だけ指定できます"
+      },
+      "numeric": "数値で入力してください"
+    },
+    "plan": {
+      "title": { "required": "タイトルは必須です" },
+      "allocation": {
+        "min": "配分は0以上で入力してください",
+        "percentMax": "割合の合計は100%以下にしてください"
+      }
+    }
+  },
+  "relations": {
+    "spouse": "配偶者",
+    "commonLaw": "事実婚",
+    "eldestSon": "長男",
+    "eldestDaughter": "長女",
+    "secondSon": "次男",
+    "secondDaughter": "次女",
+    "childOther": "子（その他）",
+    "father": "父",
+    "mother": "母",
+    "grandfather": "祖父",
+    "grandmother": "祖母",
+    "grandchild": "孫",
+    "olderBrother": "兄",
+    "olderSister": "姉",
+    "youngerBrother": "弟",
+    "youngerSister": "妹",
+    "fatherInLaw": "義父",
+    "motherInLaw": "義母",
+    "olderBrotherInLaw": "義兄",
+    "olderSisterInLaw": "義姉",
+    "youngerBrotherInLaw": "義弟",
+    "youngerSisterInLaw": "義妹",
+    "nephew": "甥",
+    "niece": "姪",
+    "uncle": "叔父",
+    "aunt": "叔母",
+    "cousin": "いとこ",
+    "relative": "親族",
+    "friend": "友人",
+    "other": "その他"
+  },
+  "authErrors": {
+    "default": "認証に失敗しました。もう一度お試しください。",
+    "emailAlreadyInUse": "このメールアドレスは既に登録されています",
+    "invalidEmail": "正しいメールアドレスを入力してください",
+    "weakPassword": "パスワードは8文字以上で入力してください",
+    "userNotFound": "メールアドレスまたはパスワードが正しくありません",
+    "tooManyRequests": "試行回数が多すぎます。しばらく待って再度お試しください"
+  },
+  "auth": {
+    "common": {
+      "email": "メールアドレス",
+      "emailPlaceholder": "example@kototsute.jp",
+      "password": "パスワード",
+      "passwordPlaceholder": "8文字以上"
+    },
+    "login": {
+      "title": "ログイン",
+      "lead": "登録済みのメールアドレスでログインしてください。",
+      "footer": {
+        "reset": "パスワードを忘れた方",
+        "register": "新規登録"
+      },
+      "submit": "ログイン",
+      "submitting": "ログイン中...",
+      "registered": "登録が完了しました。ログインしてください。"
+    },
+    "register": {
+      "title": "新規登録",
+      "lead": "メールアドレスとパスワードだけで登録できます。",
+      "footer": {
+        "login": "ログインへ",
+        "reset": "パスワード再設定"
+      },
+      "form": {
+        "displayName": "表示名",
+        "displayNamePlaceholder": "例: 山田 太郎",
+        "confirmPassword": "パスワード（確認）",
+        "confirmPasswordPlaceholder": "同じパスワードを入力"
+      },
+      "submit": "登録する",
+      "submitting": "登録中..."
+    },
+    "reset": {
+      "title": "パスワード再設定",
+      "lead": "登録済みのメールアドレスに再設定用リンクを送信します。",
+      "footer": {
+        "login": "ログインへ戻る",
+        "register": "新規登録"
+      },
+      "submit": "再設定メールを送る",
+      "submitting": "送信中...",
+      "success": "パスワード再設定メールを送信しました。"
+    }
+  },
+  "home": {
+    "title": "ログイン後ホーム（仮）",
+    "lead": "認証後に表示されるホームは現在準備中です。",
+    "footer": {
+      "login": "ログインへ戻る",
+      "register": "新規登録"
+    },
+    "placeholder": {
+      "lead": "ここから被相続人が相続人を招待する導線を配置予定です。",
+      "items": {
+        "invite": "招待リンクの発行",
+        "cases": "相続案件の一覧",
+        "timeline": "状況のタイムライン"
+      }
+    }
+  },
+  "cases": {
+    "title": "ケース",
+    "detail": {
+      "title": "ケース詳細",
+      "updatedAt": "更新: {{date}}",
+      "tabs": {
+        "assets": "資産",
+        "plans": "指図",
+        "tasks": "タスク",
+        "heirs": "相続人",
+        "deathClaims": "相続実行",
+        "wallet": "受取用ウォレット"
+      },
+      "assets": {
+        "title": "資産",
+        "actions": {
+          "lock": "資産をロックする",
+          "add": "資産を追加"
+        },
+        "empty": {
+          "heirOnly": {
+            "title": "資産は被相続人のみ閲覧できます",
+            "body": "相続人として参加しているケースでは資産は表示されません。"
+          },
+          "none": {
+            "title": "まだ資産が登録されていません",
+            "body": "「資産を追加」から登録できます。"
+          }
+        },
+        "verification": {
+          "unverified": "未検証",
+          "pending": "検証失敗",
+          "verified": "検証成功"
+        }
+      },
+      "plans": {
+        "title": "指図",
+        "actions": {
+          "create": "指図を作成"
+        },
+        "empty": {
+          "heir": {
+            "title": "指図がありません",
+            "body": "指図が作成されるとここに表示されます。"
+          },
+          "owner": {
+            "title": "まだ指図がありません",
+            "body": "最初の指図を作成できます。"
+          }
+        },
+        "updatedAt": "更新: {{date}}"
+      },
+      "deathClaims": {
+        "title": "相続実行",
+        "nextAction": {
+          "title": "次のアクション"
+        },
+        "documents": {
+          "title": "死亡診断書",
+          "hint": "提出状況の確認・再提出"
+        },
+        "approval": {
+          "title": "相続実行の同意",
+          "hint": "システム+相続人の過半数の署名が揃うと相続実行が進みます。"
+        },
+        "unavailable": {
+          "title": "相続待ちになるまで操作できません",
+          "body": "相続待ちに更新されると相続実行の手続きを進められます。"
+        }
+      },
+      "distribution": {
+        "title": "分配を実行",
+        "hint": "相続用ウォレットから受取用ウォレットへ送金します。",
+        "labels": {
+          "success": "成功",
+          "failed": "失敗",
+          "skipped": "スキップ",
+          "escalation": "エスカレ"
+        },
+        "count": "{{count}} 件",
+        "progress": "成功 {{success}} / {{total}} 件",
+        "actions": {
+          "execute": "分配を実行",
+          "executing": "実行中...",
+          "resume": "再開"
+        },
+        "note": {
+          "refresh": "1分ごとに自動更新します。"
+        },
+        "status": {
+          "pending": "未実行",
+          "running": "実行中",
+          "partial": "一部失敗",
+          "completed": "完了",
+          "failed": "失敗",
+          "unset": "未取得"
+        },
+        "disabled": {
+          "noCase": "ケース情報が取得できません。",
+          "notInProgress": "相続中になると分配を実行できます。",
+          "approvalIncomplete": "相続実行の同意が完了すると分配を実行できます。",
+          "noHeirs": "相続人が登録されていないため実行できません。",
+          "unverified": "相続人の受取用ウォレットが全員分確認済みになると実行できます。未確認: {{count}}人",
+          "loading": "分配状況を取得中です。",
+          "completed": "分配は完了しています。",
+          "running": "分配処理が進行中です。"
+        },
+        "error": {
+          "loadFailed": "分配状況の取得に失敗しました",
+          "executeFailed": "分配の実行に失敗しました"
+        }
+      },
+      "signer": {
+        "status": {
+          "label": "署名状況",
+          "notReady": "準備中",
+          "set": "署名受付中",
+          "failed": "準備失敗"
+        },
+        "approvalStatus": {
+          "prepared": "準備済み",
+          "submitted": "送信済み",
+          "failed": "失敗",
+          "unset": "未生成"
+        },
+        "networkStatus": {
+          "pending": "検証待ち",
+          "validated": "検証済み（成功）",
+          "failed": "検証済み（失敗）",
+          "notFound": "未反映",
+          "expired": "期限切れ"
+        },
+        "prepare": {
+          "title": "同意の準備",
+          "hint": "相続人の同意を進めるために、署名対象を作成します。",
+          "action": "相続同意の準備を始める",
+          "loading": "準備中...",
+          "success": "同意の準備が完了しました。シークレットを入力して署名を進めてください。",
+          "reprepareSuccess": "同意の再準備が完了しました。シークレットを入力して署名を進めてください。",
+          "error": {
+            "failed": "同意の準備に失敗しました",
+            "reprepareFailed": "同意の再準備に失敗しました",
+            "submitted": "送信中のため再準備できません。"
+          }
+        },
+        "disabled": {
+          "noCase": "ケース情報が取得できません。",
+          "notInProgress": "相続中になると署名の送信が可能になります。",
+          "failed": "署名準備に失敗しました。運営へご連絡ください。",
+          "preparing": "署名準備中です。",
+          "loading": "署名対象を取得中です。",
+          "loadFailed": "署名対象の取得に失敗しました。",
+          "notGenerated": "署名対象が未生成です。",
+          "prepareFailed": "署名対象の生成に失敗しました。",
+          "expired": "相続実行の送信が期限切れのため、再準備が必要です。",
+          "submitted": "相続実行は送信済みです{{network}}。",
+          "walletRequired": "受取用ウォレットの登録が必要です。",
+          "walletVerifyRequired": "受取用ウォレットの所有確認が必要です。",
+          "signed": "署名済みです。",
+          "completed": "必要数の署名が揃っています。"
+        },
+        "error": {
+          "statusLoadFailed": "署名状況の取得に失敗しました",
+          "loadFailed": "署名対象の取得に失敗しました",
+          "txMissing": "署名対象トランザクションが取得できません",
+          "signFailed": "署名の生成に失敗しました",
+          "signedBlobRequired": "署名済みデータを入力してください",
+          "submitFailed": "署名の送信に失敗しました"
+        },
+        "fromLabel": "送金元：被相続人の相続用ウォレット",
+        "fromValue": "被相続人の相続用ウォレット",
+        "toLabel": "送金先：システムのウォレット",
+        "toValue": "システムのウォレット",
+        "labels": {
+          "from": "送金元",
+          "to": "送金先",
+          "signers": "署名者",
+          "system": "システム署名者",
+          "mine": "あなたの受取用ウォレット",
+          "heir": "相続人の受取用ウォレット"
+        },
+        "multiSign": {
+          "title": "MultiSignのしくみ（アドレス）",
+          "empty": "署名の準備が完了すると表示します。"
+        },
+        "multiSignNote": {
+          "withCount": "相続人の同意が{{count}}人以上とシステム署名が揃うと成立します。",
+          "default": "相続人の過半数の同意とシステム署名が揃うと成立します。"
+        },
+        "txSummary": "送金元: {{from}} / 送金先: {{to}} / 送金額: {{amount}}",
+        "tx": {
+          "title": "署名内容",
+          "hint": "送金内容とMemoが正しいことを確認してください。",
+          "sentLabel": "送信Tx",
+          "afterLabel": "送信後の状態",
+          "afterTitle": "送信後の状態",
+          "afterHint": "ネットワーク反映の状況を確認できます。",
+          "actions": {
+            "reprepare": "再準備",
+            "reload": "再取得"
+          },
+          "note": {
+            "expired": "期限切れのため再準備が必要です。",
+            "refresh": "1分ごとに自動更新します。"
+          },
+          "loading": "署名対象を読み込み中...",
+          "details": {
+            "title": "署名内容を確認"
+          },
+          "memoLabel": "Memo",
+          "amount": {
+            "dropsLabel": "Amount (drops)",
+            "xrpLabel": "Amount (XRP)"
+          },
+          "copy": {
+            "sentTx": "送信Txをコピー",
+            "from": "送金元をコピー",
+            "to": "送金先をコピー",
+            "memo": "Memoをコピー",
+            "amountDrops": "Amount (drops)をコピー",
+            "amountXrp": "Amount (XRP)をコピー"
+          },
+          "empty": "署名対象が未生成です。"
+        },
+        "guide": {
+          "title": "署名の流れ",
+          "steps": {
+            "tx": "署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配するXRPLトランザクションです。",
+            "multisign": "登録済みの相続人ウォレットでMultiSign署名を行います。",
+            "secret": "シークレットを入力すると署名を自動で作成します（サーバーには送信しません）。",
+            "submit": "署名を送信すると同意が反映されます。",
+            "autoExecute": "必要な署名が揃うと相続実行の送信が自動で行われます。"
+          }
+        },
+        "secret": {
+          "label": "シークレット",
+          "note": "シークレットはこの端末内だけで使われます。"
+        },
+        "autoNote": {
+          "signing": "署名を作成中です...",
+          "ready": "署名の準備ができました。",
+          "hint": "シークレットを入力すると署名を自動で作成します。"
+        },
+        "actions": {
+          "submit": "署名を送信",
+          "submitting": "送信中..."
+        },
+        "mySignature": {
+          "label": "あなたの署名",
+          "signed": "署名済み",
+          "unsigned": "未署名"
+        },
+        "inheritance": {
+          "label": "相続状態",
+          "completed": "相続完了"
+        }
+      },
+      "inheritance": {
+        "steps": {
+          "adminApproved": {
+            "title": "運営承認済み",
+            "description": "相続人の同意が必要です。死亡診断書の同意を進めてください。"
+          },
+          "preparing": {
+            "title": "相続人同意の準備中",
+            "description": "同意の準備を始めてください。"
+          },
+          "awaitingSign": {
+            "title": "相続人同意 受付中",
+            "description": "内容を確認して署名してください。"
+          },
+          "signerCompleted": {
+            "title": "同意完了（相続実行待ち）",
+            "description": "同意がそろいました。相続実行を待っています。"
+          }
+        }
+      },
+      "prepare": {
+        "disabled": {
+          "noCase": "ケース情報が取得できません。",
+          "notInProgress": "相続中になると準備できます。",
+          "failed": "同意の準備に失敗しました。運営へご連絡ください。",
+          "completed": "同意の準備は完了しています。",
+          "noHeirs": "相続人が登録されていないため準備できません。",
+          "unverified": "相続人の受取用ウォレットが全員分確認済みになると準備できます。未確認: {{count}}人"
+        }
+      },
+      "heirs": {
+        "title": "相続人",
+        "form": {
+          "email": "メールアドレス",
+          "relation": "関係",
+          "relationOther": "関係（自由入力）",
+          "relationOtherPlaceholder": "例: 同居人",
+          "memo": "メモ（任意）",
+          "memoPlaceholder": "例: 生前からの連絡先",
+          "submit": "招待を送る",
+          "submitting": "送信中..."
+        },
+        "relationLabel": "関係",
+        "locked": {
+          "title": "資産ロック後は閲覧のみです",
+          "body": "相続人の追加や編集はできません。"
+        },
+        "invites": {
+          "empty": {
+            "title": "まだ招待がありません",
+            "body": "相続人に招待を送信できます。"
+          },
+          "status": {
+            "pending": "招待中",
+            "accepted": "参加中",
+            "declined": "辞退"
+          },
+          "error": {
+            "sendFailed": "招待の送信に失敗しました"
+          }
+        },
+        "empty": {
+          "title": "相続人が登録されていません",
+          "body": "承認済みの相続人がここに表示されます。"
+        },
+        "status": {
+          "accepted": "承認済み"
+        },
+        "walletStatus": {
+          "unregistered": "未登録",
+          "pending": "未確認",
+          "verified": "確認済み"
+        }
+      },
+      "wallet": {
+        "title": "受取用ウォレット",
+        "statusLabel": "ステータス",
+        "status": {
+          "verified": "所有確認済み",
+          "pending": "未確認",
+          "unregistered": "未登録"
+        },
+        "loading": "ウォレット情報を読み込み中...",
+        "addressLabel": "ウォレットアドレス",
+        "actions": {
+          "register": "登録/変更",
+          "verify": "所有確認"
+        },
+        "dialog": {
+          "verifyTitle": "受取用ウォレットの所有確認",
+          "registerTitle": "受取用ウォレットを登録",
+          "description": "ウォレットアドレスの登録と所有確認を行います。",
+          "empty": {
+            "title": "まずは登録してください",
+            "body": "受取用ウォレットの登録後に所有確認が可能です。"
+          }
+        },
+        "form": {
+          "addressLabel": "ウォレットアドレス",
+          "save": "登録する",
+          "saving": "保存中...",
+          "startVerify": "所有確認を開始"
+        },
+        "memoIssuing": "発行中...",
+        "memoEmpty": "未発行",
+        "notice": {
+          "register": "ウォレット登録が必要です",
+          "verify": "所有確認が必要です"
+        },
+        "unavailable": {
+          "title": "相続人のみ操作できます",
+          "body": "受取用ウォレットの登録は相続人本人が行います。"
+        },
+    "error": {
+      "loadFailed": "ウォレットの取得に失敗しました",
+      "addressRequired": "ウォレットアドレスを入力してください",
+      "saveFailed": "ウォレットの登録に失敗しました",
+      "challengeFailed": "検証コードの取得に失敗しました",
+      "caseIdMissing": "ケースIDが取得できません",
+      "addressMissing": "ウォレットアドレスが取得できません",
+      "secretRequired": "シークレットを入力してください"
+    },
+        "verify": {
+          "success": "所有確認が完了しました",
+          "error": "所有確認に失敗しました"
+        }
+      },
+      "tasks": {
+        "title": "タスク",
+        "note": "進捗には影響しません",
+        "role": {
+          "owner": "被相続人",
+          "heir": "相続人"
+        },
+        "personal": {
+          "title": "自分用タスク",
+          "empty": {
+            "title": "個人タスクはありません",
+            "body": "Todoマスターが更新されると表示されます。"
+          }
+        },
+        "error": {
+          "loadFailed": "タスクの取得に失敗しました",
+          "updateFailed": "タスクの更新に失敗しました"
+        }
+      },
+      "error": {
+        "caseIdMissing": "ケースIDが取得できません",
+        "loadFailed": "ケースの取得に失敗しました",
+        "noCase": "ケース情報が取得できません。"
+      }
+    },
+    "section": {
+      "created": "作成したケース",
+      "received": "招待されたケース"
+    },
+    "status": {
+      "draft": "下書き",
+      "waiting": "相続待ち",
+      "inProgress": "相続中",
+      "completed": "相続完了"
+    },
+    "owner": {
+      "anonymous": "ユーザー",
+      "anonymousWithId": "ユーザー-{{id}}"
+    },
+    "create": {
+      "submit": "ケースを作成",
+      "submitting": "作成中..."
+    },
+    "updatedAt": "最終更新: {{date}}",
+    "empty": {
+      "received": {
+        "title": "まだ招待がありません",
+        "body": "招待されたケースがここに表示されます。"
+      }
+    },
+    "error": {
+      "load": "ケースの取得に失敗しました",
+      "create": "ケースの作成に失敗しました",
+      "unauthorized": "ログイン情報が取得できません。再ログインしてください。"
+    }
+  },
+  "assets": {
+    "types": {
+      "xrp": {
+        "label": "XRPウォレット",
+        "desc": "ウォレットアドレスを登録します"
+      },
+      "bank": {
+        "label": "銀行口座",
+        "desc": "準備中"
+      },
+      "securities": {
+        "label": "証券口座",
+        "desc": "準備中"
+      },
+      "realEstate": {
+        "label": "不動産",
+        "desc": "準備中"
+      }
+    },
+    "new": {
+      "title": "資産登録",
+      "section": {
+        "type": "資産タイプ"
+      },
+      "type": {
+        "unavailable": "準備中",
+        "next": "次へ",
+        "change": "変更する",
+        "unselected": "未選択"
+      },
+      "form": {
+        "label": "ラベル",
+        "labelPlaceholder": "例: 自分のウォレット",
+        "address": "XRPアドレス",
+        "addressPlaceholder": "r...",
+        "submit": "登録する"
+      },
+      "error": {
+        "caseIdMissing": "ケースIDが取得できません",
+        "createFailed": "登録に失敗しました"
+      }
+    },
+    "detail": {
+      "title": "資産詳細",
+      "breadcrumb": "資産詳細",
+      "tabs": {
+        "overview": "概要",
+        "history": "履歴"
+      },
+      "status": {
+        "unverified": "未検証",
+        "pending": "検証中",
+        "verified": "検証済み"
+      },
+      "actions": {
+        "sync": "最新の情報を同期",
+        "syncing": "同期中...",
+        "verifyOwnership": "所有権を検証",
+        "delete": "資産を削除",
+        "deleting": "削除中...",
+        "confirmDelete": "削除する"
+      },
+      "overview": {
+        "title": "基本情報",
+        "createdAt": "登録日",
+        "updatedAt": "更新日",
+        "status": "ステータス"
+      },
+      "wallet": {
+        "title": "ウォレット情報",
+        "lastSynced": "最終同期: {{date}}",
+        "balance": "残高 (XRP)",
+        "ledger": "Ledger",
+        "tokenBalance": "残高",
+        "emptyTokens": "トークンはありません。",
+        "empty": "まだウォレット情報を取得していません。"
+      },
+      "token": {
+        "native": "native"
+      },
+      "reserve": {
+        "title": "相続予定数・留保設定",
+        "hint": "相続予定数は留保数量を差し引いて表示します",
+        "inheritanceTitle": "相続予定数",
+        "balanceMeta": "残高 {{balance}} XRP / 留保 {{reserve}} XRP",
+        "tokensLabel": "トークン",
+        "tokenMeta": "残高 {{balance}} / 留保 {{reserve}}",
+        "plannedLabel": "相続予定",
+        "syncHint": "ウォレット情報を同期すると表示されます。",
+        "settingsTitle": "留保設定",
+        "xrpLabel": "XRP 留保数量 (XRP)",
+        "tokenLabel": "トークン留保",
+        "tokenHint": "XRPL同期後に一覧から選択できます。",
+        "save": "留保設定を保存",
+        "saving": "保存中...",
+        "success": "留保設定を保存しました",
+        "error": "留保設定の更新に失敗しました"
+      },
+      "verify": {
+        "title": "XRPL検証",
+        "description": "シークレットで送金し、自動で検証します。",
+        "memoIssuing": "発行中...",
+        "memoEmpty": "未発行",
+        "challengeError": "検証コードの取得に失敗しました",
+        "success": "検証が完了しました",
+        "error": "自動検証に失敗しました",
+        "errorCaseMissing": "ケース情報が取得できません",
+        "errorAddressMissing": "アドレスが取得できません",
+        "errorSecretRequired": "シークレットを入力してください"
+      },
+      "history": {
+        "title": "履歴",
+        "hint": "最新50件",
+        "empty": "履歴はありません。",
+        "emptyDetail": "詳細はありません。",
+        "actor": "担当者: {{name}}",
+        "types": {
+          "created": "登録",
+          "deleted": "削除",
+          "reserve": "留保",
+          "verifyRequested": "検証開始",
+          "verifyConfirmed": "検証完了",
+          "synced": "同期",
+          "syncLog": "同期ログ"
+        }
+      },
+      "delete": {
+        "title": "資産を削除しますか？",
+        "description": "関連する指図がある場合は削除できません。",
+        "relatedError": "指図に紐づいているため削除できません",
+        "error": "削除に失敗しました"
+      },
+      "error": {
+        "assetIdMissing": "資産IDが取得できません",
+        "fetchFailed": "資産の取得に失敗しました",
+        "historyFailed": "履歴の取得に失敗しました",
+        "xrplFailed": "XRPL情報の取得に失敗しました"
+      }
+    }
+  },
+  "assetLock": {
+    "breadcrumb": "資産ロック",
+    "header": {
+      "label": "資産ロック",
+      "title": "資産ロック手続き",
+      "stepLabel": "STEP"
+    },
+    "steps": {
+      "prepare": "準備・注意",
+      "method": "方式選択",
+      "transfer": "送金実行/入力",
+      "verify": "送金検証"
+    },
+    "completed": "資産ロックが完了しました。{{seconds}}秒でケース詳細に戻ります。",
+    "validation": {
+      "noPlans": "相続対象の指図がありません",
+      "missingHeirs": "相続人が未設定の指図があります",
+      "pendingSync": "反映待ち（口座の反映に時間がかかっています）"
+    },
+    "error": {
+      "balanceFetch": "残高の取得に失敗しました",
+      "lockFetch": "資産ロック情報の取得に失敗しました",
+      "planFetch": "指図の取得に失敗しました",
+      "startFailed": "資産ロックの開始に失敗しました",
+      "txHashRequired": "TX Hashを入力してください",
+      "verifyFailed": "送金検証に失敗しました",
+      "autoTransferFailed": "自動送金に失敗しました",
+      "completeFailed": "資産ロックの完了に失敗しました",
+      "backToRegularKeyFailed": "RegularKeyの確認に戻れませんでした",
+      "confirmFailed": "確認の記録に失敗しました",
+      "regularKeyFailed": "RegularKeyの確認に失敗しました",
+      "stepUpdateFailed": "ステップの更新に失敗しました"
+    },
+    "prepare": {
+      "description": "資産・準備金・相続人状況を確認します。",
+      "confirm": "確認しました",
+      "confirming": "記録中...",
+      "waitingOwner": "被相続人の確認待ちです。"
+    },
+    "planPreview": {
+      "title": "指図プレビュー",
+      "empty": "指図がありません",
+      "statusInactive": "停止中",
+      "statusActive": "作成中",
+      "rulesTitle": "分配ルール",
+      "rulesEmpty": "分配ルールが未設定です",
+      "allocationsEmpty": "配分が未設定です",
+      "rulesLoading": "分配ルールを読み込み中...",
+      "unit": {
+        "percent": "割合",
+        "amount": "数量"
+      }
+    },
+    "method": {
+      "a": {
+        "title": "方式A（手動送金）",
+        "description": "ご自身のWalletから分配用Walletへ送金します。",
+        "bullets": {
+          "verify": "送金後にTX Hashを入力して検証します",
+          "eachAsset": "資産ごとに送金作業が必要です",
+          "signatures": "署名回数が増えます"
+        }
+      },
+      "b": {
+        "title": "方式B（自動送金・署名1回）",
+        "badge": "おすすめ",
+        "description": "一時的にRegularKeyを付与し、分配用Walletへ自動送金します。",
+        "bullets": {
+          "singleSignature": "署名は1回だけで完了します",
+          "lessSteps": "手順が少なくミスが起きにくいです",
+          "recommended": "おすすめ: 方式Bは短時間でロックまで進められます"
+        }
+      }
+    },
+    "actions": {
+      "start": "ロックを開始",
+      "starting": "開始中...",
+      "executeAuto": "自動送金を実行",
+      "executing": "送金中...",
+      "complete": "完了する",
+      "completing": "完了中...",
+      "completed": "完了済み",
+      "back": "戻る"
+    },
+    "methodSteps": {
+      "regularKeySet": {
+        "title": "RegularKeyを設定",
+        "description": "被相続人の署名でRegularKeyを付与します。"
+      },
+      "autoTransfer": {
+        "title": "自動送金を実行",
+        "description": "サーバーが分配用Walletへ送金します。"
+      },
+      "transferDone": {
+        "title": "送金完了を確認",
+        "description": "送金結果をチェックして反映します。"
+      },
+      "regularKeyCleared": {
+        "title": "RegularKeyを解除",
+        "description": "安全のためRegularKeyを解除します。"
+      },
+      "inProgress": "進行中"
+    },
+    "regularKey": {
+      "title": "RegularKeyの署名",
+      "description": "被相続人のウォレットでRegularKeyを設定し、署名後に確認します。",
+      "statusLabel": "確認状況",
+      "note": "確認が完了するまで次へ進めません。",
+      "confirm": "確認する",
+      "resultTitle": "RegularKeyの確認結果",
+      "back": "RegularKeyに戻る"
+    },
+    "status": {
+      "regularKey": {
+        "verified": "確認済み",
+        "error": "エラー",
+        "unverified": "未確認"
+      },
+      "item": {
+        "verified": "確認済み",
+        "failed": "失敗",
+        "sent": "送金済み",
+        "unverified": "未検証"
+      }
+    },
+    "transfer": {
+      "hint": "方式Aは手動送金/検証、方式Bは自動送金（RegularKey確認後）です。",
+      "autoTransferNote": "自動送金を実行すると戻れません",
+      "emptyTargets": "送金対象がありません",
+      "type": {
+        "token": "トークン送金",
+        "xrp": "XRP送金"
+      },
+      "planned": "予定 {{amount}}",
+      "txHashLabel": "TX Hash",
+      "appSend": "アプリで送金",
+      "verifyAction": "検証",
+      "errors": {
+        "destinationMissing": "送金先が取得できません",
+        "fromMissing": "送金元アドレスを入力してください",
+        "secretMissing": "シークレットを入力してください",
+        "issuerMissing": "トークン発行者が取得できません",
+        "sendFailed": "送金に失敗しました"
+      },
+      "success": {
+        "sent": "送金を実行しました。TXハッシュを入力しました。"
+      }
+    },
+    "verify": {
+      "title": "送金検証の結果",
+      "balanceTitle": "ウォレット残高 (XRP)",
+      "reload": "再取得",
+      "note": "反映に時間がかかる場合があります。必要に応じて再取得してください。",
+      "loadingBalances": "残高を取得中...",
+      "destination": "送金先",
+      "source": "送金元",
+      "empty": "送金検証の結果がありません"
+    },
+    "transferDialog": {
+      "title": "アプリで送金",
+      "description": "シークレットはこの端末内でのみ使用され、サーバーへ送信されません。",
+      "fromLabel": "送金元アドレス",
+      "toLabel": "送金先",
+      "toCopyLabel": "送金先をコピー",
+      "amountLabel": "送金額",
+      "secretLabel": "シークレット",
+      "send": "送金してTXハッシュ入力",
+      "sending": "送金中...",
+      "empty": "送金対象を選択してください"
+    },
+    "regularKeyDialog": {
+      "title": "RegularKeyを設定",
+      "description": "ウォレットアプリでAccountSetを実行し、RegularKeyに分配用Walletを指定してください。",
+      "addressLabel": "RegularKeyアドレス",
+      "addressEmpty": "未発行",
+      "copyLabel": "RegularKey",
+      "copyAriaLabel": "RegularKeyアドレスをコピー",
+      "confirm": "確認する",
+      "confirming": "記録中..."
+    },
+    "autoTransferDialog": {
+      "title": "自動送金を実行します",
+      "description": "自動送金を実行すると戻れません。内容を確認のうえ実行してください。",
+      "confirm": "実行する"
+    },
+    "heir": {
+      "defaultLabel": "相続人",
+      "unassigned": "未割当"
+    }
+  },
+  "plans": {
+    "status": {
+      "draft": "作成中",
+      "shared": "有効",
+      "inactive": "無効"
+    },
+    "new": {
+      "title": "指図作成",
+      "form": {
+        "title": "タイトル",
+        "titlePlaceholder": "例: 分配プラン"
+      },
+      "actions": {
+        "back": "戻る",
+        "submit": "作成する",
+        "submitting": "作成中..."
+      },
+      "error": {
+        "caseIdMissing": "ケースIDが取得できません",
+        "planIdMissing": "作成した指図IDが取得できません",
+        "createFailed": "指図の作成に失敗しました"
+      }
+    },
+    "edit": {
+      "title": "指図編集",
+      "updatedAt": "更新: {{date}}",
+      "actions": {
+        "backToDetail": "指図詳細へ戻る"
+      },
+      "flow": {
+        "title": "編集の流れ",
+        "text": "基本情報 → 相続人 → 資産 → 配分"
+      },
+      "section": {
+        "basic": "1. 基本情報",
+        "heirs": "2. 相続人",
+        "assets": "3. 含める資産",
+        "allocations": "4. 配分"
+      },
+      "form": {
+        "title": "タイトル",
+        "titlePlaceholder": "例: 分配プラン",
+        "saveTitle": "タイトルを更新",
+        "saving": "保存中..."
+      },
+      "heir": {
+        "helper": "承認済みの相続人を指図に追加します。",
+        "add": "相続人を追加",
+        "addConfirm": "追加する",
+        "adding": "追加中...",
+        "remove": "削除",
+        "removing": "削除中...",
+        "emptyAvailable": {
+          "title": "追加できる相続人がいません",
+          "body": "招待が承認されるとここに表示されます。"
+        },
+        "emptySelected": {
+          "title": "指図に追加された相続人がいません",
+          "body": "まずは相続人を追加してください。"
+        },
+        "defaultLabel": "相続人",
+        "other": "その他"
+      },
+      "assets": {
+        "helper": "ケースに登録済みの資産を追加します。",
+        "add": "資産を追加",
+        "addConfirm": "追加する",
+        "adding": "追加中...",
+        "remove": "削除",
+        "removing": "削除中...",
+        "emptyAvailable": {
+          "title": "追加できる資産がありません",
+          "body": "ケースに資産を登録するとここに表示されます。"
+        },
+        "emptySelected": {
+          "title": "まだ資産が登録されていません",
+          "body": "指図に含める資産を追加してください。"
+        },
+        "unset": "未設定"
+      },
+      "allocations": {
+        "emptyPlan": {
+          "title": "指図が読み込めません",
+          "body": "再読み込みしてからもう一度お試しください。"
+        },
+        "emptyAssets": {
+          "title": "配分できる資産がありません",
+          "body": "まずは指図に資産を追加してください。"
+        },
+        "emptyHeirs": {
+          "title": "相続人が未設定です",
+          "body": "相続人を追加してから配分を設定してください。"
+        },
+        "unit": {
+          "percent": "割合",
+          "amount": "金額"
+        },
+        "save": "配分を保存",
+        "saving": "保存中...",
+        "unallocated": "未分配",
+        "totalPercent": "合計: {{total}}% / 未分配: {{unallocated}}%",
+        "totalAmount": "合計: {{total}}"
+      },
+      "error": {
+        "planIdMissing": "指図IDが取得できません",
+        "loadFailed": "指図の取得に失敗しました",
+        "titleUpdateFailed": "指図タイトルの更新に失敗しました",
+        "addAssetFailed": "資産の追加に失敗しました",
+        "removeAssetFailed": "資産の削除に失敗しました",
+        "addHeirFailed": "相続人の追加に失敗しました",
+        "removeHeirFailed": "相続人の削除に失敗しました",
+        "allocationUpdateFailed": "配分の更新に失敗しました"
+      }
+    },
+    "detail": {
+      "title": "指図詳細",
+      "breadcrumb": "指図",
+      "updatedAt": "更新: {{date}}",
+      "actions": {
+        "edit": "編集する",
+        "delete": "指図を削除",
+        "confirmDelete": "削除する",
+        "deleting": "削除中..."
+      },
+      "deleteDialog": {
+        "title": "指図を削除しますか？",
+        "description": "資産が追加されていない指図のみ削除できます。"
+      },
+      "deleteLocked": "資産が追加されているため削除できません。",
+      "tabs": {
+        "summary": "概要",
+        "assets": "内容",
+        "heirs": "相続人",
+        "history": "履歴"
+      },
+      "summary": {
+        "title": "概要",
+        "updatedAt": "最終更新",
+        "empty": {
+          "title": "指図が見つかりません",
+          "body": "アクセス権限を確認してください。"
+        }
+      },
+      "assets": {
+        "title": "内容",
+        "empty": {
+          "title": "指図に含まれる資産がありません",
+          "body": "指図に設定した資産がここに表示されます。"
+        },
+        "allocationsEmpty": "分配が設定されていません"
+      },
+      "heirs": {
+        "title": "相続人",
+        "relation": "関係",
+        "accepted": "承認済み",
+        "empty": {
+          "title": "承認済みの相続人がいません",
+          "body": "招待が承認されるとここに表示されます。"
+        }
+      },
+      "history": {
+        "title": "履歴",
+        "empty": {
+          "title": "履歴はまだありません",
+          "body": "指図の操作履歴がここに表示されます。"
+        }
+      },
+      "error": {
+        "planIdMissing": "指図IDが取得できません",
+        "fetchFailed": "指図の取得に失敗しました",
+        "deleteFailed": "指図の削除に失敗しました"
+      }
+    }
+  },
+  "myPage": {
+    "title": "マイページ",
+    "lead": "登録情報の確認とプロフィールの管理ができます。",
+    "section": {
+      "account": "アカウント"
+    },
+    "labels": {
+      "email": "メールアドレス",
+      "displayName": "表示名",
+      "uid": "UID",
+      "logout": "ログアウト"
+    },
+    "placeholders": {
+      "displayName": "例: 山田 太郎"
+    },
+    "actions": {
+      "update": "更新",
+      "updating": "更新中..."
+    },
+    "status": {
+      "displayNameUpdated": "表示名を更新しました。"
+    },
+    "error": {
+      "authMissing": "ログイン情報が取得できません。再ログインしてください。",
+      "displayNameUpdateFailed": "表示名の更新に失敗しました。",
+      "logoutFailed": "ログアウトに失敗しました。"
+    },
+    "logout": {
+      "title": "ログアウトしますか？",
+      "description": "現在のセッションを終了します。",
+      "cancel": "キャンセル",
+      "confirm": "ログアウト"
+    },
+    "language": {
+      "label": "表示言語",
+      "ja": "日本語",
+      "en": "English"
+    }
+  },
+  "invites": {
+    "title": "招待",
+    "empty": {
+      "title": "まだ招待がありません",
+      "body": "招待が届くとここに表示されます。"
+    },
+    "error": {
+      "loadFailed": "招待の取得に失敗しました",
+      "actionFailed": "招待の処理に失敗しました"
+    },
+    "list": {
+      "from": "「{{name}}」さんから招待がきています。",
+      "inviterFallback": "招待者"
+    },
+    "actions": {
+      "decline": "辞退",
+      "accept": "承認",
+      "declineConfirm": "辞退する"
+    },
+    "status": {
+      "accepted": "参加中",
+      "declined": "辞退"
+    },
+    "dialog": {
+      "decline": {
+        "title": "招待を辞退しますか？",
+        "description": "「{{name}}」さんからの招待を辞退します。",
+        "cancel": "キャンセル",
+        "confirm": "辞退する"
+      }
+    }
+  },
+  "notifications": {
+    "title": "通知",
+    "table": {
+      "content": "内容",
+      "receivedAt": "受信日時",
+      "action": "操作"
+    },
+    "actions": {
+      "markRead": "既読にする",
+      "reload": "再読み込み",
+      "markAll": "すべて既読"
+    },
+    "empty": {
+      "title": "通知はまだありません",
+      "body": "招待や指図の更新があると表示されます。"
+    },
+    "error": {
+      "loadFailed": "通知の取得に失敗しました",
+      "markReadFailed": "既読更新に失敗しました",
+      "markAllFailed": "一括既読に失敗しました"
+    }
+  },
+  "deathClaims": {
+    "title": "死亡診断書",
+    "lead": "提出書類の管理と相続人同意を行います。",
+    "breadcrumb": {
+      "cases": "ケース",
+      "deathClaim": "死亡診断書"
+    },
+    "backToCase": "ケース詳細へ戻る",
+    "status": {
+      "submitted": "提出済み",
+      "adminApproved": "運営承認済み",
+      "adminRejected": "差し戻し",
+      "confirmed": "確定済み"
+    },
+    "currentAction": {
+      "title": "現在のアクション",
+      "submit": {
+        "description": "死亡診断書を提出してください。",
+        "action": "死亡診断書を提出",
+        "actioning": "提出中..."
+      },
+      "resubmit": {
+        "description": "差し戻し内容を確認して再提出してください。",
+        "action": "再提出",
+        "actioning": "再提出中..."
+      },
+      "confirm": {
+        "description": "運営承認済みです。死亡確定への同意を進めてください。",
+        "action": "同意する",
+        "actioning": "同意中..."
+      },
+      "confirmed": {
+        "description": "死亡確定済みです。"
+      },
+      "confirmedByMe": {
+        "description": "同意済みです。ほかの相続人の同意を待っています。"
+      },
+      "uploading": {
+        "description": "運営確認中です。必要があればファイルを追加してください。"
+      },
+      "waiting": {
+        "description": "運営の確認を待っています。"
+      }
+    },
+    "panel": {
+      "status": "申請ステータス",
+      "files": "提出ファイル"
+    },
+    "steps": {
+      "submit": "提出・ファイル追加",
+      "review": "運営確認",
+      "consent": "相続人同意",
+      "confirmed": "確定"
+    },
+    "loading": "読み込み中...",
+    "empty": {
+      "noClaim": {
+        "title": "まだ死亡診断書が提出されていません",
+        "body": "提出後、運営承認と相続人同意で死亡確定となります。",
+        "action": "死亡診断書を提出",
+        "actioning": "提出中..."
+      },
+      "noFiles": "提出済みのファイルはありません。"
+    },
+    "consent": {
+      "label": "同意状況",
+      "confirmed": "死亡確定済みです。",
+      "confirmedByMe": "あなたは同意済みです。",
+      "awaitingApproval": "運営の承認後に同意できます。"
+    },
+    "rejected": {
+      "title": "差し戻し",
+      "noteFallback": "運営から差し戻しされました。"
+    },
+    "files": {
+      "note": "PDF/JPG/PNG（10MBまで、100件目安）",
+      "open": "開く",
+      "opening": "取得中...",
+      "openingAria": "ファイルを取得中",
+      "openAria": "ファイルを開く"
+    },
+    "upload": {
+      "label": "ファイルを追加",
+      "action": "アップロード",
+      "actioning": "アップロード中...",
+      "disabled": "運営承認後はファイルを追加できません。"
+    },
+    "modal": {
+      "confirm": {
+        "title": "同意の確認",
+        "message": "この同意は死亡確定への同意です。相続の実行はこの操作では行われません。",
+        "cancel": "キャンセル",
+        "confirm": "同意する",
+        "confirming": "同意中..."
+      },
+      "resubmit": {
+        "title": "再提出の確認",
+        "message": "差し戻し内容を確認した上で、死亡診断書を再提出しますか？",
+        "cancel": "キャンセル",
+        "confirm": "再提出する",
+        "confirming": "再提出中..."
+      }
+    },
+    "errors": {
+      "loadFailed": "死亡診断書の取得に失敗しました",
+      "submitFailed": "死亡診断書の提出に失敗しました",
+      "noFileSelected": "アップロードするファイルを選択してください",
+      "fileTypeUnknown": "ファイル形式を判定できませんでした",
+      "uploadFailed": "ファイルのアップロードに失敗しました",
+      "confirmFailed": "同意に失敗しました",
+      "resubmitFailed": "再提出に失敗しました",
+      "fileDownloadFailed": "ファイルの取得に失敗しました"
+    }
+  },
+  "nav": {
+    "home": "ホーム",
+    "menu": "メニュー",
+    "mainMenu": "メインメニュー",
+    "openMenu": "メニューを開く",
+    "breadcrumbs": "パンくずリスト",
+    "cases": "ケース",
+    "notifications": "通知",
+    "invites": "招待",
+    "login": "ログイン",
+    "register": "新規登録",
+    "reset": "パスワードリセット",
+    "myPage": "マイページ"
+  },
+  "sidebar": {
+    "notifications": {
+      "unread": "未読{{count}}件"
+    },
+    "invites": {
+      "pending": "招待{{count}}件"
+    },
+    "logout": {
+      "title": "ログアウトしますか？",
+      "description": "現在のセッションを終了します。",
+      "error": "ログアウトに失敗しました。"
+    }
+  },
+  "footer": {
+    "note": "© 2026 Kototsute"
+  },
+  "walletVerify": {
+    "destination": {
+      "label": "Destination（運営確認用ウォレット）",
+      "hint": "送金先はシステムの検証用アドレスです。"
+    },
+    "memo": {
+      "label": "Memo",
+      "hint": "1 drops (=0.000001 XRP) を送信します。"
+    },
+    "secret": {
+      "label": "シークレット",
+      "hint": "シークレットは一時的に利用し、保存しません。",
+      "submitting": "自動検証中...",
+      "submit": "シークレットで自動検証"
+    }
+  }
+}

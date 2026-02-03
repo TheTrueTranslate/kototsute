@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 export const displayNameSchema = z
-  .string()
+  .string({ required_error: "validation.displayName.required" })
   .trim()
-  .min(1, "表示名を入力してください")
-  .max(50, "表示名は50文字以内で入力してください");
+  .min(1, "validation.displayName.required")
+  .max(50, "validation.displayName.max");
 
 export const caseCreateInputSchema = z.object({});

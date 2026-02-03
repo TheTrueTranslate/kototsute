@@ -19,13 +19,7 @@ import {
   type DeathClaimSummary
 } from "../api/death-claims";
 import styles from "../../styles/deathClaimsPage.module.css";
-
-const statusLabels: Record<string, string> = {
-  SUBMITTED: "提出済み",
-  ADMIN_APPROVED: "運営承認済み",
-  ADMIN_REJECTED: "差し戻し",
-  CONFIRMED: "確定済み"
-};
+import { useTranslation } from "react-i18next";
 
 const formatBytes = (value: number) => {
   if (!Number.isFinite(value)) return "-";
@@ -70,6 +64,7 @@ export function DeathClaimsPanel({
   initialConfirmDialogOpen = false,
   onClaimChange
 }: DeathClaimsPanelProps) {
+  const { t } = useTranslation();
   const { caseId } = useParams();
   const { user } = useAuth();
   const [loading, setLoading] = useState(initialLoading ?? !initialClaim);
@@ -83,6 +78,12 @@ export function DeathClaimsPanel({
   const [openingFileId, setOpeningFileId] = useState<string | null>(null);
   const [resubmitDialogOpen, setResubmitDialogOpen] = useState(initialResubmitDialogOpen);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(initialConfirmDialogOpen);
+  const statusLabels: Record<string, string> = {
+    SUBMITTED: t("deathClaims.status.submitted"),
+    ADMIN_APPROVED: t("deathClaims.status.adminApproved"),
+    ADMIN_REJECTED: t("deathClaims.status.adminRejected"),
+    CONFIRMED: t("deathClaims.status.confirmed")
+  };
 
   const fetchClaim = useCallback(async () => {
     if (!caseId) return;
@@ -92,7 +93,7 @@ export function DeathClaimsPanel({
       const data = await getDeathClaim(caseId);
       setClaim(data);
     } catch (err: any) {
-      setError(err?.message ?? "死亡診断書の取得に失敗しました");
+      setError(err?.message ?? "deathClaims.errors.loadFailed");
     } finally {
       setLoading(false);
     }
@@ -115,7 +116,7 @@ export function DeathClaimsPanel({
       await submitDeathClaim(caseId);
       await fetchClaim();
     } catch (err: any) {
-      setError(err?.message ?? "死亡診断書の提出に失敗しました");
+      setError(err?.message ?? "deathClaims.errors.submitFailed");
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +125,7 @@ export function DeathClaimsPanel({
   const handleUpload = async () => {
     if (!caseId || !claim?.claim?.claimId) return;
     if (selectedFiles.length === 0) {
-      setError("アップロードするファイルを選択してください");
+      setError("deathClaims.errors.noFileSelected");
       return;
     }
     setUploading(true);
@@ -132,7 +133,7 @@ export function DeathClaimsPanel({
     try {
       for (const file of selectedFiles) {
         if (!file.type) {
-          throw new Error("ファイル形式を判定できませんでした");
+          throw new Error("deathClaims.errors.fileTypeUnknown");
         }
         const request = await createDeathClaimUploadRequest(caseId, claim.claim.claimId, {
           fileName: file.name,
@@ -146,7 +147,7 @@ export function DeathClaimsPanel({
       setSelectedFiles([]);
       await fetchClaim();
     } catch (err: any) {
-      setError(err?.message ?? "ファイルのアップロードに失敗しました");
+      setError(err?.message ?? "deathClaims.errors.uploadFailed");
     } finally {
       setUploading(false);
     }
@@ -160,7 +161,7 @@ export function DeathClaimsPanel({
       await confirmDeathClaim(caseId, claim.claim.claimId);
       await fetchClaim();
     } catch (err: any) {
-      setError(err?.message ?? "同意に失敗しました");
+      setError(err?.message ?? "deathClaims.errors.confirmFailed");
     } finally {
       setConfirming(false);
     }
@@ -188,7 +189,7 @@ export function DeathClaimsPanel({
       await resubmitDeathClaim(caseId, claim.claim.claimId);
       await fetchClaim();
     } catch (err: any) {
-      setError(err?.message ?? "再提出に失敗しました");
+      setError(err?.message ?? "deathClaims.errors.resubmitFailed");
     } finally {
       setResubmitting(false);
     }
@@ -215,7 +216,7 @@ export function DeathClaimsPanel({
     try {
       const file = await downloadDeathClaimFile(caseId, claim.claim.claimId, fileId);
       if (!file.dataBase64) {
-        throw new Error("ファイルの取得に失敗しました");
+        throw new Error("deathClaims.errors.fileDownloadFailed");
       }
       const bytes = decodeBase64ToBytes(file.dataBase64);
       const blob = new Blob([bytes], {
@@ -225,7 +226,7 @@ export function DeathClaimsPanel({
       window.open(url, "_blank", "noopener,noreferrer");
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
-      setError(err?.message ?? "ファイルの取得に失敗しました");
+      setError(err?.message ?? "deathClaims.errors.fileDownloadFailed");
     } finally {
       setOpeningFileId(null);
     }
@@ -241,35 +242,41 @@ export function DeathClaimsPanel({
   const currentAction = (() => {
     if (!hasClaim) {
       return {
-        title: "現在のアクション",
-        description: "死亡診断書を提出してください。",
-        actionLabel: submitting ? "提出中..." : "死亡診断書を提出",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.submit.description"),
+        actionLabel: submitting
+          ? t("deathClaims.currentAction.submit.actioning")
+          : t("deathClaims.currentAction.submit.action"),
         onAction: handleSubmit,
         disabled: submitting
       };
     }
     if (isRejected) {
       return {
-        title: "現在のアクション",
-        description: "差し戻し内容を確認して再提出してください。",
-        actionLabel: resubmitting ? "再提出中..." : "再提出",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.resubmit.description"),
+        actionLabel: resubmitting
+          ? t("deathClaims.currentAction.resubmit.actioning")
+          : t("deathClaims.currentAction.resubmit.action"),
         onAction: openResubmitDialog,
         disabled: resubmitting
       };
     }
     if (canConfirm) {
       return {
-        title: "現在のアクション",
-        description: "運営承認済みです。死亡確定への同意を進めてください。",
-        actionLabel: confirming ? "同意中..." : "同意する",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.confirm.description"),
+        actionLabel: confirming
+          ? t("deathClaims.currentAction.confirm.actioning")
+          : t("deathClaims.currentAction.confirm.action"),
         onAction: openConfirmDialog,
         disabled: confirming
       };
     }
     if (isConfirmed) {
       return {
-        title: "現在のアクション",
-        description: "死亡確定済みです。",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.confirmed.description"),
         actionLabel: null,
         onAction: null,
         disabled: false
@@ -277,8 +284,8 @@ export function DeathClaimsPanel({
     }
     if (claim?.confirmedByMe) {
       return {
-        title: "現在のアクション",
-        description: "同意済みです。ほかの相続人の同意を待っています。",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.confirmedByMe.description"),
         actionLabel: null,
         onAction: null,
         disabled: false
@@ -286,16 +293,16 @@ export function DeathClaimsPanel({
     }
     if (canUploadFiles) {
       return {
-        title: "現在のアクション",
-        description: "運営確認中です。必要があればファイルを追加してください。",
+        title: t("deathClaims.currentAction.title"),
+        description: t("deathClaims.currentAction.uploading.description"),
         actionLabel: null,
         onAction: null,
         disabled: false
       };
     }
     return {
-      title: "現在のアクション",
-      description: "運営の確認を待っています。",
+      title: t("deathClaims.currentAction.title"),
+      description: t("deathClaims.currentAction.waiting.description"),
       actionLabel: null,
       onAction: null,
       disabled: false
@@ -303,7 +310,7 @@ export function DeathClaimsPanel({
   })();
   const renderFileUploadForm = (testId: string) => (
     <div className={styles.form} data-testid={testId}>
-      <FormField label="ファイルを追加">
+      <FormField label={t("deathClaims.upload.label")}>
         <Input
           type="file"
           multiple
@@ -316,17 +323,19 @@ export function DeathClaimsPanel({
       </FormField>
       <div className={styles.actions}>
         <Button type="button" onClick={handleUpload} disabled={uploading}>
-          {uploading ? "アップロード中..." : "アップロード"}
+          {uploading
+            ? t("deathClaims.upload.actioning")
+            : t("deathClaims.upload.action")}
         </Button>
       </div>
     </div>
   );
 
   const stepItems = [
-    { id: "submit", label: "提出・ファイル追加" },
-    { id: "review", label: "運営確認" },
-    { id: "consent", label: "相続人同意" },
-    { id: "confirmed", label: "確定" }
+    { id: "submit", label: t("deathClaims.steps.submit") },
+    { id: "review", label: t("deathClaims.steps.review") },
+    { id: "consent", label: t("deathClaims.steps.consent") },
+    { id: "confirmed", label: t("deathClaims.steps.confirmed") }
   ];
   const activeStepIndex = (() => {
     if (!claim?.claim) return 0;
@@ -339,7 +348,7 @@ export function DeathClaimsPanel({
 
   return (
     <>
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <div className={styles.panel}>
         <div className={styles.actionSummary}>
@@ -359,7 +368,7 @@ export function DeathClaimsPanel({
           {canUploadFiles ? renderFileUploadForm("death-claims-action-upload") : null}
         </div>
         <div className={`${styles.panelHeader} ${styles.panelHeaderSpaced}`}>
-          <h2 className={styles.panelTitle}>申請ステータス</h2>
+          <h2 className={styles.panelTitle}>{t("deathClaims.panel.status")}</h2>
           {hasClaim ? (
             <span className={styles.statusBadge}>
               {statusLabels[claim?.claim?.status ?? ""] ?? claim?.claim?.status}
@@ -384,47 +393,52 @@ export function DeathClaimsPanel({
           })}
         </div>
         {loading ? (
-          <div className={styles.muted}>読み込み中...</div>
+          <div className={styles.muted}>{t("deathClaims.loading")}</div>
         ) : !hasClaim ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyTitle}>まだ死亡診断書が提出されていません</div>
-            <div className={styles.emptyBody}>
-              提出後、運営承認と相続人同意で死亡確定となります。
-            </div>
+            <div className={styles.emptyTitle}>{t("deathClaims.empty.noClaim.title")}</div>
+            <div className={styles.emptyBody}>{t("deathClaims.empty.noClaim.body")}</div>
             <div className={styles.actions}>
               <Button type="button" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? "提出中..." : "死亡診断書を提出"}
+                {submitting
+                  ? t("deathClaims.empty.noClaim.actioning")
+                  : t("deathClaims.empty.noClaim.action")}
               </Button>
             </div>
           </div>
         ) : (
           <div className={styles.statusBody}>
             <div className={styles.statusRow}>
-              <span className={styles.statusLabel}>同意状況</span>
+              <span className={styles.statusLabel}>{t("deathClaims.consent.label")}</span>
               <span className={styles.statusValue}>
                 {claim?.confirmationsCount ?? 0}/{claim?.requiredCount ?? 0}
               </span>
             </div>
             {isConfirmed ? (
-              <div className={styles.muted}>死亡確定済みです。</div>
+              <div className={styles.muted}>{t("deathClaims.consent.confirmed")}</div>
             ) : claim?.confirmedByMe ? (
-              <div className={styles.muted}>あなたは同意済みです。</div>
+              <div className={styles.muted}>{t("deathClaims.consent.confirmedByMe")}</div>
             ) : canConfirm ? (
               <Button type="button" onClick={openConfirmDialog} disabled={confirming}>
-                {confirming ? "同意中..." : "同意する"}
+                {confirming
+                  ? t("deathClaims.currentAction.confirm.actioning")
+                  : t("deathClaims.currentAction.confirm.action")}
               </Button>
             ) : isRejected ? (
               <div className={styles.rejected}>
-                <div className={styles.rejectedTitle}>差し戻し</div>
+                <div className={styles.rejectedTitle}>{t("deathClaims.rejected.title")}</div>
                 <div className={styles.rejectedBody}>
-                  {claim?.claim?.adminReview?.note ?? "運営から差し戻しされました。"}
+                  {claim?.claim?.adminReview?.note ??
+                    t("deathClaims.rejected.noteFallback")}
                 </div>
                 <Button type="button" onClick={openResubmitDialog} disabled={resubmitting}>
-                  {resubmitting ? "再提出中..." : "再提出"}
+                  {resubmitting
+                    ? t("deathClaims.currentAction.resubmit.actioning")
+                    : t("deathClaims.currentAction.resubmit.action")}
                 </Button>
               </div>
             ) : (
-              <div className={styles.muted}>運営の承認後に同意できます。</div>
+              <div className={styles.muted}>{t("deathClaims.consent.awaitingApproval")}</div>
             )}
           </div>
         )}
@@ -433,8 +447,8 @@ export function DeathClaimsPanel({
       {hasClaim ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>提出ファイル</h2>
-            <span className={styles.note}>PDF/JPG/PNG（10MBまで、100件目安）</span>
+            <h2 className={styles.panelTitle}>{t("deathClaims.panel.files")}</h2>
+            <span className={styles.note}>{t("deathClaims.files.note")}</span>
           </div>
           {claim?.files?.length ? (
             <div className={styles.fileList}>
@@ -443,7 +457,7 @@ export function DeathClaimsPanel({
                   <div>
                     <div className={styles.fileName}>{file.fileName}</div>
                     <div className={styles.fileMeta}>
-                      {file.contentType} ・ {formatBytes(file.size)}
+                      {file.contentType} / {formatBytes(file.size)}
                     </div>
                   </div>
                   {file.fileId ? (
@@ -456,11 +470,15 @@ export function DeathClaimsPanel({
                         disabled={openingFileId === file.fileId}
                         data-testid={`death-claims-file-open-${file.fileId}`}
                         aria-label={
-                          openingFileId === file.fileId ? "ファイルを取得中" : "ファイルを開く"
+                          openingFileId === file.fileId
+                            ? t("deathClaims.files.openingAria")
+                            : t("deathClaims.files.openAria")
                         }
                       >
                         <FileOpenIcon />
-                        {openingFileId === file.fileId ? "取得中..." : "開く"}
+                        {openingFileId === file.fileId
+                          ? t("deathClaims.files.opening")
+                          : t("deathClaims.files.open")}
                       </Button>
                     </div>
                   ) : null}
@@ -468,13 +486,13 @@ export function DeathClaimsPanel({
               ))}
             </div>
           ) : (
-            <div className={styles.muted}>提出済みのファイルはありません。</div>
+            <div className={styles.muted}>{t("deathClaims.empty.noFiles")}</div>
           )}
 
           {canUploadFiles ? (
             renderFileUploadForm("death-claims-files-upload")
           ) : (
-            <div className={styles.muted}>運営承認後はファイルを追加できません。</div>
+            <div className={styles.muted}>{t("deathClaims.upload.disabled")}</div>
           )}
         </div>
       ) : null}
@@ -486,10 +504,8 @@ export function DeathClaimsPanel({
           onClick={() => handleConfirmDialogChange(false)}
         >
           <div className={styles.modalCard} onClick={(event) => event.stopPropagation()}>
-            <div className={styles.modalTitle}>同意の確認</div>
-            <div className={styles.modalMessage}>
-              この同意は死亡確定への同意です。相続の実行はこの操作では行われません。
-            </div>
+            <div className={styles.modalTitle}>{t("deathClaims.modal.confirm.title")}</div>
+            <div className={styles.modalMessage}>{t("deathClaims.modal.confirm.message")}</div>
             <div className={styles.modalActions}>
               <Button
                 type="button"
@@ -497,10 +513,12 @@ export function DeathClaimsPanel({
                 onClick={() => handleConfirmDialogChange(false)}
                 disabled={confirming}
               >
-                キャンセル
+                {t("deathClaims.modal.confirm.cancel")}
               </Button>
               <Button type="button" onClick={handleConfirmDialogConfirm} disabled={confirming}>
-                {confirming ? "同意中..." : "同意する"}
+                {confirming
+                  ? t("deathClaims.modal.confirm.confirming")
+                  : t("deathClaims.modal.confirm.confirm")}
               </Button>
             </div>
           </div>
@@ -514,10 +532,8 @@ export function DeathClaimsPanel({
           onClick={() => handleResubmitDialogChange(false)}
         >
           <div className={styles.modalCard} onClick={(event) => event.stopPropagation()}>
-            <div className={styles.modalTitle}>再提出の確認</div>
-            <div className={styles.modalMessage}>
-              差し戻し内容を確認した上で、死亡診断書を再提出しますか？
-            </div>
+            <div className={styles.modalTitle}>{t("deathClaims.modal.resubmit.title")}</div>
+            <div className={styles.modalMessage}>{t("deathClaims.modal.resubmit.message")}</div>
             <div className={styles.modalActions}>
               <Button
                 type="button"
@@ -525,10 +541,12 @@ export function DeathClaimsPanel({
                 onClick={() => handleResubmitDialogChange(false)}
                 disabled={resubmitting}
               >
-                キャンセル
+                {t("deathClaims.modal.resubmit.cancel")}
               </Button>
               <Button type="button" onClick={handleConfirmResubmit} disabled={resubmitting}>
-                {resubmitting ? "再提出中..." : "再提出する"}
+                {resubmitting
+                  ? t("deathClaims.modal.resubmit.confirming")
+                  : t("deathClaims.modal.resubmit.confirm")}
               </Button>
             </div>
           </div>
@@ -540,24 +558,25 @@ export function DeathClaimsPanel({
 
 export default function DeathClaimsPage(props: DeathClaimsPanelProps) {
   const { caseId } = useParams();
+  const { t } = useTranslation();
 
   return (
     <section className={styles.page}>
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            { label: "死亡診断書" }
+            { label: t("deathClaims.breadcrumb.cases"), href: "/cases" },
+            { label: t("deathClaims.breadcrumb.deathClaim") }
           ]}
         />
         <div className={styles.headerRow}>
           <div>
-            <h1 className="text-title">死亡診断書</h1>
-            <p className={styles.lead}>提出書類の管理と相続人同意を行います。</p>
+            <h1 className="text-title">{t("deathClaims.title")}</h1>
+            <p className={styles.lead}>{t("deathClaims.lead")}</p>
           </div>
           {caseId ? (
             <Button asChild variant="secondary" size="sm">
-              <Link to={`/cases/${caseId}`}>ケース詳細へ戻る</Link>
+              <Link to={`/cases/${caseId}`}>{t("deathClaims.backToCase")}</Link>
             </Button>
           ) : null}
         </div>

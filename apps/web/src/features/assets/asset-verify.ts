@@ -43,13 +43,13 @@ export const autoVerifyAssetOwnership = async (
   const assetAddress = input.assetAddress.trim();
   const secret = input.secret.trim();
   if (!caseId || !assetId) {
-    throw new Error("ケース情報が取得できません");
+    throw new Error("assets.detail.verify.errorCaseMissing");
   }
   if (!assetAddress) {
-    throw new Error("アドレスが取得できません");
+    throw new Error("assets.detail.verify.errorAddressMissing");
   }
   if (!secret) {
-    throw new Error("シークレットを入力してください");
+    throw new Error("assets.detail.verify.errorSecretRequired");
   }
 
   const challenge =

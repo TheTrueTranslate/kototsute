@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -39,37 +40,7 @@ import {
 import { normalizeNumberInput } from "../../features/shared/lib/xrp-amount";
 import styles from "../../styles/assetDetailPage.module.css";
 
-const verificationLabels: Record<AssetDetail["verificationStatus"], string> = {
-  UNVERIFIED: "未検証",
-  PENDING: "検証中",
-  VERIFIED: "検証済み"
-};
-
 type TabKey = "overview" | "history";
-
-const tabItems = [
-  { key: "overview", label: "概要" },
-  { key: "history", label: "履歴" }
-];
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return "-";
-  }
-};
-
-const historyTypeLabels: Record<string, string> = {
-  ASSET_CREATED: "登録",
-  ASSET_DELETED: "削除",
-  ASSET_RESERVE_UPDATED: "留保",
-  ASSET_VERIFY_REQUESTED: "検証開始",
-  ASSET_VERIFY_CONFIRMED: "検証完了",
-  ASSET_SYNCED: "同期",
-  SYNC_LOG: "同期ログ"
-};
 
 const toNumber = (value: string | number | null | undefined) => {
   const numeric = Number(value ?? 0);
@@ -101,6 +72,7 @@ export default function AssetDetailPage({
 }: AssetDetailPageProps = {}) {
   const { caseId, assetId } = useParams();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const [asset, setAsset] = useState<AssetDetail | null>(initialAsset ?? null);
   const [loading, setLoading] = useState(!initialAsset);
   const [error, setError] = useState<string | null>(null);
@@ -136,10 +108,44 @@ export default function AssetDetailPage({
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [reserveSuccess, setReserveSuccess] = useState<string | null>(null);
 
-  const title = useMemo(() => asset?.label ?? "資産詳細", [asset?.label]);
+  const verificationLabels: Record<AssetDetail["verificationStatus"], string> = {
+    UNVERIFIED: t("assets.detail.status.unverified"),
+    PENDING: t("assets.detail.status.pending"),
+    VERIFIED: t("assets.detail.status.verified")
+  };
+
+  const tabItems = [
+    { key: "overview", label: t("assets.detail.tabs.overview") },
+    { key: "history", label: t("assets.detail.tabs.history") }
+  ];
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "-";
+    try {
+      return new Date(value).toLocaleString(i18n.language);
+    } catch {
+      return "-";
+    }
+  };
+
+  const historyTypeLabels: Record<string, string> = {
+    ASSET_CREATED: t("assets.detail.history.types.created"),
+    ASSET_DELETED: t("assets.detail.history.types.deleted"),
+    ASSET_RESERVE_UPDATED: t("assets.detail.history.types.reserve"),
+    ASSET_VERIFY_REQUESTED: t("assets.detail.history.types.verifyRequested"),
+    ASSET_VERIFY_CONFIRMED: t("assets.detail.history.types.verifyConfirmed"),
+    ASSET_SYNCED: t("assets.detail.history.types.synced"),
+    SYNC_LOG: t("assets.detail.history.types.syncLog")
+  };
+
+  const title = useMemo(() => asset?.label ?? t("assets.detail.title"), [asset?.label, t]);
   const isLocked = caseData?.assetLockStatus === "LOCKED";
   const memoValue = asset?.verificationChallenge ?? challenge?.challenge ?? "";
-  const memoDisplay = memoValue || (verifyChallengeLoading ? "発行中..." : "未発行");
+  const memoDisplay =
+    memoValue ||
+    (verifyChallengeLoading
+      ? t("assets.detail.verify.memoIssuing")
+      : t("assets.detail.verify.memoEmpty"));
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -203,7 +209,7 @@ export default function AssetDetailPage({
       const data = await getAssetHistory(caseId, assetId);
       setHistoryItems(data);
     } catch (err: any) {
-      setHistoryError(err?.message ?? "履歴の取得に失敗しました");
+      setHistoryError(err?.message ?? "assets.detail.error.historyFailed");
     } finally {
       setHistoryLoading(false);
     }
@@ -212,7 +218,7 @@ export default function AssetDetailPage({
   useEffect(() => {
     const run = async () => {
       if (!caseId || !assetId) {
-        setError("資産IDが取得できません");
+        setError("assets.detail.error.assetIdMissing");
         setLoading(false);
         return;
       }
@@ -221,7 +227,7 @@ export default function AssetDetailPage({
       try {
         await loadAsset();
       } catch (err: any) {
-        setError(err?.message ?? "資産の取得に失敗しました");
+        setError(err?.message ?? "assets.detail.error.fetchFailed");
       } finally {
         setLoading(false);
       }
@@ -257,7 +263,7 @@ export default function AssetDetailPage({
         await loadHistory();
       }
     } catch (err: any) {
-      setError(err?.message ?? "XRPL情報の取得に失敗しました");
+      setError(err?.message ?? "assets.detail.error.xrplFailed");
     } finally {
       setSyncing(false);
     }
@@ -282,7 +288,7 @@ export default function AssetDetailPage({
           : prev
       );
     } catch (err: any) {
-      setVerifyError(err?.message ?? "検証コードの取得に失敗しました");
+      setVerifyError(err?.message ?? "assets.detail.verify.challengeError");
     } finally {
       setVerifyChallengeLoading(false);
     }
@@ -335,7 +341,7 @@ export default function AssetDetailPage({
         reserveXrp: normalizedXrp,
         reserveTokens
       });
-      setReserveSuccess("留保設定を保存しました");
+      setReserveSuccess("assets.detail.reserve.success");
       setAsset((prev) =>
         prev
           ? {
@@ -349,7 +355,7 @@ export default function AssetDetailPage({
         await loadHistory();
       }
     } catch (err: any) {
-      setReserveError(err?.message ?? "留保設定の更新に失敗しました");
+      setReserveError(err?.message ?? "assets.detail.reserve.error");
     } finally {
       setReserveSaving(false);
     }
@@ -389,13 +395,13 @@ export default function AssetDetailPage({
       );
       setChallenge(result.challenge);
       setVerifySecret("");
-      setVerifySuccess("検証が完了しました");
+      setVerifySuccess("assets.detail.verify.success");
       await loadAsset();
       if (tab === "history") {
         await loadHistory();
       }
     } catch (err: any) {
-      setVerifyError(err?.message ?? "自動検証に失敗しました");
+      setVerifyError(err?.message ?? "assets.detail.verify.error");
     } finally {
       setVerifySending(false);
     }
@@ -413,9 +419,9 @@ export default function AssetDetailPage({
       const apiData = err?.data;
       if (err?.status === 409 && apiData?.data?.relatedPlans) {
         setRelatedPlans(apiData.data.relatedPlans as RelatedPlan[]);
-        setDeleteError(apiData?.message ?? "指図に紐づいているため削除できません");
+        setDeleteError(apiData?.message ?? "assets.detail.delete.relatedError");
       } else {
-        setDeleteError(err?.message ?? "削除に失敗しました");
+        setDeleteError(err?.message ?? "assets.detail.delete.error");
       }
     } finally {
       setDeleting(false);
@@ -427,9 +433,11 @@ export default function AssetDetailPage({
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "資産詳細" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("assets.detail.breadcrumb") }
           ]}
         />
         <div className={styles.headerRow}>
@@ -440,13 +448,13 @@ export default function AssetDetailPage({
           <div className={styles.headerActions}>
             <Button size="sm" variant="ghost" onClick={handleSync} disabled={syncing || isLocked}>
               <RefreshCw />
-              {syncing ? "同期中..." : "最新の情報を同期"}
+              {syncing ? t("assets.detail.actions.syncing") : t("assets.detail.actions.sync")}
             </Button>
           </div>
         </div>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       {loading ? null : asset ? (
         <>
@@ -461,19 +469,19 @@ export default function AssetDetailPage({
             <div className={styles.contentGrid}>
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>基本情報</h2>
+                  <h2 className={styles.cardTitle}>{t("assets.detail.overview.title")}</h2>
                 </div>
                 <div className={styles.metaGrid}>
                   <div>
-                    <div className={styles.metaLabel}>登録日</div>
+                    <div className={styles.metaLabel}>{t("assets.detail.overview.createdAt")}</div>
                     <div className={styles.metaValue}>{formatDate(asset.createdAt)}</div>
                   </div>
                   <div>
-                    <div className={styles.metaLabel}>更新日</div>
+                    <div className={styles.metaLabel}>{t("assets.detail.overview.updatedAt")}</div>
                     <div className={styles.metaValue}>{formatDate(asset.updatedAt)}</div>
                   </div>
                   <div>
-                    <div className={styles.metaLabel}>ステータス</div>
+                    <div className={styles.metaLabel}>{t("assets.detail.overview.status")}</div>
                     <div className={styles.metaValue}>
                       <div className={styles.statusRow}>
                         <span className={styles.statusBadge}>
@@ -486,7 +494,7 @@ export default function AssetDetailPage({
                             onClick={() => setVerifyOpen(true)}
                             disabled={isLocked}
                           >
-                            所有権を検証
+                            {t("assets.detail.actions.verifyOwnership")}
                           </Button>
                         ) : null}
                       </div>
@@ -497,20 +505,22 @@ export default function AssetDetailPage({
 
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>ウォレット情報</h2>
+                  <h2 className={styles.cardTitle}>{t("assets.detail.wallet.title")}</h2>
                   <span className={styles.metaHint}>
-                    最終同期: {formatDate(asset.xrpl?.syncedAt)}
+                    {t("assets.detail.wallet.lastSynced", {
+                      date: formatDate(asset.xrpl?.syncedAt)
+                    })}
                   </span>
                 </div>
                 {asset.xrpl ? (
                   asset.xrpl.status === "ok" ? (
                     <div className={styles.xrplGrid}>
                       <div>
-                        <div className={styles.metaLabel}>残高 (XRP)</div>
+                        <div className={styles.metaLabel}>{t("assets.detail.wallet.balance")}</div>
                         <div className={styles.metaValue}>{asset.xrpl.balanceXrp}</div>
                       </div>
                       <div>
-                        <div className={styles.metaLabel}>Ledger</div>
+                        <div className={styles.metaLabel}>{t("assets.detail.wallet.ledger")}</div>
                         <div className={styles.metaValue}>{asset.xrpl.ledgerIndex ?? "-"}</div>
                       </div>
                       {asset.xrpl.tokens?.length ? (
@@ -523,38 +533,44 @@ export default function AssetDetailPage({
                               <div className={styles.tokenInfo}>
                                 <div className={styles.tokenName}>{token.currency}</div>
                                 <div className={styles.tokenIssuer}>
-                                  {token.issuer ?? "native"}
+                                  {token.issuer ?? t("assets.detail.token.native")}
                                 </div>
                               </div>
                               <div className={styles.tokenBalance}>
-                                <span className={styles.tokenBalanceLabel}>残高</span>
+                                <span className={styles.tokenBalanceLabel}>
+                                  {t("assets.detail.wallet.tokenBalance")}
+                                </span>
                                 <span>{formatAmount(toNumber(token.balance))}</span>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className={styles.emptyText}>トークンはありません。</div>
+                        <div className={styles.emptyText}>
+                          {t("assets.detail.wallet.emptyTokens")}
+                        </div>
                       )}
                     </div>
                   ) : (
                     <FormAlert variant="error">{asset.xrpl.message}</FormAlert>
                   )
                 ) : (
-                  <div className={styles.emptyText}>まだウォレット情報を取得していません。</div>
+                  <div className={styles.emptyText}>{t("assets.detail.wallet.empty")}</div>
                 )}
               </div>
 
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>相続予定数・留保設定</h2>
+                  <h2 className={styles.cardTitle}>{t("assets.detail.reserve.title")}</h2>
                   <span className={styles.metaHint}>
-                    相続予定数は留保数量を差し引いて表示します
+                    {t("assets.detail.reserve.hint")}
                   </span>
                 </div>
                 <div className={styles.combinedGrid}>
                   <div className={styles.combinedSection}>
-                    <h3 className={styles.sectionTitle}>相続予定数</h3>
+                    <h3 className={styles.sectionTitle}>
+                      {t("assets.detail.reserve.inheritanceTitle")}
+                    </h3>
                     {asset.xrpl ? (
                       asset.xrpl.status === "ok" ? (
                         <div className={styles.inheritanceGrid}>
@@ -566,13 +582,20 @@ export default function AssetDetailPage({
                                 : `${formatAmount(inheritanceXrp)} XRP`}
                             </div>
                             <div className={styles.inheritanceMeta}>
-                              残高 {asset.xrpl.balanceXrp} XRP / 留保 {reserveXrpInput} XRP
+                              {t("assets.detail.reserve.balanceMeta", {
+                                balance: asset.xrpl.balanceXrp,
+                                reserve: reserveXrpInput
+                              })}
                             </div>
                           </div>
                           <div className={styles.inheritanceTokenBlock}>
-                            <div className={styles.metaLabel}>トークン</div>
+                            <div className={styles.metaLabel}>
+                              {t("assets.detail.reserve.tokensLabel")}
+                            </div>
                             {inheritanceTokens.length === 0 ? (
-                              <div className={styles.emptyText}>トークンはありません。</div>
+                              <div className={styles.emptyText}>
+                                {t("assets.detail.wallet.emptyTokens")}
+                              </div>
                             ) : (
                               <div className={styles.tokenList}>
                                 {inheritanceTokens.map((token) => (
@@ -583,15 +606,19 @@ export default function AssetDetailPage({
                                     <div className={styles.tokenInfo}>
                                       <div className={styles.tokenName}>{token.currency}</div>
                                       <div className={styles.tokenIssuer}>
-                                        {token.issuer ?? "native"}
+                                        {token.issuer ?? t("assets.detail.token.native")}
                                       </div>
                                       <div className={styles.tokenMeta}>
-                                        残高 {formatAmount(token.balance)} / 留保{" "}
-                                        {formatAmount(token.reserve)}
+                                        {t("assets.detail.reserve.tokenMeta", {
+                                          balance: formatAmount(token.balance),
+                                          reserve: formatAmount(token.reserve)
+                                        })}
                                       </div>
                                     </div>
                                     <div className={styles.tokenBalance}>
-                                      <span className={styles.tokenBalanceLabel}>相続予定</span>
+                                      <span className={styles.tokenBalanceLabel}>
+                                        {t("assets.detail.reserve.plannedLabel")}
+                                      </span>
                                       <span>{formatAmount(token.planned)}</span>
                                     </div>
                                   </div>
@@ -605,18 +632,22 @@ export default function AssetDetailPage({
                       )
                     ) : (
                       <div className={styles.emptyText}>
-                        ウォレット情報を同期すると表示されます。
+                        {t("assets.detail.reserve.syncHint")}
                       </div>
                     )}
                   </div>
                   <div className={`${styles.combinedSection} ${styles.combinedSectionAlt}`}>
-                    <h3 className={styles.sectionTitle}>留保設定</h3>
-                    {reserveError ? <FormAlert variant="error">{reserveError}</FormAlert> : null}
+                    <h3 className={styles.sectionTitle}>
+                      {t("assets.detail.reserve.settingsTitle")}
+                    </h3>
+                    {reserveError ? (
+                      <FormAlert variant="error">{t(reserveError)}</FormAlert>
+                    ) : null}
                     {reserveSuccess ? (
-                      <FormAlert variant="success">{reserveSuccess}</FormAlert>
+                      <FormAlert variant="success">{t(reserveSuccess)}</FormAlert>
                     ) : null}
                     <div className={styles.reserveGrid}>
-                      <FormField label="XRP 留保数量 (XRP)">
+                      <FormField label={t("assets.detail.reserve.xrpLabel")}>
                         <Input
                           value={reserveXrpInput}
                           onChange={(event) =>
@@ -627,10 +658,12 @@ export default function AssetDetailPage({
                         />
                       </FormField>
                       <div className={styles.reserveTokenBlock}>
-                        <div className={styles.metaLabel}>トークン留保</div>
+                        <div className={styles.metaLabel}>
+                          {t("assets.detail.reserve.tokenLabel")}
+                        </div>
                         {availableTokens.length === 0 ? (
                           <div className={styles.emptyText}>
-                            XRPL同期後に一覧から選択できます。
+                            {t("assets.detail.reserve.tokenHint")}
                           </div>
                         ) : (
                           <div className={styles.reserveTokenList}>
@@ -655,7 +688,7 @@ export default function AssetDetailPage({
                                       {token.currency}
                                     </span>
                                     <span className={styles.reserveTokenIssuer}>
-                                      {token.issuer ?? "native"}
+                                      {token.issuer ?? t("assets.detail.token.native")}
                                     </span>
                                   </label>
                                   {selected ? (
@@ -681,7 +714,9 @@ export default function AssetDetailPage({
                           onClick={handleSaveReserve}
                           disabled={reserveSaving || isLocked}
                         >
-                          {reserveSaving ? "保存中..." : "留保設定を保存"}
+                          {reserveSaving
+                            ? t("assets.detail.reserve.saving")
+                            : t("assets.detail.reserve.save")}
                         </Button>
                       </div>
                     </div>
@@ -692,13 +727,17 @@ export default function AssetDetailPage({
               <Dialog open={verifyOpen} onOpenChange={setVerifyOpen}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>XRPL検証</DialogTitle>
+                    <DialogTitle>{t("assets.detail.verify.title")}</DialogTitle>
                     <DialogDescription>
-                      シークレットで送金し、自動で検証します。
+                      {t("assets.detail.verify.description")}
                     </DialogDescription>
                   </DialogHeader>
-                  {verifyError ? <FormAlert variant="error">{verifyError}</FormAlert> : null}
-                  {verifySuccess ? <FormAlert variant="success">{verifySuccess}</FormAlert> : null}
+                  {verifyError ? (
+                    <FormAlert variant="error">{t(verifyError)}</FormAlert>
+                  ) : null}
+                  {verifySuccess ? (
+                    <FormAlert variant="success">{t(verifySuccess)}</FormAlert>
+                  ) : null}
 
                   <WalletVerifyPanel
                     destination={asset.verificationAddress}
@@ -712,7 +751,7 @@ export default function AssetDetailPage({
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button variant="ghost">閉じる</Button>
+                      <Button variant="ghost">{t("common.close")}</Button>
                     </DialogClose>
                   </DialogFooter>
                 </DialogContent>
@@ -724,14 +763,16 @@ export default function AssetDetailPage({
             <div className={styles.contentGrid}>
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>履歴</h2>
-                  <span className={styles.metaHint}>最新50件</span>
+                  <h2 className={styles.cardTitle}>{t("assets.detail.history.title")}</h2>
+                  <span className={styles.metaHint}>{t("assets.detail.history.hint")}</span>
                 </div>
-                {historyError ? <FormAlert variant="error">{historyError}</FormAlert> : null}
+                {historyError ? (
+                  <FormAlert variant="error">{t(historyError)}</FormAlert>
+                ) : null}
                 {historyLoading ? (
-                  <div className={styles.emptyText}>読み込み中...</div>
+                  <div className={styles.emptyText}>{t("common.loading")}</div>
                 ) : historyItems.length === 0 ? (
-                  <div className={styles.emptyText}>履歴はありません。</div>
+                  <div className={styles.emptyText}>{t("assets.detail.history.empty")}</div>
                 ) : (
                   <div className={styles.logList}>
                     {historyItems.map((item) => {
@@ -763,10 +804,12 @@ export default function AssetDetailPage({
                               <div className={styles.logSummary}>{item.title}</div>
                             </div>
                             <div className={styles.logMessage}>
-                              {item.detail ?? "詳細はありません。"}
+                              {item.detail ?? t("assets.detail.history.emptyDetail")}
                             </div>
                             {actorLabel ? (
-                              <div className={styles.logActor}>担当者: {actorLabel}</div>
+                              <div className={styles.logActor}>
+                                {t("assets.detail.history.actor", { name: actorLabel })}
+                              </div>
                             ) : null}
                           </div>
                           <div className={styles.logMeta}>{formatDate(item.createdAt)}</div>
@@ -785,14 +828,14 @@ export default function AssetDetailPage({
         {!isLocked ? (
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogTrigger asChild>
-              <Button variant="destructive">資産を削除</Button>
+              <Button variant="destructive">{t("assets.detail.actions.delete")}</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>資産を削除しますか？</DialogTitle>
-                <DialogDescription>関連する指図がある場合は削除できません。</DialogDescription>
+                <DialogTitle>{t("assets.detail.delete.title")}</DialogTitle>
+                <DialogDescription>{t("assets.detail.delete.description")}</DialogDescription>
               </DialogHeader>
-              {deleteError ? <FormAlert variant="error">{deleteError}</FormAlert> : null}
+              {deleteError ? <FormAlert variant="error">{t(deleteError)}</FormAlert> : null}
               {relatedPlans.length > 0 ? (
                 <div className={styles.relatedList}>
                   {relatedPlans.map((plan) => (
@@ -801,21 +844,23 @@ export default function AssetDetailPage({
                       to={`/cases/${caseId}/plans/${plan.planId}/edit`}
                       className={styles.relatedLink}
                     >
-                      {plan.title ?? "指図"}
+                      {plan.title ?? t("plans.detail.breadcrumb")}
                     </Link>
                   ))}
                 </div>
               ) : null}
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="ghost">キャンセル</Button>
+                  <Button variant="ghost">{t("common.cancel")}</Button>
                 </DialogClose>
                 <Button
                   variant="destructive"
                   onClick={handleDelete}
                   disabled={deleting || relatedPlans.length > 0}
                 >
-                  {deleting ? "削除中..." : "削除する"}
+                  {deleting
+                    ? t("assets.detail.actions.deleting")
+                    : t("assets.detail.actions.confirmDelete")}
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -348,7 +348,10 @@ describe("CaseDetailPage", () => {
     });
     expect(result).not.toBeNull();
     expect(result?.stepIndex).toBe(0);
-    expect(result?.title).toBe("運営承認済み");
+    expect(result?.titleKey).toBe("cases.detail.inheritance.steps.adminApproved.title");
+    expect(result?.descriptionKey).toBe(
+      "cases.detail.inheritance.steps.adminApproved.description"
+    );
   });
 
   it("renders next action banner in inheritance tab", async () => {
@@ -502,8 +505,8 @@ describe("CaseDetailPage", () => {
 
   it("formats signer from label as legacy wallet", async () => {
     const { resolveSignerFromLabel } = await import("./CaseDetailPage");
-    expect(resolveSignerFromLabel("山田")).toBe("送金元：被相続人の相続用ウォレット");
-    expect(resolveSignerFromLabel("")).toBe("送金元：被相続人の相続用ウォレット");
+    expect(resolveSignerFromLabel()).toBe("cases.detail.signer.fromLabel");
+    expect(resolveSignerFromLabel()).toBe("cases.detail.signer.fromLabel");
   });
 
   it("decides whether to poll approval status", async () => {
@@ -578,7 +581,10 @@ describe("CaseDetailPage", () => {
         skippedCount: 0,
         escalationCount: 0
       })
-    ).toBe("成功 2 / 5 件");
+    ).toEqual({
+      key: "cases.detail.distribution.progress",
+      values: { success: 2, total: 5 }
+    });
   });
 
   it("disables distribution when completed", async () => {
@@ -606,7 +612,7 @@ describe("CaseDetailPage", () => {
         escalationCount: 0
       }
     });
-    expect(reason).toBe("分配は完了しています。");
+    expect(reason).toEqual({ key: "cases.detail.distribution.disabled.completed" });
   });
 
   it("builds signer entry display list with roles", async () => {
@@ -620,9 +626,9 @@ describe("CaseDetailPage", () => {
       systemSignerAddress: "rSystem",
       heirWalletAddress: "rMe"
     });
-    expect(result[0].label).toBe("システム署名者");
-    expect(result[1].label).toBe("あなたの受取用ウォレット");
-    expect(result[2].label).toBe("相続人の受取用ウォレット");
+    expect(result[0].label).toBe("cases.detail.signer.labels.system");
+    expect(result[1].label).toBe("cases.detail.signer.labels.mine");
+    expect(result[2].label).toBe("cases.detail.signer.labels.heir");
   });
 
   it("shows wallet status badge in heirs tab", async () => {

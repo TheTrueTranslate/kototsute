@@ -2,6 +2,7 @@ import FormField from "./form-field";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import styles from "./wallet-verify-panel.module.css";
+import { useTranslation } from "react-i18next";
 
 type WalletVerifyPanelProps = {
   destination: string;
@@ -24,26 +25,27 @@ export const WalletVerifyPanel = ({
   submitDisabled,
   secretDisabled
 }: WalletVerifyPanelProps) => {
+  const { t } = useTranslation();
   return (
     <div className={styles.panel} data-testid="wallet-verify-panel">
       <div className={styles.block}>
         <div className={styles.row}>
           <div>
-            <div className={styles.label}>Destination（運営確認用ウォレット）</div>
+            <div className={styles.label}>{t("walletVerify.destination.label")}</div>
             <div className={styles.value}>{destination}</div>
           </div>
         </div>
-        <div className={styles.hint}>送金先はシステムの検証用アドレスです。</div>
+        <div className={styles.hint}>{t("walletVerify.destination.hint")}</div>
         <div className={styles.row}>
           <div>
-            <div className={styles.label}>Memo</div>
+            <div className={styles.label}>{t("walletVerify.memo.label")}</div>
             <div className={styles.value}>{memo}</div>
           </div>
         </div>
-        <div className={styles.hint}>1 drops (=0.000001 XRP) を送信します。</div>
+        <div className={styles.hint}>{t("walletVerify.memo.hint")}</div>
       </div>
 
-      <FormField label="シークレット">
+      <FormField label={t("walletVerify.secret.label")}>
         <Input
           type="password"
           value={secret}
@@ -52,10 +54,12 @@ export const WalletVerifyPanel = ({
           disabled={secretDisabled}
         />
       </FormField>
-      <div className={styles.hint}>シークレットは一時的に利用し、保存しません。</div>
+      <div className={styles.hint}>{t("walletVerify.secret.hint")}</div>
       <div className={styles.actions}>
         <Button size="sm" onClick={onSubmit} disabled={submitDisabled}>
-          {isSubmitting ? "自動検証中..." : "シークレットで自動検証"}
+          {isSubmitting
+            ? t("walletVerify.secret.submitting")
+            : t("walletVerify.secret.submit")}
         </Button>
       </div>
     </div>

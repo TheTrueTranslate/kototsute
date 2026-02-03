@@ -15,6 +15,7 @@ describe("assetCreateSchema", () => {
       address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.label.required");
   });
 
   it("rejects invalid address", () => {
@@ -23,6 +24,7 @@ describe("assetCreateSchema", () => {
       address: "invalid"
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.address.invalid");
   });
 });
 
@@ -33,6 +35,7 @@ describe("assetReserveSchema", () => {
       reserveTokens: []
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.numeric");
   });
 
   it("rejects duplicate tokens", () => {
@@ -44,5 +47,6 @@ describe("assetReserveSchema", () => {
       ]
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.token.duplicate");
   });
 });

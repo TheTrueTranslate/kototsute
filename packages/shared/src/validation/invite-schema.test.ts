@@ -16,6 +16,7 @@ describe("inviteCreateSchema", () => {
       relationLabel: "長男"
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.email.invalid");
   });
 
   it("requires relationOther when relationLabel is その他", () => {
@@ -24,6 +25,7 @@ describe("inviteCreateSchema", () => {
       relationLabel: "その他"
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.relationOther.required");
   });
 
   it("rejects memo over 400 chars", () => {
@@ -33,5 +35,6 @@ describe("inviteCreateSchema", () => {
       memo: "a".repeat(401)
     });
     expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.memo.max");
   });
 });

@@ -19,7 +19,7 @@ const missingKeys = Object.entries(firebaseConfig)
 
 if (missingKeys.length > 0) {
   throw new Error(
-    `Firebase 設定が不足しています: ${missingKeys.join(", ")}. .env を確認してください。`
+    `Missing Firebase config: ${missingKeys.join(", ")}. Check your .env.`
   );
 }
 

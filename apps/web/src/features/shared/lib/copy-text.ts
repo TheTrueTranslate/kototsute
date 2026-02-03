@@ -1,6 +1,7 @@
 export type CopyResult = {
   ok: boolean;
-  message: string;
+  messageKey: string;
+  values?: Record<string, string>;
 };
 
 type ClipboardLike = {
@@ -13,15 +14,15 @@ export const copyText = async (
   clipboard?: ClipboardLike
 ): Promise<CopyResult> => {
   if (!value) {
-    return { ok: false, message: "コピーできる値がありません" };
+    return { ok: false, messageKey: "common.copy.empty" };
   }
   try {
     const target = clipboard ?? (typeof navigator !== "undefined" ? navigator.clipboard : undefined);
     if (target?.writeText) {
       await target.writeText(value);
     }
-    return { ok: true, message: `${label}をコピーしました` };
+    return { ok: true, messageKey: "common.copy.success", values: { label } };
   } catch {
-    return { ok: false, message: "コピーに失敗しました" };
+    return { ok: false, messageKey: "common.copy.failed" };
   }
 };

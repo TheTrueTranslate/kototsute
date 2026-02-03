@@ -4,12 +4,12 @@ import { displayNameSchema } from "@kototsute/shared";
 const emailSchema = z
   .string()
   .trim()
-  .min(1, "メールアドレスを入力してください")
-  .email("正しいメールアドレスを入力してください");
+  .min(1, "validation.email.required")
+  .email("validation.email.invalid");
 
 const passwordSchema = z
   .string()
-  .min(8, "パスワードは8文字以上で入力してください");
+  .min(8, "validation.password.min");
 
 export const registerSchema = z
   .object({
@@ -19,7 +19,7 @@ export const registerSchema = z
     confirmPassword: z.string()
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "パスワードが一致しません",
+    message: "validation.password.mismatch",
     path: ["confirmPassword"]
   });
 

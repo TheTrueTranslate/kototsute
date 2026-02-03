@@ -5,7 +5,7 @@ describe("copyText", () => {
   it("returns empty message when value is missing", async () => {
     const result = await copyText("Memo", "");
     expect(result.ok).toBe(false);
-    expect(result.message).toBe("コピーできる値がありません");
+    expect(result.messageKey).toBe("common.copy.empty");
   });
 
   it("copies value and returns success message", async () => {
@@ -13,7 +13,8 @@ describe("copyText", () => {
     const result = await copyText("Memo", "abc", { writeText });
     expect(writeText).toHaveBeenCalledWith("abc");
     expect(result.ok).toBe(true);
-    expect(result.message).toBe("Memoをコピーしました");
+    expect(result.messageKey).toBe("common.copy.success");
+    expect(result.values).toEqual({ label: "Memo" });
   });
 
   it("returns failure message when clipboard throws", async () => {
@@ -22,6 +23,6 @@ describe("copyText", () => {
     });
     const result = await copyText("Memo", "abc", { writeText });
     expect(result.ok).toBe(false);
-    expect(result.message).toBe("コピーに失敗しました");
+    expect(result.messageKey).toBe("common.copy.failed");
   });
 });
