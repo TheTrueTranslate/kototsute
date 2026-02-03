@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { relationOptions } from "@kototsute/shared";
+import { relationOtherValue } from "@kototsute/shared";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -56,7 +56,6 @@ export default function PlanEditPage() {
   const [savingAllocationId, setSavingAllocationId] = useState<string | null>(null);
   const [heirModalOpen, setHeirModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
-  const relationOtherValue = relationOptions[relationOptions.length - 1];
 
   const statusLabels: Record<string, string> = {
     DRAFT: t("plans.status.draft"),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import { useAuth } from "../../features/auth/auth-provider";
 import { Button } from "../../features/shared/components/ui/button";
@@ -36,16 +37,10 @@ import { getPlan, listPlanAssets, listPlans, type PlanAsset, type PlanHeir, type
 import { Copy } from "lucide-react";
 import { copyText } from "../../features/shared/lib/copy-text";
 import { createPaymentTx, signSingle, submitSignedBlob } from "../../features/xrpl/xrpl-client";
+import { getRelationOptionKey, relationOtherValue } from "@kototsute/shared";
 import styles from "../../styles/assetLockPage.module.css";
 
 const XRPL_EXPLORER_BASE = "https://testnet.xrpl.org/accounts";
-
-const steps = [
-  { id: "prepare", title: "準備・注意" },
-  { id: "method", title: "方式選択" },
-  { id: "transfer", title: "送金実行/入力" },
-  { id: "verify", title: "送金検証" }
-];
 
 type AssetLockPageProps = {
   initialLock?: AssetLockState | null;
@@ -75,6 +70,13 @@ export default function AssetLockPage({
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const steps = [
+    { id: "prepare", title: t("assetLock.steps.prepare") },
+    { id: "method", title: t("assetLock.steps.method") },
+    { id: "transfer", title: t("assetLock.steps.transfer") },
+    { id: "verify", title: t("assetLock.steps.verify") }
+  ];
   const [stepIndex, setStepIndex] = useState(() =>
     resolveAssetLockStepIndex(initialLock?.uiStep, initialStep)
   );
@@ -126,23 +128,23 @@ export default function AssetLockPage({
   const methodSteps = [
     {
       id: "REGULAR_KEY_SET",
-      title: "RegularKeyを設定",
-      description: "被相続人の署名でRegularKeyを付与します。"
+      title: t("assetLock.methodSteps.regularKeySet.title"),
+      description: t("assetLock.methodSteps.regularKeySet.description")
     },
     {
       id: "AUTO_TRANSFER",
-      title: "自動送金を実行",
-      description: "サーバーが分配用Walletへ送金します。"
+      title: t("assetLock.methodSteps.autoTransfer.title"),
+      description: t("assetLock.methodSteps.autoTransfer.description")
     },
     {
       id: "TRANSFER_DONE",
-      title: "送金完了を確認",
-      description: "送金結果をチェックして反映します。"
+      title: t("assetLock.methodSteps.transferDone.title"),
+      description: t("assetLock.methodSteps.transferDone.description")
     },
     {
       id: "REGULAR_KEY_CLEARED",
-      title: "RegularKeyを解除",
-      description: "安全のためRegularKeyを解除します。"
+      title: t("assetLock.methodSteps.regularKeyCleared.title"),
+      description: t("assetLock.methodSteps.regularKeyCleared.description")
     }
   ] as const;
 
@@ -160,7 +162,7 @@ export default function AssetLockPage({
 
   const resolveAssetAddress = (assetId: string) => assetAddressMap.get(assetId) ?? "";
 
-  const stepLabel = useMemo(() => `${stepIndex + 1} / ${steps.length}`, [stepIndex]);
+  const stepLabel = `${stepIndex + 1} / ${steps.length}`;
   const regularKeyStatuses = lockState?.regularKeyStatuses ?? [];
   const hideBackButton =
     lockState?.method === "B" &&
@@ -179,11 +181,11 @@ export default function AssetLockPage({
     activePlans.every((plan) => planHeirsById[plan.planId] !== undefined);
   const planValidationError = useMemo(() => {
     if (!isPlanDataReady) return null;
-    if (activePlans.length === 0) return "相続対象の指図がありません";
+    if (activePlans.length === 0) return "assetLock.validation.noPlans";
     const hasMissingHeirs = activePlans.some(
       (plan) => (planHeirsById[plan.planId]?.length ?? 0) === 0
     );
-    if (hasMissingHeirs) return "相続人が未設定の指図があります";
+    if (hasMissingHeirs) return "assetLock.validation.missingHeirs";
     return null;
   }, [activePlans, isPlanDataReady, planHeirsById]);
 
@@ -198,7 +200,7 @@ export default function AssetLockPage({
   const formatBalanceError = (message: string | null) => {
     if (!message) return null;
     if (/account not found/i.test(message)) {
-      return "反映待ち（口座の反映に時間がかかっています）";
+      return t("assetLock.validation.pendingSync");
     }
     return message;
   };
@@ -218,22 +220,22 @@ export default function AssetLockPage({
     if (!transferDialogItem) return;
     const destination = lockState?.wallet?.address ?? "";
     if (!destination) {
-      setTransferSendError("送金先が取得できません");
+      setTransferSendError("assetLock.transfer.errors.destinationMissing");
       return;
     }
     const from = transferFromAddress.trim();
     if (!from) {
-      setTransferSendError("送金元アドレスを入力してください");
+      setTransferSendError("assetLock.transfer.errors.fromMissing");
       return;
     }
     const secret = transferSecret.trim();
     if (!secret) {
-      setTransferSendError("シークレットを入力してください");
+      setTransferSendError("assetLock.transfer.errors.secretMissing");
       return;
     }
     const token = transferDialogItem.token;
     if (token && !token.issuer) {
-      setTransferSendError("トークン発行者が取得できません");
+      setTransferSendError("assetLock.transfer.errors.issuerMissing");
       return;
     }
     const amount = token
@@ -255,10 +257,10 @@ export default function AssetLockPage({
         ...prev,
         [transferDialogItem.itemId]: result.txHash
       }));
-      setTransferSendSuccess("送金を実行しました。TXハッシュを入力しました。");
+      setTransferSendSuccess("assetLock.transfer.success.sent");
       setTransferSecret("");
     } catch (err: any) {
-      setTransferSendError(err?.message ?? "送金に失敗しました");
+      setTransferSendError(err?.message ?? "assetLock.transfer.errors.sendFailed");
     } finally {
       setTransferSending(false);
     }
@@ -272,7 +274,7 @@ export default function AssetLockPage({
       const data = await getAssetLockBalances(caseId);
       setBalances(data);
     } catch (err: any) {
-      setBalanceError(err?.message ?? "残高の取得に失敗しました");
+      setBalanceError(err?.message ?? "assetLock.error.balanceFetch");
     } finally {
       setBalanceLoading(false);
     }
@@ -284,7 +286,7 @@ export default function AssetLockPage({
     setError(null);
     getAssetLock(caseId)
       .then((data) => setLockState(data))
-      .catch((err: any) => setError(err?.message ?? "資産ロック情報の取得に失敗しました"))
+      .catch((err: any) => setError(err?.message ?? "assetLock.error.lockFetch"))
       .finally(() => setLoading(false));
   }, [caseId, initialLock]);
 
@@ -345,7 +347,7 @@ export default function AssetLockPage({
       })
       .catch((err: any) => {
         if (!active) return;
-        setPlanError(err?.message ?? "指図の取得に失敗しました");
+        setPlanError(err?.message ?? "assetLock.error.planFetch");
       })
       .finally(() => {
         if (!active) return;
@@ -383,7 +385,7 @@ export default function AssetLockPage({
     )
       .catch((err: any) => {
         if (!active) return;
-        setPlanError(err?.message ?? "指図の取得に失敗しました");
+        setPlanError(err?.message ?? "assetLock.error.planFetch");
       })
       .finally(() => {
         if (!active) return;
@@ -415,10 +417,14 @@ export default function AssetLockPage({
   }, [caseData, user?.uid, initialIsOwner]);
 
   const renderHeirLabel = (heir?: PlanHeir | null, isUnallocated?: boolean) => {
-    if (isUnallocated) return "未割当";
-    if (!heir) return "相続人";
-    if (heir.relationLabel === "その他") return heir.relationOther ?? "その他";
-    return heir.relationLabel || heir.email || "相続人";
+    if (isUnallocated) return t("assetLock.heir.unassigned");
+    if (!heir) return t("assetLock.heir.defaultLabel");
+    if (heir.relationLabel === relationOtherValue) {
+      return heir.relationOther?.trim() ? heir.relationOther : t("relations.other");
+    }
+    const relationKey = getRelationOptionKey(heir.relationLabel);
+    if (relationKey) return t(relationKey);
+    return heir.relationLabel || heir.email || t("assetLock.heir.defaultLabel");
   };
 
   const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") => {
@@ -427,16 +433,16 @@ export default function AssetLockPage({
   };
 
   const formatRegularKeyStatus = (status: "VERIFIED" | "UNVERIFIED" | "ERROR") => {
-    if (status === "VERIFIED") return "確認済み";
-    if (status === "ERROR") return "エラー";
-    return "未確認";
+    if (status === "VERIFIED") return t("assetLock.status.regularKey.verified");
+    if (status === "ERROR") return t("assetLock.status.regularKey.error");
+    return t("assetLock.status.regularKey.unverified");
   };
 
   const formatItemStatus = (status: AssetLockState["items"][number]["status"]) => {
-    if (status === "VERIFIED") return "確認済み";
-    if (status === "FAILED") return "失敗";
-    if (status === "SENT") return "送金済み";
-    return "未検証";
+    if (status === "VERIFIED") return t("assetLock.status.item.verified");
+    if (status === "FAILED") return t("assetLock.status.item.failed");
+    if (status === "SENT") return t("assetLock.status.item.sent");
+    return t("assetLock.status.item.unverified");
   };
 
   const formatTransferAmount = (item: AssetLockState["items"][number] | null) => {
@@ -459,10 +465,14 @@ export default function AssetLockPage({
       status: "VERIFIED" | "UNVERIFIED" | "ERROR";
     }[]
   ) => {
-    if (!statuses.length) return "未確認";
-    if (statuses.some((status) => status.status === "ERROR")) return "エラー";
-    if (statuses.every((status) => status.status === "VERIFIED")) return "確認済み";
-    return "未確認";
+    if (!statuses.length) return t("assetLock.status.regularKey.unverified");
+    if (statuses.some((status) => status.status === "ERROR")) {
+      return t("assetLock.status.regularKey.error");
+    }
+    if (statuses.every((status) => status.status === "VERIFIED")) {
+      return t("assetLock.status.regularKey.verified");
+    }
+    return t("assetLock.status.regularKey.unverified");
   };
 
   const handleStart = async () => {
@@ -482,7 +492,7 @@ export default function AssetLockPage({
         setLockState(synced);
       }
     } catch (err: any) {
-      setError(err?.message ?? "資産ロックの開始に失敗しました");
+      setError(err?.message ?? "assetLock.error.startFailed");
     } finally {
       setLoading(false);
     }
@@ -492,7 +502,7 @@ export default function AssetLockPage({
     if (!caseId) return;
     const txHash = (txInputs[itemId] ?? "").trim();
     if (!txHash) {
-      setError("TX Hashを入力してください");
+      setError("assetLock.error.txHashRequired");
       return;
     }
     setLoading(true);
@@ -501,7 +511,7 @@ export default function AssetLockPage({
       const data = await verifyAssetLockItem(caseId, { itemId, txHash });
       setLockState(data);
     } catch (err: any) {
-      setError(err?.message ?? "送金検証に失敗しました");
+      setError(err?.message ?? "assetLock.error.verifyFailed");
     } finally {
       setLoading(false);
     }
@@ -521,7 +531,7 @@ export default function AssetLockPage({
         setLockState(synced);
       }
     } catch (err: any) {
-      setError(err?.message ?? "自動送金に失敗しました");
+      setError(err?.message ?? "assetLock.error.autoTransferFailed");
     } finally {
       setLoading(false);
     }
@@ -535,7 +545,7 @@ export default function AssetLockPage({
       const data = await completeAssetLock(caseId);
       setLockState(data);
     } catch (err: any) {
-      setError(err?.message ?? "資産ロックの完了に失敗しました");
+      setError(err?.message ?? "assetLock.error.completeFailed");
     } finally {
       setCompleteLoading(false);
     }
@@ -554,7 +564,7 @@ export default function AssetLockPage({
       const data = await updateAssetLockState(caseId, { methodStep: "REGULAR_KEY_SET" });
       setLockState(data);
     } catch (err: any) {
-      setError(err?.message ?? "RegularKeyの確認に戻れませんでした");
+      setError(err?.message ?? "assetLock.error.backToRegularKeyFailed");
     } finally {
       setLoading(false);
     }
@@ -572,7 +582,7 @@ export default function AssetLockPage({
       }
       setStepIndex(nextIndex);
     } catch (err: any) {
-      setError(err?.message ?? "確認の記録に失敗しました");
+      setError(err?.message ?? "assetLock.error.confirmFailed");
     } finally {
       setLoading(false);
     }
@@ -592,7 +602,7 @@ export default function AssetLockPage({
       setLockState(data);
       setRegularKeyOpen(false);
     } catch (err: any) {
-      setRegularKeyError(err?.message ?? "RegularKeyの確認に失敗しました");
+      setRegularKeyError(err?.message ?? "assetLock.error.regularKeyFailed");
     } finally {
       setRegularKeyLoading(false);
     }
@@ -608,7 +618,7 @@ export default function AssetLockPage({
         setLockState(data);
       }
     } catch (err: any) {
-      setError(err?.message ?? "ステップの更新に失敗しました");
+      setError(err?.message ?? "assetLock.error.stepUpdateFailed");
     }
   };
 
@@ -617,30 +627,32 @@ export default function AssetLockPage({
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "資産ロック" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("assetLock.breadcrumb") }
           ]}
         />
         <div className={styles.headerRow}>
           <div>
-            <div className={styles.headerMeta}>資産ロック</div>
-            <h1 className="text-title">資産ロック手続き</h1>
+            <div className={styles.headerMeta}>{t("assetLock.header.label")}</div>
+            <h1 className="text-title">{t("assetLock.header.title")}</h1>
           </div>
           <div className={styles.stepChip}>
-            <span className={styles.stepChipLabel}>STEP</span>
+            <span className={styles.stepChipLabel}>{t("assetLock.header.stepLabel")}</span>
             <span className={styles.stepChipValue}>{stepLabel}</span>
           </div>
         </div>
       </header>
 
       {planValidationError ? (
-        <FormAlert variant="error">{planValidationError}</FormAlert>
+        <FormAlert variant="error">{t(planValidationError)}</FormAlert>
       ) : null}
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
       {isLocked ? (
         <FormAlert variant="success">
-          資産ロックが完了しました。{redirectSeconds ?? 5}秒でケース詳細に戻ります。
+          {t("assetLock.completed", { seconds: redirectSeconds ?? 5 })}
         </FormAlert>
       ) : null}
 
@@ -648,27 +660,33 @@ export default function AssetLockPage({
         <div className={styles.stepTitle}>{current.title}</div>
         {current.id === "prepare" ? (
           <div className={styles.stepBody}>
-            <div>資産・準備金・相続人状況を確認します。</div>
+            <div>{t("assetLock.prepare.description")}</div>
             <div className={styles.planSection}>
-              <div className={styles.planSectionTitle}>指図プレビュー</div>
+              <div className={styles.planSectionTitle}>{t("assetLock.planPreview.title")}</div>
               {planLoading ? (
-                <div className={styles.planHint}>読み込み中...</div>
+                <div className={styles.planHint}>{t("common.loading")}</div>
               ) : planError ? (
-                <div className={styles.planHint}>{planError}</div>
+                <div className={styles.planHint}>{t(planError)}</div>
               ) : plans.length === 0 ? (
-                <div className={styles.planHint}>指図がありません</div>
+                <div className={styles.planHint}>{t("assetLock.planPreview.empty")}</div>
               ) : (
                 <div className={styles.planList}>
                   {plans.map((plan) => (
                     <div key={plan.planId} className={styles.planCard}>
                       <div className={styles.planTitle}>{plan.title}</div>
                       <div className={styles.planMeta}>
-                        {plan.status === "INACTIVE" ? "停止中" : "作成中"}
+                        {plan.status === "INACTIVE"
+                          ? t("assetLock.planPreview.statusInactive")
+                          : t("assetLock.planPreview.statusActive")}
                       </div>
-                      <div className={styles.planRuleTitle}>分配ルール</div>
+                      <div className={styles.planRuleTitle}>
+                        {t("assetLock.planPreview.rulesTitle")}
+                      </div>
                       {planAssetsById[plan.planId] ? (
                         planAssetsById[plan.planId].length === 0 ? (
-                          <div className={styles.planHint}>分配ルールが未設定です</div>
+                          <div className={styles.planHint}>
+                            {t("assetLock.planPreview.rulesEmpty")}
+                          </div>
                         ) : (
                           <div className={styles.ruleList}>
                             {planAssetsById[plan.planId].map((asset) => {
@@ -678,7 +696,9 @@ export default function AssetLockPage({
                                   <div className={styles.ruleHeader}>
                                     <span className={styles.ruleAsset}>{asset.assetLabel}</span>
                                     <span className={styles.ruleUnit}>
-                                      {asset.unitType === "PERCENT" ? "割合" : "数量"}
+                                      {asset.unitType === "PERCENT"
+                                        ? t("assetLock.planPreview.unit.percent")
+                                        : t("assetLock.planPreview.unit.amount")}
                                     </span>
                                   </div>
                                   {asset.allocations?.length ? (
@@ -698,7 +718,9 @@ export default function AssetLockPage({
                                       })}
                                     </div>
                                   ) : (
-                                    <div className={styles.planHint}>配分が未設定です</div>
+                                    <div className={styles.planHint}>
+                                      {t("assetLock.planPreview.allocationsEmpty")}
+                                    </div>
                                   )}
                                 </div>
                               );
@@ -706,7 +728,9 @@ export default function AssetLockPage({
                           </div>
                         )
                       ) : (
-                        <div className={styles.planHint}>分配ルールを読み込み中...</div>
+                        <div className={styles.planHint}>
+                          {t("assetLock.planPreview.rulesLoading")}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -720,11 +744,13 @@ export default function AssetLockPage({
                   onClick={handleConfirmPreparation}
                   disabled={loading || !!planValidationError}
                 >
-                  {loading ? "記録中..." : "確認しました"}
+                  {loading
+                    ? t("assetLock.prepare.confirming")
+                    : t("assetLock.prepare.confirm")}
                 </Button>
               </div>
             ) : (
-              <div className={styles.planHint}>被相続人の確認待ちです。</div>
+              <div className={styles.planHint}>{t("assetLock.prepare.waitingOwner")}</div>
             )}
           </div>
         ) : null}
@@ -743,16 +769,22 @@ export default function AssetLockPage({
                     className={styles.methodRadio}
                   />
                   <div className={styles.methodHeading}>
-                    <div className={styles.methodTitle}>方式A（手動送金）</div>
+                    <div className={styles.methodTitle}>{t("assetLock.method.a.title")}</div>
                     <div className={styles.methodSummary}>
-                      ご自身のWalletから分配用Walletへ送金します。
+                      {t("assetLock.method.a.description")}
                     </div>
                   </div>
                 </div>
                 <ul className={styles.methodList}>
-                  <li className={styles.methodListItem}>送金後にTX Hashを入力して検証します</li>
-                  <li className={styles.methodListItem}>資産ごとに送金作業が必要です</li>
-                  <li className={styles.methodListItem}>署名回数が増えます</li>
+                  <li className={styles.methodListItem}>
+                    {t("assetLock.method.a.bullets.verify")}
+                  </li>
+                  <li className={styles.methodListItem}>
+                    {t("assetLock.method.a.bullets.eachAsset")}
+                  </li>
+                  <li className={styles.methodListItem}>
+                    {t("assetLock.method.a.bullets.signatures")}
+                  </li>
                 </ul>
               </label>
               <label
@@ -768,26 +800,34 @@ export default function AssetLockPage({
                   />
                   <div className={styles.methodHeading}>
                     <div className={styles.methodTitleRow}>
-                      <span className={styles.methodTitle}>方式B（自動送金・署名1回）</span>
-                      <span className={styles.methodBadge}>おすすめ</span>
+                      <span className={styles.methodTitle}>{t("assetLock.method.b.title")}</span>
+                      <span className={styles.methodBadge}>
+                        {t("assetLock.method.b.badge")}
+                      </span>
                     </div>
                     <div className={styles.methodSummary}>
-                      一時的にRegularKeyを付与し、分配用Walletへ自動送金します。
+                      {t("assetLock.method.b.description")}
                     </div>
                   </div>
                 </div>
                 <ul className={styles.methodList}>
-                  <li className={styles.methodListItem}>署名は1回だけで完了します</li>
-                  <li className={styles.methodListItem}>手順が少なくミスが起きにくいです</li>
                   <li className={styles.methodListItem}>
-                    おすすめ: 方式Bは短時間でロックまで進められます
+                    {t("assetLock.method.b.bullets.singleSignature")}
+                  </li>
+                  <li className={styles.methodListItem}>
+                    {t("assetLock.method.b.bullets.lessSteps")}
+                  </li>
+                  <li className={styles.methodListItem}>
+                    {t("assetLock.method.b.bullets.recommended")}
                   </li>
                 </ul>
               </label>
             </div>
             <div className={styles.methodActions}>
               <Button type="button" onClick={handleStart} disabled={loading || !!planValidationError}>
-                {loading ? "開始中..." : "ロックを開始"}
+                {loading
+                  ? t("assetLock.actions.starting")
+                  : t("assetLock.actions.start")}
               </Button>
             </div>
           </div>
@@ -795,7 +835,7 @@ export default function AssetLockPage({
         {current.id === "transfer" ? (
           <div className={styles.stepBody}>
             <div className={styles.transferHint}>
-              方式Aは手動送金/検証、方式Bは自動送金（RegularKey確認後）です。
+              {t("assetLock.transfer.hint")}
             </div>
             {method === "B" ? (
               <div className={styles.methodProgress}>
@@ -826,7 +866,9 @@ export default function AssetLockPage({
                         <div className={styles.methodStepTitle}>{step.title}</div>
                         <div className={styles.methodStepDescription}>{step.description}</div>
                         {status === "current" ? (
-                          <span className={styles.methodStepTag}>進行中</span>
+                          <span className={styles.methodStepTag}>
+                            {t("assetLock.methodSteps.inProgress")}
+                          </span>
                         ) : null}
                       </div>
                     </div>
@@ -834,31 +876,35 @@ export default function AssetLockPage({
                 })}
                 {lockState?.methodStep === "REGULAR_KEY_SET" ? (
                   <div className={styles.regularKeyCard}>
-                    <div className={styles.regularKeyTitle}>RegularKeyの署名</div>
+                    <div className={styles.regularKeyTitle}>{t("assetLock.regularKey.title")}</div>
                     <div className={styles.regularKeyBody}>
-                      被相続人のウォレットでRegularKeyを設定し、署名後に確認します。
+                      {t("assetLock.regularKey.description")}
                     </div>
                     <div className={styles.regularKeySummary}>
-                      <span className={styles.regularKeySummaryLabel}>確認状況</span>
+                      <span className={styles.regularKeySummaryLabel}>
+                        {t("assetLock.regularKey.statusLabel")}
+                      </span>
                       <span className={styles.regularKeySummaryValue}>
                         {getRegularKeySummary(regularKeyStatuses)}
                       </span>
                     </div>
                     <div className={styles.regularKeyNote}>
-                      確認が完了するまで次へ進めません。
+                      {t("assetLock.regularKey.note")}
                     </div>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setRegularKeyOpen(true)}
                     >
-                      確認する
+                      {t("assetLock.regularKey.confirm")}
                     </Button>
                   </div>
                 ) : null}
                 {regularKeyStatuses.length > 0 ? (
                   <div className={styles.regularKeyStatusCard}>
-                    <div className={styles.regularKeyStatusTitle}>RegularKeyの確認結果</div>
+                    <div className={styles.regularKeyStatusTitle}>
+                      {t("assetLock.regularKey.resultTitle")}
+                    </div>
                     <div className={styles.regularKeyStatusList}>
                       {regularKeyStatuses.map((status) => (
                         <div
@@ -884,7 +930,7 @@ export default function AssetLockPage({
                 {lockState?.methodStep === "AUTO_TRANSFER" ? (
                   <div className={styles.methodActions}>
                     <div className={styles.autoTransferNote}>
-                      自動送金を実行すると戻れません
+                      {t("assetLock.transfer.autoTransferNote")}
                     </div>
                     <Button
                       type="button"
@@ -892,14 +938,16 @@ export default function AssetLockPage({
                       onClick={handleReturnToRegularKey}
                       disabled={loading}
                     >
-                      RegularKeyに戻る
+                      {t("assetLock.regularKey.back")}
                     </Button>
                     <Button
                       type="button"
                       onClick={() => setAutoTransferConfirmOpen(true)}
                       disabled={loading}
                     >
-                      {loading ? "送金中..." : "自動送金を実行"}
+                      {loading
+                        ? t("assetLock.actions.executing")
+                        : t("assetLock.actions.executeAuto")}
                     </Button>
                   </div>
                 ) : null}
@@ -907,7 +955,7 @@ export default function AssetLockPage({
             ) : (
               <div className={styles.transferList}>
                 {(lockState?.items ?? []).length === 0 ? (
-                  <div className={styles.emptyState}>送金対象がありません</div>
+                  <div className={styles.emptyState}>{t("assetLock.transfer.emptyTargets")}</div>
                 ) : (
                   (lockState?.items ?? []).map((item) => {
                     const assetAddress = resolveAssetAddress(item.assetId);
@@ -917,16 +965,19 @@ export default function AssetLockPage({
                         <div>
                           <div className={styles.transferLabel}>{item.assetLabel}</div>
                           <div className={styles.transferType}>
-                            {item.token ? "トークン送金" : "XRP送金"}
+                            {item.token
+                              ? t("assetLock.transfer.type.token")
+                              : t("assetLock.transfer.type.xrp")}
                           </div>
                           <div className={styles.transferMeta}>
                             {item.token
                               ? `${item.token.currency} / ${item.token.issuer ?? ""}`
                               : "XRP"}
-                            {" · "}予定 {item.plannedAmount}
+                            {" · "}
+                            {t("assetLock.transfer.planned", { amount: item.plannedAmount })}
                           </div>
                         </div>
-                        <FormField label="TX Hash">
+                        <FormField label={t("assetLock.transfer.txHashLabel")}>
                           <Input
                             value={txInputs[item.itemId] ?? ""}
                             onChange={(event) =>
@@ -945,14 +996,14 @@ export default function AssetLockPage({
                             onClick={() => handleOpenTransferDialog(item)}
                             disabled={!canAppTransfer}
                           >
-                            アプリで送金
+                            {t("assetLock.transfer.appSend")}
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             onClick={() => handleVerify(item.itemId)}
                           >
-                            検証
+                            {t("assetLock.transfer.verifyAction")}
                           </Button>
                         </div>
                       </div>
@@ -965,10 +1016,10 @@ export default function AssetLockPage({
         ) : null}
         {current.id === "verify" ? (
           <div className={styles.stepBody}>
-            <div className={styles.verifyTitle}>送金検証の結果</div>
+            <div className={styles.verifyTitle}>{t("assetLock.verify.title")}</div>
             <div className={styles.balanceBlock}>
               <div className={styles.balanceHeader}>
-                <div className={styles.balanceTitle}>ウォレット残高 (XRP)</div>
+                <div className={styles.balanceTitle}>{t("assetLock.verify.balanceTitle")}</div>
                 <Button
                   type="button"
                   size="sm"
@@ -976,20 +1027,20 @@ export default function AssetLockPage({
                   onClick={loadBalances}
                   disabled={balanceLoading}
                 >
-                  再取得
+                  {t("assetLock.verify.reload")}
                 </Button>
               </div>
               <div className={styles.balanceNote}>
-                反映に時間がかかる場合があります。必要に応じて再取得してください。
+                {t("assetLock.verify.note")}
               </div>
-              {balanceError ? <FormAlert variant="error">{balanceError}</FormAlert> : null}
+              {balanceError ? <FormAlert variant="error">{t(balanceError)}</FormAlert> : null}
               {balanceLoading ? (
-                <div className={styles.balanceNote}>残高を取得中...</div>
+                <div className={styles.balanceNote}>{t("assetLock.verify.loadingBalances")}</div>
               ) : null}
               {balances ? (
                 <div className={styles.balanceGrid}>
                   <div className={styles.balanceItem}>
-                    <div className={styles.balanceLabel}>送金先</div>
+                    <div className={styles.balanceLabel}>{t("assetLock.verify.destination")}</div>
                     <div className={styles.balanceValue}>
                       {formatBalanceLabel(balances.destination)}
                     </div>
@@ -1011,7 +1062,8 @@ export default function AssetLockPage({
                   {balances.sources.map((source) => (
                     <div key={source.assetId ?? source.address} className={styles.balanceItem}>
                       <div className={styles.balanceLabel}>
-                        送金元{source.assetLabel ? ` (${source.assetLabel})` : ""}
+                        {t("assetLock.verify.source")}
+                        {source.assetLabel ? ` (${source.assetLabel})` : ""}
                       </div>
                       <div className={styles.balanceValue}>
                         {formatBalanceLabel(source)}
@@ -1035,7 +1087,7 @@ export default function AssetLockPage({
               ) : null}
             </div>
             {(lockState?.items ?? []).length === 0 ? (
-              <div className={styles.emptyState}>送金検証の結果がありません</div>
+              <div className={styles.emptyState}>{t("assetLock.verify.empty")}</div>
             ) : (
               <div className={styles.transferList}>
                 {(lockState?.items ?? []).map((item) => (
@@ -1049,9 +1101,13 @@ export default function AssetLockPage({
                       </span>
                     </div>
                     <div className={styles.transferType}>
-                      {item.token ? "トークン送金" : "XRP送金"}
+                      {item.token
+                        ? t("assetLock.transfer.type.token")
+                        : t("assetLock.transfer.type.xrp")}
                     </div>
-                    <div className={styles.transferMeta}>予定 {item.plannedAmount}</div>
+                    <div className={styles.transferMeta}>
+                      {t("assetLock.transfer.planned", { amount: item.plannedAmount })}
+                    </div>
                     {item.txHash ? (
                       <div className={styles.transferMeta}>TX Hash: {item.txHash}</div>
                     ) : null}
@@ -1068,7 +1124,11 @@ export default function AssetLockPage({
                 onClick={handleComplete}
                 disabled={!canComplete || completeLoading || isLocked}
               >
-                {isLocked ? "完了済み" : completeLoading ? "完了中..." : "完了する"}
+                {isLocked
+                  ? t("assetLock.actions.completed")
+                  : completeLoading
+                    ? t("assetLock.actions.completing")
+                    : t("assetLock.actions.complete")}
               </Button>
             </div>
           </div>
@@ -1083,7 +1143,7 @@ export default function AssetLockPage({
               className={styles.backButton}
               data-variant="back"
             >
-              戻る
+              {t("assetLock.actions.back")}
             </Button>
           </div>
         ) : null}
@@ -1104,19 +1164,21 @@ export default function AssetLockPage({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>アプリで送金</DialogTitle>
+            <DialogTitle>{t("assetLock.transferDialog.title")}</DialogTitle>
             <DialogDescription>
-              シークレットはこの端末内でのみ使用され、サーバーへ送信されません。
+              {t("assetLock.transferDialog.description")}
             </DialogDescription>
           </DialogHeader>
-          {transferSendError ? <FormAlert variant="error">{transferSendError}</FormAlert> : null}
+          {transferSendError ? (
+            <FormAlert variant="error">{t(transferSendError)}</FormAlert>
+          ) : null}
           {transferSendSuccess ? (
-            <FormAlert variant="success">{transferSendSuccess}</FormAlert>
+            <FormAlert variant="success">{t(transferSendSuccess)}</FormAlert>
           ) : null}
           {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
           {transferDialogItem ? (
             <div className={styles.transferDialogGrid}>
-              <FormField label="送金元アドレス">
+              <FormField label={t("assetLock.transferDialog.fromLabel")}>
                 <Input
                   value={transferFromAddress}
                   onChange={(event) => setTransferFromAddress(event.target.value)}
@@ -1125,7 +1187,9 @@ export default function AssetLockPage({
               </FormField>
               <div className={styles.transferDialogRow}>
                 <div>
-                  <div className={styles.transferDialogLabel}>送金先</div>
+                  <div className={styles.transferDialogLabel}>
+                    {t("assetLock.transferDialog.toLabel")}
+                  </div>
                   <div className={styles.transferDialogValue}>
                     {lockState?.wallet?.address ?? "-"}
                   </div>
@@ -1134,21 +1198,25 @@ export default function AssetLockPage({
                   size="icon"
                   variant="ghost"
                   className={styles.copyButton}
-                  onClick={() => handleCopy("送金先", lockState?.wallet?.address ?? "")}
-                  aria-label="送金先をコピー"
+                  onClick={() =>
+                    handleCopy(t("assetLock.transferDialog.toLabel"), lockState?.wallet?.address ?? "")
+                  }
+                  aria-label={t("assetLock.transferDialog.toCopyLabel")}
                 >
                   <Copy />
                 </Button>
               </div>
               <div className={styles.transferDialogRow}>
                 <div>
-                  <div className={styles.transferDialogLabel}>送金額</div>
+                  <div className={styles.transferDialogLabel}>
+                    {t("assetLock.transferDialog.amountLabel")}
+                  </div>
                   <div className={styles.transferDialogValue}>
                     {formatTransferAmount(transferDialogItem)}
                   </div>
                 </div>
               </div>
-              <FormField label="シークレット">
+              <FormField label={t("assetLock.transferDialog.secretLabel")}>
                 <Input
                   value={transferSecret}
                   onChange={(event) => setTransferSecret(event.target.value)}
@@ -1163,12 +1231,14 @@ export default function AssetLockPage({
                   onClick={handleSendTransfer}
                   disabled={transferSending}
                 >
-                  {transferSending ? "送金中..." : "送金してTXハッシュ入力"}
+                  {transferSending
+                    ? t("assetLock.transferDialog.sending")
+                    : t("assetLock.transferDialog.send")}
                 </Button>
               </div>
             </div>
           ) : (
-            <div className={styles.emptyState}>送金対象を選択してください</div>
+            <div className={styles.emptyState}>{t("assetLock.transferDialog.empty")}</div>
           )}
         </DialogContent>
       </Dialog>
@@ -1176,27 +1246,33 @@ export default function AssetLockPage({
       <Dialog open={regularKeyOpen} onOpenChange={setRegularKeyOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>RegularKeyを設定</DialogTitle>
+            <DialogTitle>{t("assetLock.regularKeyDialog.title")}</DialogTitle>
             <DialogDescription>
-              ウォレットアプリでAccountSetを実行し、RegularKeyに分配用Walletを指定してください。
+              {t("assetLock.regularKeyDialog.description")}
             </DialogDescription>
           </DialogHeader>
-          {regularKeyError ? <FormAlert variant="error">{regularKeyError}</FormAlert> : null}
+          {regularKeyError ? (
+            <FormAlert variant="error">{t(regularKeyError)}</FormAlert>
+          ) : null}
           {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
           <div className={styles.regularKeyInfo}>
             <div className={styles.regularKeyRow}>
               <div>
-                <div className={styles.regularKeyLabel}>RegularKeyアドレス</div>
+                <div className={styles.regularKeyLabel}>
+                  {t("assetLock.regularKeyDialog.addressLabel")}
+                </div>
                 <div className={styles.regularKeyValue}>
-                  {lockState?.wallet?.address ?? "未発行"}
+                  {lockState?.wallet?.address ?? t("assetLock.regularKeyDialog.addressEmpty")}
                 </div>
               </div>
               <Button
                 size="icon"
                 variant="ghost"
                 className={styles.copyButton}
-                onClick={() => handleCopy("RegularKey", lockState?.wallet?.address ?? "")}
-                aria-label="RegularKeyアドレスをコピー"
+                onClick={() =>
+                  handleCopy(t("assetLock.regularKeyDialog.copyLabel"), lockState?.wallet?.address ?? "")
+                }
+                aria-label={t("assetLock.regularKeyDialog.copyAriaLabel")}
               >
                 <Copy />
               </Button>
@@ -1204,7 +1280,9 @@ export default function AssetLockPage({
           </div>
           <div className={styles.methodActions}>
             <Button type="button" onClick={handleConfirmRegularKey} disabled={regularKeyLoading}>
-              {regularKeyLoading ? "記録中..." : "確認する"}
+              {regularKeyLoading
+                ? t("assetLock.regularKeyDialog.confirming")
+                : t("assetLock.regularKeyDialog.confirm")}
             </Button>
           </div>
         </DialogContent>
@@ -1213,9 +1291,9 @@ export default function AssetLockPage({
       <Dialog open={autoTransferConfirmOpen} onOpenChange={setAutoTransferConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>自動送金を実行します</DialogTitle>
+            <DialogTitle>{t("assetLock.autoTransferDialog.title")}</DialogTitle>
             <DialogDescription>
-              自動送金を実行すると戻れません。内容を確認のうえ実行してください。
+              {t("assetLock.autoTransferDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <div className={styles.methodActions}>
@@ -1224,10 +1302,12 @@ export default function AssetLockPage({
               variant="outline"
               onClick={() => setAutoTransferConfirmOpen(false)}
             >
-              キャンセル
+              {t("common.cancel")}
             </Button>
             <Button type="button" onClick={handleConfirmAutoTransfer} disabled={loading}>
-              {loading ? "送金中..." : "実行する"}
+              {loading
+                ? t("assetLock.actions.executing")
+                : t("assetLock.autoTransferDialog.confirm")}
             </Button>
           </div>
         </DialogContent>

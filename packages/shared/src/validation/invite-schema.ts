@@ -33,6 +33,48 @@ export const relationOptions = [
   "その他"
 ] as const;
 
+export type RelationOption = (typeof relationOptions)[number];
+
+export const relationOptionKeys: Record<RelationOption, string> = {
+  配偶者: "relations.spouse",
+  事実婚: "relations.commonLaw",
+  長男: "relations.eldestSon",
+  長女: "relations.eldestDaughter",
+  次男: "relations.secondSon",
+  次女: "relations.secondDaughter",
+  "子（その他）": "relations.childOther",
+  父: "relations.father",
+  母: "relations.mother",
+  祖父: "relations.grandfather",
+  祖母: "relations.grandmother",
+  孫: "relations.grandchild",
+  兄: "relations.olderBrother",
+  姉: "relations.olderSister",
+  弟: "relations.youngerBrother",
+  妹: "relations.youngerSister",
+  義父: "relations.fatherInLaw",
+  義母: "relations.motherInLaw",
+  義兄: "relations.olderBrotherInLaw",
+  義姉: "relations.olderSisterInLaw",
+  義弟: "relations.youngerBrotherInLaw",
+  義妹: "relations.youngerSisterInLaw",
+  甥: "relations.nephew",
+  姪: "relations.niece",
+  叔父: "relations.uncle",
+  叔母: "relations.aunt",
+  いとこ: "relations.cousin",
+  親族: "relations.relative",
+  友人: "relations.friend",
+  その他: "relations.other"
+};
+
+export const relationOtherValue: RelationOption = relationOptions[relationOptions.length - 1];
+
+export const getRelationOptionKey = (value?: string | null) => {
+  if (!value) return null;
+  return (relationOptionKeys as Record<string, string>)[value] ?? null;
+};
+
 const base = z.object({
   email: z
     .string({ required_error: "validation.email.invalid" })
@@ -48,7 +90,7 @@ const base = z.object({
 });
 
 export const inviteCreateSchema = base.superRefine((values, ctx) => {
-  if (values.relationLabel === "その他" && !values.relationOther?.trim()) {
+  if (values.relationLabel === relationOtherValue && !values.relationOther?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["relationOther"],

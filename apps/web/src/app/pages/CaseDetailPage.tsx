@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -64,74 +65,30 @@ import { WalletVerifyPanel } from "../../features/shared/components/wallet-verif
 import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import styles from "../../styles/caseDetailPage.module.css";
 import { DeathClaimsPanel } from "./DeathClaimsPage";
-import { relationOptions } from "@kototsute/shared";
+import {
+  getRelationOptionKey,
+  relationOptions,
+  relationOtherValue,
+  type RelationOption
+} from "@kototsute/shared";
 import { todoMaster, type TaskItem } from "@kototsute/tasks";
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "下書き",
-  WAITING: "相続待ち",
-  IN_PROGRESS: "相続中",
-  COMPLETED: "相続完了"
-};
-
-const formatDate = (value: string | null | undefined) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString();
-};
-
-const planStatusLabels: Record<string, string> = {
-  DRAFT: "作成中",
-  SHARED: "有効",
-  INACTIVE: "無効"
-};
-
-const walletStatusLabels: Record<string, string> = {
-  UNREGISTERED: "未登録",
-  PENDING: "未確認",
-  VERIFIED: "確認済み"
-};
-
-const assetVerificationLabels: Record<AssetListItem["verificationStatus"], string> = {
-  UNVERIFIED: "未検証",
-  PENDING: "検証失敗",
-  VERIFIED: "検証成功"
-};
-
-const signerStatusLabels: Record<string, string> = {
-  NOT_READY: "準備中",
-  SET: "署名受付中",
-  FAILED: "準備失敗"
-};
-
-const approvalStatusLabels: Record<string, string> = {
-  PREPARED: "準備済み",
-  SUBMITTED: "送信済み",
-  FAILED: "失敗"
-};
-
-const approvalNetworkStatusLabels: Record<string, string> = {
-  PENDING: "検証待ち",
-  VALIDATED: "検証済み（成功）",
-  FAILED: "検証済み（失敗）",
-  NOT_FOUND: "未反映",
-  EXPIRED: "期限切れ"
-};
-
-const distributionStatusLabels: Record<string, string> = {
-  PENDING: "未実行",
-  RUNNING: "実行中",
-  PARTIAL: "一部失敗",
-  COMPLETED: "完了",
-  FAILED: "失敗"
+type LocalizedMessage = {
+  key: string;
+  values?: Record<string, number | string>;
 };
 
 export const formatDistributionProgressText = (
   distribution: DistributionState | null
-) => {
-  if (!distribution?.totalCount) return "-";
-  return `成功 ${distribution.successCount} / ${distribution.totalCount} 件`;
+) : LocalizedMessage | null => {
+  if (!distribution?.totalCount) return null;
+  return {
+    key: "cases.detail.distribution.progress",
+    values: {
+      success: distribution.successCount,
+      total: distribution.totalCount
+    }
+  };
 };
 
 export const canUpdateTaskProgress = (input: { isLocked: boolean }) => {
@@ -146,28 +103,31 @@ export const resolveDistributionDisabledReason = (input: {
   unverifiedHeirCount: number;
   distribution: DistributionState | null;
   distributionLoading: boolean;
-}) => {
-  if (!input.caseData) return "ケース情報が取得できません。";
+}): LocalizedMessage | null => {
+  if (!input.caseData) return { key: "cases.detail.distribution.disabled.noCase" };
   if (input.caseData.stage !== "IN_PROGRESS") {
-    return "相続中になると分配を実行できます。";
+    return { key: "cases.detail.distribution.disabled.notInProgress" };
   }
   if (!input.approvalCompleted) {
-    return "相続実行の同意が完了すると分配を実行できます。";
+    return { key: "cases.detail.distribution.disabled.approvalIncomplete" };
   }
   if (input.totalHeirCount === 0) {
-    return "相続人が登録されていないため実行できません。";
+    return { key: "cases.detail.distribution.disabled.noHeirs" };
   }
   if (input.unverifiedHeirCount > 0) {
-    return `相続人の受取用ウォレットが全員分確認済みになると実行できます。未確認: ${input.unverifiedHeirCount}人`;
+    return {
+      key: "cases.detail.distribution.disabled.unverified",
+      values: { count: input.unverifiedHeirCount }
+    };
   }
   if (input.distributionLoading) {
-    return "分配状況を取得中です。";
+    return { key: "cases.detail.distribution.disabled.loading" };
   }
   if (input.distribution?.status === "COMPLETED") {
-    return "分配は完了しています。";
+    return { key: "cases.detail.distribution.disabled.completed" };
   }
   if (input.distribution?.status === "RUNNING") {
-    return "分配処理が進行中です。";
+    return { key: "cases.detail.distribution.disabled.running" };
   }
   return null;
 };
@@ -225,29 +185,29 @@ export const resolveInheritanceNextAction = (input: {
   if (input.claimStatus === "ADMIN_APPROVED" && input.caseStage === "WAITING") {
     return {
       stepIndex: 0,
-      title: "運営承認済み",
-      description: "相続人の同意が必要です。死亡診断書の同意を進めてください。"
+      titleKey: "cases.detail.inheritance.steps.adminApproved.title",
+      descriptionKey: "cases.detail.inheritance.steps.adminApproved.description"
     };
   }
   if (input.caseStage === "IN_PROGRESS" && input.signerCompleted) {
     return {
       stepIndex: 3,
-      title: "同意完了（相続実行待ち）",
-      description: "同意がそろいました。相続実行を待っています。"
+      titleKey: "cases.detail.inheritance.steps.signerCompleted.title",
+      descriptionKey: "cases.detail.inheritance.steps.signerCompleted.description"
     };
   }
   if (input.caseStage === "IN_PROGRESS" && input.signerStatus !== "SET") {
     return {
       stepIndex: 1,
-      title: "相続人同意の準備中",
-      description: "同意の準備を始めてください。"
+      titleKey: "cases.detail.inheritance.steps.preparing.title",
+      descriptionKey: "cases.detail.inheritance.steps.preparing.description"
     };
   }
   if (input.caseStage === "IN_PROGRESS" && input.approvalStatus === "PREPARED") {
     return {
       stepIndex: 2,
-      title: "相続人同意 受付中",
-      description: "内容を確認して署名してください。"
+      titleKey: "cases.detail.inheritance.steps.awaitingSign.title",
+      descriptionKey: "cases.detail.inheritance.steps.awaitingSign.description"
     };
   }
   return null;
@@ -259,26 +219,29 @@ export const resolvePrepareDisabledReason = (input: {
   totalHeirCount: number;
   unverifiedHeirCount: number;
   approvalTx: ApprovalTxSummary | null;
-}) => {
-  if (!input.caseData) return "ケース情報が取得できません。";
+}): LocalizedMessage | null => {
+  if (!input.caseData) return { key: "cases.detail.prepare.disabled.noCase" };
   if (input.caseData.stage !== "IN_PROGRESS") {
-    return "相続中になると準備できます。";
+    return { key: "cases.detail.prepare.disabled.notInProgress" };
   }
   if (input.signerStatusKey === "FAILED") {
-    return "同意の準備に失敗しました。運営へご連絡ください。";
+    return { key: "cases.detail.prepare.disabled.failed" };
   }
   const approvalPrepared =
     input.approvalTx?.status === "PREPARED" ||
     input.approvalTx?.status === "SUBMITTED" ||
     Boolean(input.approvalTx?.txJson);
   if (input.signerStatusKey === "SET" && approvalPrepared) {
-    return "同意の準備は完了しています。";
+    return { key: "cases.detail.prepare.disabled.completed" };
   }
   if (input.totalHeirCount === 0) {
-    return "相続人が登録されていないため準備できません。";
+    return { key: "cases.detail.prepare.disabled.noHeirs" };
   }
   if (input.unverifiedHeirCount > 0) {
-    return `相続人の受取用ウォレットが全員分確認済みになると準備できます。未確認: ${input.unverifiedHeirCount}人`;
+    return {
+      key: "cases.detail.prepare.disabled.unverified",
+      values: { count: input.unverifiedHeirCount }
+    };
   }
   return null;
 };
@@ -286,10 +249,10 @@ export const resolvePrepareDisabledReason = (input: {
 export const resolveApprovalTxErrorMessage = (error: any) => {
   const code = error?.data?.code;
   if (code === "NOT_FOUND") return null;
-  return error?.message ?? "署名対象の取得に失敗しました";
+  return error?.message ?? "cases.detail.signer.error.loadFailed";
 };
 
-export const resolveSignerFromLabel = () => "送金元：被相続人の相続用ウォレット";
+export const resolveSignerFromLabel = () => "cases.detail.signer.fromLabel";
 
 export const buildSignerEntryDisplayList = (input: {
   entries?: Array<{ account: string; weight: number }> | null;
@@ -306,10 +269,10 @@ export const buildSignerEntryDisplayList = (input: {
       const isSystem = Boolean(systemSigner && account === systemSigner);
       const isMine = Boolean(heirWallet && account === heirWallet);
       const label = isSystem
-        ? "システム署名者"
+        ? "cases.detail.signer.labels.system"
         : isMine
-          ? "あなたの受取用ウォレット"
-          : "相続人の受取用ウォレット";
+          ? "cases.detail.signer.labels.mine"
+          : "cases.detail.signer.labels.heir";
       return { account, label, isSystem, isMine };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
@@ -341,6 +304,18 @@ type AssetRowProps = {
 };
 
 export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
+  const { t, i18n } = useTranslation();
+  const verificationLabels: Record<AssetListItem["verificationStatus"], string> = {
+    UNVERIFIED: t("cases.detail.assets.verification.unverified"),
+    PENDING: t("cases.detail.assets.verification.pending"),
+    VERIFIED: t("cases.detail.assets.verification.verified")
+  };
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString(i18n.language);
+  };
   const content = (
     <div className={styles.row}>
       <div className={styles.rowMain}>
@@ -350,7 +325,7 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
       <div className={styles.rowSide}>
         <div className={styles.rowBadgeStack}>
           <span className={styles.statusBadge}>
-            {assetVerificationLabels[asset.verificationStatus]}
+            {verificationLabels[asset.verificationStatus] ?? asset.verificationStatus}
           </span>
           <span className={styles.badgeMuted}>{formatDate(asset.createdAt)}</span>
         </div>
@@ -383,13 +358,6 @@ type CaseDetailPageProps = {
   initialDeathClaim?: DeathClaimSummary | null;
 };
 
-const baseTabItems: { key: TabKey; label: string }[] = [
-  { key: "assets", label: "資産" },
-  { key: "plans", label: "指図" },
-  { key: "tasks", label: "タスク" },
-  { key: "heirs", label: "相続人" }
-];
-
 const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet", "death-claims"];
 
 const isTabKey = (value: string | null): value is TabKey =>
@@ -410,6 +378,7 @@ export default function CaseDetailPage({
   const [searchParams, setSearchParams] = useSearchParams();
   const queryTab = searchParams.get("tab");
   const { user } = useAuth();
+  const { t, i18n } = useTranslation();
   const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [plans, setPlans] = useState<PlanListItem[]>([]);
@@ -476,24 +445,102 @@ export default function CaseDetailPage({
   const [signerSigning, setSignerSigning] = useState(false);
   const [signerSubmitting, setSignerSubmitting] = useState(false);
   const autoSignKeyRef = useRef("");
+  const caseStatusLabels = useMemo(
+    () => ({
+      DRAFT: t("cases.status.draft"),
+      WAITING: t("cases.status.waiting"),
+      IN_PROGRESS: t("cases.status.inProgress"),
+      COMPLETED: t("cases.status.completed")
+    }),
+    [t]
+  );
+  const planStatusLabels = useMemo(
+    () => ({
+      DRAFT: t("plans.status.draft"),
+      SHARED: t("plans.status.shared"),
+      INACTIVE: t("plans.status.inactive")
+    }),
+    [t]
+  );
+  const walletStatusLabels = useMemo(
+    () => ({
+      UNREGISTERED: t("cases.detail.heirs.walletStatus.unregistered"),
+      PENDING: t("cases.detail.heirs.walletStatus.pending"),
+      VERIFIED: t("cases.detail.heirs.walletStatus.verified")
+    }),
+    [t]
+  );
+  const signerStatusLabels = useMemo(
+    () => ({
+      NOT_READY: t("cases.detail.signer.status.notReady"),
+      SET: t("cases.detail.signer.status.set"),
+      FAILED: t("cases.detail.signer.status.failed")
+    }),
+    [t]
+  );
+  const approvalStatusLabels = useMemo(
+    () => ({
+      PREPARED: t("cases.detail.signer.approvalStatus.prepared"),
+      SUBMITTED: t("cases.detail.signer.approvalStatus.submitted"),
+      FAILED: t("cases.detail.signer.approvalStatus.failed")
+    }),
+    [t]
+  );
+  const approvalNetworkStatusLabels = useMemo(
+    () => ({
+      PENDING: t("cases.detail.signer.networkStatus.pending"),
+      VALIDATED: t("cases.detail.signer.networkStatus.validated"),
+      FAILED: t("cases.detail.signer.networkStatus.failed"),
+      NOT_FOUND: t("cases.detail.signer.networkStatus.notFound"),
+      EXPIRED: t("cases.detail.signer.networkStatus.expired")
+    }),
+    [t]
+  );
+  const distributionStatusLabels = useMemo(
+    () => ({
+      PENDING: t("cases.detail.distribution.status.pending"),
+      RUNNING: t("cases.detail.distribution.status.running"),
+      PARTIAL: t("cases.detail.distribution.status.partial"),
+      COMPLETED: t("cases.detail.distribution.status.completed"),
+      FAILED: t("cases.detail.distribution.status.failed")
+    }),
+    [t]
+  );
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString(i18n.language);
+  };
+  const resolveMessage = (message: string | LocalizedMessage | null | undefined) => {
+    if (!message) return null;
+    if (typeof message === "string") return t(message);
+    return t(message.key, message.values);
+  };
   const tabItems = useMemo(() => {
+    const baseTabItems = [
+      { key: "assets" as const, label: t("cases.detail.tabs.assets") },
+      { key: "plans" as const, label: t("cases.detail.tabs.plans") },
+      { key: "tasks" as const, label: t("cases.detail.tabs.tasks") },
+      { key: "heirs" as const, label: t("cases.detail.tabs.heirs") }
+    ];
     if (isOwner === false) {
       return [
         baseTabItems[0],
         baseTabItems[1],
         baseTabItems[2],
-        { key: "death-claims" as const, label: "相続実行" },
-        { key: "wallet" as const, label: "受取用ウォレット" },
+        { key: "death-claims" as const, label: t("cases.detail.tabs.deathClaims") },
+        { key: "wallet" as const, label: t("cases.detail.tabs.wallet") },
         baseTabItems[3]
       ];
     }
     return baseTabItems;
-  }, [isOwner]);
+  }, [isOwner, t]);
   const availableTabKeys = useMemo(() => tabItems.map((item) => item.key), [tabItems]);
 
   const title = useMemo(
-    () => caseData?.ownerDisplayName ?? "ケース詳細",
-    [caseData]
+    () => caseData?.ownerDisplayName ?? t("cases.detail.title"),
+    [caseData, t]
   );
   const personalTasks = useMemo(() => {
     if (isOwner === true) return todoMaster.owner;
@@ -517,30 +564,44 @@ export default function CaseDetailPage({
   const needsHeirWalletRegistration = isHeir && !hasHeirWallet;
   const needsHeirWalletVerification = isHeir && hasHeirWallet && !isHeirWalletVerified;
   const heirWalletDestinationDisplay =
-    heirWalletChallenge?.address ?? (heirWalletVerifyLoading ? "発行中..." : "未発行");
+    heirWalletChallenge?.address ??
+    (heirWalletVerifyLoading
+      ? t("cases.detail.wallet.memoIssuing")
+      : t("cases.detail.wallet.memoEmpty"));
   const heirWalletMemoDisplay =
-    heirWalletChallenge?.challenge ?? (heirWalletVerifyLoading ? "発行中..." : "未発行");
+    heirWalletChallenge?.challenge ??
+    (heirWalletVerifyLoading
+      ? t("cases.detail.wallet.memoIssuing")
+      : t("cases.detail.wallet.memoEmpty"));
   const getWalletNotice = (taskId: string) => {
     if (!isHeir) return null;
     if (taskId === "heir.register-wallet" && needsHeirWalletRegistration) {
-      return "ウォレット登録が必要です";
+      return "cases.detail.wallet.notice.register";
     }
     if (taskId === "heir.verify-wallet" && needsHeirWalletVerification) {
-      return "所有確認が必要です";
+      return "cases.detail.wallet.notice.verify";
     }
     return null;
+  };
+  const renderRelationLabel = (label?: string | null, other?: string | null) => {
+    if (!label) return t("common.unset");
+    if (label === relationOtherValue) {
+      return other?.trim() ? other : t("relations.other");
+    }
+    const relationKey = getRelationOptionKey(label);
+    return relationKey ? t(relationKey) : label;
   };
   const signerStatusKey = signerList?.status ?? "NOT_READY";
   const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
   const approvalStatusLabel = approvalTx?.status
     ? approvalStatusLabels[approvalTx.status] ?? approvalTx.status
-    : "未生成";
+    : t("cases.detail.signer.approvalStatus.unset");
   const approvalSubmittedTxHash = approvalTx?.submittedTxHash ?? "";
   const approvalNetworkStatus = approvalTx?.networkStatus ?? null;
   const approvalNetworkStatusLabel = approvalNetworkStatus
     ? approvalNetworkStatusLabels[approvalNetworkStatus] ?? approvalNetworkStatus
     : approvalTx?.status === "SUBMITTED"
-      ? "検証待ち"
+      ? t("cases.detail.signer.networkStatus.pending")
       : "-";
   const approvalNetworkDetail = approvalTx?.networkResult
     ? `${approvalNetworkStatusLabel} (${approvalTx.networkResult})`
@@ -558,16 +619,17 @@ export default function CaseDetailPage({
   const approvalAmountXrp = approvalAmountDrops
     ? dropsToXrpInput(approvalAmountDrops)
     : "";
-  const signerFromLabel = resolveSignerFromLabel();
-  const signerToLabel = "送金先：システムのウォレット";
+  const signerFromLabel = t(resolveSignerFromLabel());
+  const signerToLabel = t("cases.detail.signer.toLabel");
   const approvalSummaryAmount = approvalAmountDrops
     ? `${approvalAmountDrops} drops (${approvalAmountXrp} XRP)`
     : formatTxAmount(approvalTxJson?.Amount);
   const signerTxSummary = approvalTxJson
-    ? `送金元: ${signerFromLabel.replace("送金元：", "")} / 送金先: ${signerToLabel.replace(
-        "送金先：",
-        ""
-      )} / 送金額: ${approvalSummaryAmount}`
+    ? t("cases.detail.signer.txSummary", {
+        from: t("cases.detail.signer.fromValue"),
+        to: t("cases.detail.signer.toValue"),
+        amount: approvalSummaryAmount
+      })
     : "";
   const signerEntryDisplayList = useMemo(
     () =>
@@ -579,8 +641,10 @@ export default function CaseDetailPage({
     [signerList?.entries, signerList?.systemSignerAddress, heirWallet?.address]
   );
   const multiSignNote = signerList?.requiredCount
-    ? `相続人の同意が${signerList.requiredCount}人以上とシステム署名が揃うと成立します。`
-    : "相続人の過半数の同意とシステム署名が揃うと成立します。";
+    ? t("cases.detail.signer.multiSignNote.withCount", {
+        count: signerList.requiredCount
+      })
+    : t("cases.detail.signer.multiSignNote.default");
   const showSignerDetails = shouldShowSignerDetails(approvalTx?.status ?? null);
   const approvalSubmitted = Boolean(
     approvalTx?.status === "SUBMITTED" || approvalSubmittedTxHash
@@ -598,12 +662,15 @@ export default function CaseDetailPage({
     approvalStatus: approvalTx?.status ?? null,
     signerCompleted
   });
-  const nextActionSteps = [
-    "運営承認済み",
-    "相続人同意の準備中",
-    "相続人同意 受付中",
-    "同意完了（相続実行待ち）"
-  ];
+  const nextActionSteps = useMemo(
+    () => [
+      t("cases.detail.inheritance.steps.adminApproved.title"),
+      t("cases.detail.inheritance.steps.preparing.title"),
+      t("cases.detail.inheritance.steps.awaitingSign.title"),
+      t("cases.detail.inheritance.steps.signerCompleted.title")
+    ],
+    [t]
+  );
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
   const prepareDisabledReason = useMemo(
@@ -641,7 +708,11 @@ export default function CaseDetailPage({
   const canPrepareApproval = !prepareDisabledReason;
   const distributionStatusLabel = distribution?.status
     ? distributionStatusLabels[distribution.status] ?? distribution.status
-    : "未取得";
+    : t("cases.detail.distribution.status.unset");
+  const distributionProgress = formatDistributionProgressText(distribution);
+  const distributionProgressText = distributionProgress
+    ? resolveMessage(distributionProgress)
+    : "-";
   const distributionDisabledReason = useMemo(() => {
     return resolveDistributionDisabledReason({
       caseData,
@@ -659,52 +730,57 @@ export default function CaseDetailPage({
     distribution,
     distributionLoading
   ]);
+  const prepareDisabledText = resolveMessage(prepareDisabledReason);
+  const distributionDisabledText = resolveMessage(distributionDisabledReason);
   const canExecuteDistribution =
     !distributionDisabledReason && !distributionExecuting;
   const signerDisabledReason = useMemo(() => {
-    if (!caseData) return "ケース情報が取得できません。";
+    if (!caseData) return { key: "cases.detail.signer.disabled.noCase" };
     if (caseData.stage !== "IN_PROGRESS") {
-      return "相続中になると署名の送信が可能になります。";
+      return { key: "cases.detail.signer.disabled.notInProgress" };
     }
     if (signerStatusKey === "FAILED") {
-      return "署名準備に失敗しました。運営へご連絡ください。";
+      return { key: "cases.detail.signer.disabled.failed" };
     }
     if (signerStatusKey !== "SET") {
-      return "署名準備中です。";
+      return { key: "cases.detail.signer.disabled.preparing" };
     }
     if (approvalLoading) {
-      return "署名対象を取得中です。";
+      return { key: "cases.detail.signer.disabled.loading" };
     }
     if (approvalError) {
-      return "署名対象の取得に失敗しました。";
+      return { key: "cases.detail.signer.disabled.loadFailed" };
     }
     if (!approvalTx?.txJson) {
-      return "署名対象が未生成です。";
+      return { key: "cases.detail.signer.disabled.notGenerated" };
     }
     if (approvalTx.status === "FAILED") {
-      return "署名対象の生成に失敗しました。";
+      return { key: "cases.detail.signer.disabled.prepareFailed" };
     }
     if (approvalTx.status === "SUBMITTED") {
       if (approvalNetworkStatus === "EXPIRED") {
-        return "相続実行の送信が期限切れのため、再準備が必要です。";
+        return { key: "cases.detail.signer.disabled.expired" };
       }
       const networkLabel =
         approvalNetworkStatusLabel && approvalNetworkStatusLabel !== "-"
           ? `（${approvalNetworkStatusLabel}）`
           : "";
-      return `相続実行は送信済みです${networkLabel}。`;
+      return {
+        key: "cases.detail.signer.disabled.submitted",
+        values: { network: networkLabel }
+      };
     }
     if (!hasHeirWallet) {
-      return "受取用ウォレットの登録が必要です。";
+      return { key: "cases.detail.signer.disabled.walletRequired" };
     }
     if (!isHeirWalletVerified) {
-      return "受取用ウォレットの所有確認が必要です。";
+      return { key: "cases.detail.signer.disabled.walletVerifyRequired" };
     }
     if (signerList?.signedByMe) {
-      return "署名済みです。";
+      return { key: "cases.detail.signer.disabled.signed" };
     }
     if (signerCompleted) {
-      return "必要数の署名が揃っています。";
+      return { key: "cases.detail.signer.disabled.completed" };
     }
     return null;
   }, [
@@ -721,6 +797,7 @@ export default function CaseDetailPage({
     approvalNetworkStatusLabel,
     approvalNetworkStatus
   ]);
+  const signerDisabledText = resolveMessage(signerDisabledReason);
   const canSubmitSignature =
     !signerDisabledReason &&
     !signerSubmitting &&
@@ -731,7 +808,7 @@ export default function CaseDetailPage({
     let active = true;
     if (!caseId) {
       if (active) {
-        setError("ケースIDが取得できません");
+        setError("cases.detail.error.caseIdMissing");
         setLoading(false);
       }
       return;
@@ -775,7 +852,7 @@ export default function CaseDetailPage({
             }
           } catch (err: any) {
             if (active) {
-              setHeirWalletError(err?.message ?? "ウォレットの取得に失敗しました");
+              setHeirWalletError(err?.message ?? "cases.detail.wallet.error.loadFailed");
             }
           } finally {
             if (active) {
@@ -785,7 +862,7 @@ export default function CaseDetailPage({
         }
       } catch (err: any) {
         if (active) {
-          setError(err?.message ?? "ケースの取得に失敗しました");
+          setError(err?.message ?? "cases.detail.error.loadFailed");
         }
       } finally {
         if (active) setLoading(false);
@@ -809,7 +886,7 @@ export default function CaseDetailPage({
         setUserCompletedTaskIds(progress.userCompletedTaskIds ?? []);
       } catch (err: any) {
         if (!active) return;
-        setTaskError(err?.message ?? "タスクの取得に失敗しました");
+        setTaskError(err?.message ?? "cases.detail.tasks.error.loadFailed");
       } finally {
         if (active) setTaskLoading(false);
       }
@@ -848,7 +925,7 @@ export default function CaseDetailPage({
       const data = await getSignerList(caseId);
       setSignerList(data);
     } catch (err: any) {
-      setSignerError(err?.message ?? "署名状況の取得に失敗しました");
+      setSignerError(err?.message ?? "cases.detail.signer.error.statusLoadFailed");
     } finally {
       setSignerLoading(false);
     }
@@ -889,7 +966,7 @@ export default function CaseDetailPage({
       const data = await getDistributionState(caseId);
       setDistribution(data);
     } catch (err: any) {
-      setDistributionError(err?.message ?? "分配状況の取得に失敗しました");
+      setDistributionError(err?.message ?? "cases.detail.distribution.error.loadFailed");
     } finally {
       setDistributionLoading(false);
     }
@@ -957,9 +1034,7 @@ export default function CaseDetailPage({
     setPrepareSuccess(null);
     try {
       await prepareApprovalTx(caseId);
-      setPrepareSuccess(
-        "同意の準備が完了しました。シークレットを入力して署名を進めてください。"
-      );
+      setPrepareSuccess("cases.detail.signer.prepare.success");
       setSignerSignedBlob("");
       setSignerSignedHash("");
       autoSignKeyRef.current = "";
@@ -968,13 +1043,13 @@ export default function CaseDetailPage({
     } catch (err: any) {
       const code = err?.data?.code;
       if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
-        setPrepareError("相続人の受取用ウォレットが全員分確認済みになると準備できます。");
+        setPrepareError("cases.detail.prepare.disabled.unverified");
       } else if (code === "HEIR_MISSING") {
-        setPrepareError("相続人が登録されていないため準備できません。");
+        setPrepareError("cases.detail.prepare.disabled.noHeirs");
       } else if (code === "NOT_READY") {
-        setPrepareError("相続中になると準備できます。");
+        setPrepareError("cases.detail.prepare.disabled.notInProgress");
       } else {
-        setPrepareError(err?.message ?? "同意の準備に失敗しました");
+        setPrepareError(err?.message ?? "cases.detail.signer.prepare.error.failed");
       }
     } finally {
       setPrepareLoading(false);
@@ -988,9 +1063,7 @@ export default function CaseDetailPage({
     setPrepareSuccess(null);
     try {
       await prepareApprovalTx(caseId, { force: true });
-      setPrepareSuccess(
-        "同意の再準備が完了しました。シークレットを入力して署名を進めてください。"
-      );
+      setPrepareSuccess("cases.detail.signer.prepare.reprepareSuccess");
       setSignerSignedBlob("");
       setSignerSignedHash("");
       autoSignKeyRef.current = "";
@@ -999,13 +1072,13 @@ export default function CaseDetailPage({
     } catch (err: any) {
       const code = err?.data?.code;
       if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
-        setPrepareError("相続人の受取用ウォレットが全員分確認済みになると準備できます。");
+        setPrepareError("cases.detail.prepare.disabled.unverified");
       } else if (code === "HEIR_MISSING") {
-        setPrepareError("相続人が登録されていないため準備できません。");
+        setPrepareError("cases.detail.prepare.disabled.noHeirs");
       } else if (code === "NOT_READY") {
-        setPrepareError("送信中のため再準備できません。");
+        setPrepareError("cases.detail.signer.prepare.error.submitted");
       } else {
-        setPrepareError(err?.message ?? "同意の再準備に失敗しました");
+        setPrepareError(err?.message ?? "cases.detail.signer.prepare.error.reprepareFailed");
       }
     } finally {
       setPrepareLoading(false);
@@ -1020,7 +1093,7 @@ export default function CaseDetailPage({
       const data = await executeDistribution(caseId);
       setDistribution(data);
     } catch (err: any) {
-      setDistributionError(err?.message ?? "分配の実行に失敗しました");
+      setDistributionError(err?.message ?? "cases.detail.distribution.error.executeFailed");
     } finally {
       setDistributionExecuting(false);
     }
@@ -1030,7 +1103,7 @@ export default function CaseDetailPage({
     if (!caseId) return;
     const address = heirWalletAddressInput.trim();
     if (!address) {
-      setHeirWalletError("ウォレットアドレスを入力してください");
+      setHeirWalletError("cases.detail.wallet.error.addressRequired");
       return;
     }
     setHeirWalletSaving(true);
@@ -1042,7 +1115,7 @@ export default function CaseDetailPage({
       setHeirWallet(wallet);
       setHeirWalletChallenge(null);
     } catch (err: any) {
-      setHeirWalletError(err?.message ?? "ウォレットの登録に失敗しました");
+      setHeirWalletError(err?.message ?? "cases.detail.wallet.error.saveFailed");
     } finally {
       setHeirWalletSaving(false);
     }
@@ -1058,7 +1131,7 @@ export default function CaseDetailPage({
       const result = await requestHeirWalletVerifyChallenge(caseId);
       setHeirWalletChallenge(result);
     } catch (err: any) {
-      setHeirWalletVerifyError(err?.message ?? "検証コードの取得に失敗しました");
+      setHeirWalletVerifyError(err?.message ?? "cases.detail.wallet.error.challengeFailed");
     } finally {
       setHeirWalletVerifyLoading(false);
     }
@@ -1074,11 +1147,11 @@ export default function CaseDetailPage({
 
   const handleAutoVerifyHeirWallet = async () => {
     if (!caseId) {
-      setHeirWalletVerifyError("ケースIDが取得できません");
+      setHeirWalletVerifyError("cases.detail.wallet.error.caseIdMissing");
       return;
     }
     if (!heirWallet?.address) {
-      setHeirWalletVerifyError("ウォレットアドレスが取得できません");
+      setHeirWalletVerifyError("cases.detail.wallet.error.addressMissing");
       return;
     }
     setHeirWalletVerifyError(null);
@@ -1103,12 +1176,12 @@ export default function CaseDetailPage({
       setHeirWalletSecret("");
       const wallet = await getHeirWallet(caseId);
       setHeirWallet(wallet);
-      setHeirWalletVerifySuccess("所有確認が完了しました");
+      setHeirWalletVerifySuccess("cases.detail.wallet.verify.success");
       if (shouldCloseWalletDialogOnVerify(wallet?.verificationStatus === "VERIFIED")) {
         setWalletDialogOpen(false);
       }
     } catch (err: any) {
-      setHeirWalletVerifyError(err?.message ?? "所有確認に失敗しました");
+      setHeirWalletVerifyError(err?.message ?? "cases.detail.wallet.verify.error");
     } finally {
       setHeirWalletSending(false);
     }
@@ -1117,7 +1190,7 @@ export default function CaseDetailPage({
   const signApprovalTx = useCallback(
     (secret: string) => {
       if (!approvalTx?.txJson) {
-        setSignerError("署名対象トランザクションが取得できません");
+        setSignerError("cases.detail.signer.error.txMissing");
         return false;
       }
       setSignerSigning(true);
@@ -1130,7 +1203,7 @@ export default function CaseDetailPage({
       } catch (err: any) {
         setSignerSignedBlob("");
         setSignerSignedHash("");
-        setSignerError(err?.message ?? "署名の生成に失敗しました");
+        setSignerError(err?.message ?? "cases.detail.signer.error.signFailed");
         return false;
       } finally {
         setSignerSigning(false);
@@ -1180,7 +1253,7 @@ export default function CaseDetailPage({
     if (!caseId) return;
     const signedBlob = signerSignedBlob.trim();
     if (!signedBlob) {
-      setSignerError("署名済みデータを入力してください");
+      setSignerError("cases.detail.signer.error.signedBlobRequired");
       return;
     }
     setSignerSubmitting(true);
@@ -1200,7 +1273,7 @@ export default function CaseDetailPage({
       setSignerSeed("");
       void fetchApprovalTx();
     } catch (err: any) {
-      setSignerError(err?.message ?? "署名の送信に失敗しました");
+      setSignerError(err?.message ?? "cases.detail.signer.error.submitFailed");
     } finally {
       setSignerSubmitting(false);
     }
@@ -1245,7 +1318,7 @@ export default function CaseDetailPage({
     event.preventDefault();
     if (isLocked) return;
     if (!caseId) {
-      setError("ケースIDが取得できません");
+      setError("cases.detail.error.caseIdMissing");
       return;
     }
     setError(null);
@@ -1254,7 +1327,7 @@ export default function CaseDetailPage({
       await createInvite(caseId, {
         email: inviteEmail,
         relationLabel: inviteRelation,
-        relationOther: inviteRelation === "その他" ? inviteRelationOther : undefined,
+        relationOther: inviteRelation === relationOtherValue ? inviteRelationOther : undefined,
         memo: inviteMemo.trim() ? inviteMemo : undefined
       });
       setInviteEmail("");
@@ -1264,7 +1337,7 @@ export default function CaseDetailPage({
       const inviteItems = await listInvitesByOwner(caseId);
       setOwnerInvites(inviteItems);
     } catch (err: any) {
-      setError(err?.message ?? "招待の送信に失敗しました");
+      setError(err?.message ?? "cases.detail.heirs.invite.error.sendFailed");
     } finally {
       setInviting(false);
     }
@@ -1287,7 +1360,7 @@ export default function CaseDetailPage({
       await updateMyTaskProgress(caseId, next);
     } catch (err: any) {
       setUserCompletedTaskIds(prev);
-      setTaskError(err?.message ?? "タスクの更新に失敗しました");
+      setTaskError(err?.message ?? "cases.detail.tasks.error.updateFailed");
     }
   };
 
@@ -1296,7 +1369,7 @@ export default function CaseDetailPage({
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
+            { label: t("nav.cases"), href: "/cases" },
             { label: title }
           ]}
         />
@@ -1306,45 +1379,57 @@ export default function CaseDetailPage({
             {caseData ? (
               <div className={styles.headerMeta}>
                 <span className={styles.statusBadge}>
-                  {statusLabels[caseData.stage] ?? caseData.stage}
+                  {caseStatusLabels[caseData.stage] ?? caseData.stage}
                 </span>
-                <span className={styles.metaText}>更新: {formatDate(caseData.updatedAt)}</span>
+                <span className={styles.metaText}>
+                  {t("cases.detail.updatedAt", { date: formatDate(caseData.updatedAt) })}
+                </span>
               </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
       {tab === "assets" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>資産</h2>
+            <h2 className={styles.panelTitle}>{t("cases.detail.assets.title")}</h2>
             {caseId && isOwner && !isLocked ? (
               <div className={styles.panelActions}>
                 <Button asChild size="sm" variant="secondary">
-                  <Link to={`/cases/${caseId}/asset-lock`}>資産をロックする</Link>
+                  <Link to={`/cases/${caseId}/asset-lock`}>
+                    {t("cases.detail.assets.actions.lock")}
+                  </Link>
                 </Button>
                 <Button asChild size="sm">
-                  <Link to={`/cases/${caseId}/assets/new`}>資産を追加</Link>
+                  <Link to={`/cases/${caseId}/assets/new`}>
+                    {t("cases.detail.assets.actions.add")}
+                  </Link>
                 </Button>
               </div>
             ) : null}
           </div>
           {loading ? null : isOwner === false ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>資産は被相続人のみ閲覧できます</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.assets.empty.heirOnly.title")}
+              </div>
               <div className={styles.emptyBody}>
-                相続人として参加しているケースでは資産は表示されません。
+                {t("cases.detail.assets.empty.heirOnly.body")}
               </div>
             </div>
           ) : assets.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>まだ資産が登録されていません</div>
-              <div className={styles.emptyBody}>「資産を追加」から登録できます。</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.assets.empty.none.title")}
+              </div>
+              <div className={styles.emptyBody}>
+                {t("cases.detail.assets.empty.none.body")}
+              </div>
             </div>
           ) : (
             <div className={styles.list}>
@@ -1359,10 +1444,12 @@ export default function CaseDetailPage({
       {tab === "plans" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>指図</h2>
+            <h2 className={styles.panelTitle}>{t("cases.detail.plans.title")}</h2>
             {caseId && isOwner && !isLocked ? (
               <Button asChild size="sm">
-                <Link to={`/cases/${caseId}/plans/new`}>指図を作成</Link>
+                <Link to={`/cases/${caseId}/plans/new`}>
+                  {t("cases.detail.plans.actions.create")}
+                </Link>
               </Button>
             ) : null}
           </div>
@@ -1370,15 +1457,21 @@ export default function CaseDetailPage({
             <div className={styles.emptyState}>
               {isOwner === false ? (
                 <>
-                  <div className={styles.emptyTitle}>指図がありません</div>
+                  <div className={styles.emptyTitle}>
+                    {t("cases.detail.plans.empty.heir.title")}
+                  </div>
                   <div className={styles.emptyBody}>
-                    指図が作成されるとここに表示されます。
+                    {t("cases.detail.plans.empty.heir.body")}
                   </div>
                 </>
               ) : (
                 <>
-                  <div className={styles.emptyTitle}>まだ指図がありません</div>
-                  <div className={styles.emptyBody}>最初の指図を作成できます。</div>
+                  <div className={styles.emptyTitle}>
+                    {t("cases.detail.plans.empty.owner.title")}
+                  </div>
+                  <div className={styles.emptyBody}>
+                    {t("cases.detail.plans.empty.owner.body")}
+                  </div>
                 </>
               )}
             </div>
@@ -1393,7 +1486,11 @@ export default function CaseDetailPage({
                   <div className={styles.row}>
                     <div className={styles.rowMain}>
                       <div className={styles.rowTitle}>{plan.title}</div>
-                      <div className={styles.rowMeta}>更新: {formatDate(plan.updatedAt)}</div>
+                      <div className={styles.rowMeta}>
+                        {t("cases.detail.plans.updatedAt", {
+                          date: formatDate(plan.updatedAt)
+                        })}
+                      </div>
                     </div>
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
@@ -1412,25 +1509,27 @@ export default function CaseDetailPage({
         loading && !caseData ? (
           <div className={styles.panel}>
             <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>相続実行</h2>
+              <h2 className={styles.panelTitle}>{t("cases.detail.deathClaims.title")}</h2>
             </div>
-            <div className={styles.muted}>読み込み中...</div>
+            <div className={styles.muted}>{t("common.loading")}</div>
           </div>
         ) : !caseData ? (
           <div className={styles.panel}>
             <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>相続実行</h2>
+              <h2 className={styles.panelTitle}>{t("cases.detail.deathClaims.title")}</h2>
             </div>
-            <div className={styles.muted}>ケース情報が取得できません。</div>
+            <div className={styles.muted}>{t("cases.detail.error.noCase")}</div>
           </div>
         ) : canAccessDeathClaims ? (
           <div className={styles.panel}>
             <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>相続実行</h2>
+              <h2 className={styles.panelTitle}>{t("cases.detail.deathClaims.title")}</h2>
             </div>
             {nextAction ? (
               <div className={styles.nextAction}>
-                <div className={styles.nextActionTitle}>次のアクション</div>
+                <div className={styles.nextActionTitle}>
+                  {t("cases.detail.deathClaims.nextAction.title")}
+                </div>
                 <div className={styles.nextActionSteps}>
                   {nextActionSteps.map((label, index) => (
                     <span
@@ -1443,14 +1542,20 @@ export default function CaseDetailPage({
                     </span>
                   ))}
                 </div>
-                <div className={styles.nextActionBody}>{nextAction.description}</div>
+                <div className={styles.nextActionBody}>
+                  {t(nextAction.descriptionKey)}
+                </div>
               </div>
             ) : null}
             <details className={styles.collapsible}>
               <summary className={styles.collapsibleSummary}>
                 <div className={styles.collapsibleText}>
-                  <div className={styles.collapsibleTitle}>死亡診断書</div>
-                  <div className={styles.collapsibleHint}>提出状況の確認・再提出</div>
+                  <div className={styles.collapsibleTitle}>
+                    {t("cases.detail.deathClaims.documents.title")}
+                  </div>
+                  <div className={styles.collapsibleHint}>
+                    {t("cases.detail.deathClaims.documents.hint")}
+                  </div>
                 </div>
                 <span className={styles.collapsibleChevron} aria-hidden="true" />
               </summary>
@@ -1464,9 +1569,11 @@ export default function CaseDetailPage({
             <details className={styles.collapsible} open>
               <summary className={styles.collapsibleSummary}>
                 <div className={styles.collapsibleText}>
-                  <div className={styles.collapsibleTitle}>相続実行の同意</div>
+                  <div className={styles.collapsibleTitle}>
+                    {t("cases.detail.deathClaims.approval.title")}
+                  </div>
                   <div className={styles.collapsibleHint}>
-                    システム+相続人の過半数の署名が揃うと相続実行が進みます。
+                    {t("cases.detail.deathClaims.approval.hint")}
                   </div>
                 </div>
                 <span className={styles.collapsibleMeta}>
@@ -1477,9 +1584,11 @@ export default function CaseDetailPage({
               <div className={styles.collapsibleBody}>
                 <div className={styles.signerSection}>
               <div className={styles.signerPrepare}>
-                <div className={styles.signerPrepareTitle}>同意の準備</div>
+                <div className={styles.signerPrepareTitle}>
+                  {t("cases.detail.signer.prepare.title")}
+                </div>
                 <div className={styles.signerPrepareHint}>
-                  相続人の同意を進めるために、署名対象を作成します。
+                  {t("cases.detail.signer.prepare.hint")}
                 </div>
                 <div className={styles.signerPrepareActions}>
                   <Button
@@ -1487,58 +1596,81 @@ export default function CaseDetailPage({
                     onClick={handlePrepareApproval}
                     disabled={!canPrepareApproval || prepareLoading}
                   >
-                    {prepareLoading ? "準備中..." : "相続同意の準備を始める"}
+                    {prepareLoading
+                      ? t("cases.detail.signer.prepare.loading")
+                      : t("cases.detail.signer.prepare.action")}
                   </Button>
                 </div>
-                {prepareDisabledReason ? (
-                  <div className={styles.signerPrepareNote}>{prepareDisabledReason}</div>
+                {prepareDisabledText ? (
+                  <div className={styles.signerPrepareNote}>{prepareDisabledText}</div>
                 ) : null}
               </div>
-              {signerError ? <FormAlert variant="error">{signerError}</FormAlert> : null}
-              {approvalError ? <FormAlert variant="error">{approvalError}</FormAlert> : null}
-              {prepareError ? <FormAlert variant="error">{prepareError}</FormAlert> : null}
-              {prepareSuccess ? <FormAlert variant="success">{prepareSuccess}</FormAlert> : null}
+              {signerError ? <FormAlert variant="error">{t(signerError)}</FormAlert> : null}
+              {approvalError ? (
+                <FormAlert variant="error">{t(approvalError)}</FormAlert>
+              ) : null}
+              {prepareError ? <FormAlert variant="error">{t(prepareError)}</FormAlert> : null}
+              {prepareSuccess ? (
+                <FormAlert variant="success">{t(prepareSuccess)}</FormAlert>
+              ) : null}
               {signerList?.error ? (
                 <FormAlert variant="error">{signerList.error}</FormAlert>
               ) : null}
               {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>署名状況</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.signer.status.label")}
+                  </div>
                   <div className={styles.signerValue}>
                     {signerLoading
-                      ? "読み込み中..."
+                      ? t("common.loading")
                       : signerList
-                        ? `${signerList.signaturesCount} / ${signerList.requiredCount} 人`
+                        ? t("cases.detail.signer.status.count", {
+                            signed: signerList.signaturesCount,
+                            required: signerList.requiredCount
+                          })
                         : "-"}
                   </div>
                 </div>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>あなたの署名</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.signer.mySignature.label")}
+                  </div>
                   <div className={styles.signerValue}>
-                    {signerList?.signedByMe ? "署名済み" : "未署名"}
+                    {signerList?.signedByMe
+                      ? t("cases.detail.signer.mySignature.signed")
+                      : t("cases.detail.signer.mySignature.unsigned")}
                   </div>
                 </div>
                 {approvalCompleted ? (
                   <div className={styles.signerRow}>
-                    <div className={styles.signerLabel}>相続状態</div>
-                    <div className={styles.signerValue}>相続完了</div>
+                    <div className={styles.signerLabel}>
+                      {t("cases.detail.signer.inheritance.label")}
+                    </div>
+                    <div className={styles.signerValue}>
+                      {t("cases.detail.signer.inheritance.completed")}
+                    </div>
                   </div>
                 ) : null}
               </div>
               <div className={styles.signerMultiSign}>
                 <div className={styles.signerMultiSignTitle}>
-                  MultiSignのしくみ（アドレス）
+                  {t("cases.detail.signer.multiSign.title")}
                 </div>
                 <div className={styles.signerMultiSignBody}>
                   <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>送金元</div>
+                    <div className={styles.signerMultiSignLabel}>
+                      {t("cases.detail.signer.labels.from")}
+                    </div>
                     <div className={styles.signerMultiSignValue}>
                       {approvalTxJson?.Account ?? "-"}
                     </div>
                   </div>
                   <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>署名者</div>
+                    <div className={styles.signerMultiSignLabel}>
+                      {t("cases.detail.signer.labels.signers")}
+                    </div>
                     {signerEntryDisplayList.length ? (
                       <ul className={styles.signerMultiSignList}>
                         {signerEntryDisplayList.map((entry) => (
@@ -1547,7 +1679,7 @@ export default function CaseDetailPage({
                             className={styles.signerMultiSignItem}
                           >
                             <div className={styles.signerMultiSignItemLabel}>
-                              {entry.label}
+                              {t(entry.label)}
                             </div>
                             <div className={styles.signerMultiSignItemValue}>
                               {entry.account}
@@ -1557,12 +1689,14 @@ export default function CaseDetailPage({
                       </ul>
                     ) : (
                       <div className={styles.muted}>
-                        署名の準備が完了すると表示します。
+                        {t("cases.detail.signer.multiSign.empty")}
                       </div>
                     )}
                   </div>
                   <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>送金先</div>
+                    <div className={styles.signerMultiSignLabel}>
+                      {t("cases.detail.signer.labels.to")}
+                    </div>
                     <div className={styles.signerMultiSignValue}>
                       {approvalTxJson?.Destination ?? "-"}
                     </div>
@@ -1574,9 +1708,11 @@ export default function CaseDetailPage({
                 <div className={styles.signerTxSection}>
                   <div className={styles.signerTxHeader}>
                     <div className={styles.signerTxHeaderMain}>
-                      <div className={styles.signerTxTitle}>署名内容</div>
+                      <div className={styles.signerTxTitle}>
+                        {t("cases.detail.signer.tx.title")}
+                      </div>
                       <div className={styles.signerTxHint}>
-                        送金内容とMemoが正しいことを確認してください。
+                        {t("cases.detail.signer.tx.hint")}
                       </div>
                     </div>
                     <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
@@ -1585,7 +1721,9 @@ export default function CaseDetailPage({
                     <div className={styles.signerTxStatus}>
                       <div className={styles.signerTxRow}>
                         <div>
-                          <div className={styles.signerTxLabel}>送信Tx</div>
+                          <div className={styles.signerTxLabel}>
+                            {t("cases.detail.signer.tx.sentLabel")}
+                          </div>
                           <div className={styles.signerTxValue}>
                             {approvalSubmittedTxHash || "-"}
                           </div>
@@ -1595,8 +1733,10 @@ export default function CaseDetailPage({
                             size="icon"
                             variant="ghost"
                             className={styles.copyButton}
-                            onClick={() => handleCopy("送信Tx", approvalSubmittedTxHash)}
-                            aria-label="送信Txをコピー"
+                            onClick={() =>
+                              handleCopy(t("cases.detail.signer.tx.sentLabel"), approvalSubmittedTxHash)
+                            }
+                            aria-label={t("cases.detail.signer.tx.copy.sentTx")}
                           >
                             <Copy />
                           </Button>
@@ -1604,7 +1744,9 @@ export default function CaseDetailPage({
                       </div>
                       <div className={styles.signerTxRow}>
                         <div>
-                          <div className={styles.signerTxLabel}>送信後の状態</div>
+                          <div className={styles.signerTxLabel}>
+                            {t("cases.detail.signer.tx.afterLabel")}
+                          </div>
                           <div className={styles.signerTxValue}>
                             {approvalNetworkDetail}
                           </div>
@@ -1617,7 +1759,7 @@ export default function CaseDetailPage({
                             onClick={handleReprepareApproval}
                             disabled={prepareLoading}
                           >
-                            再準備
+                            {t("cases.detail.signer.tx.actions.reprepare")}
                           </Button>
                         ) : null}
                         <Button
@@ -1627,24 +1769,26 @@ export default function CaseDetailPage({
                           onClick={() => void fetchApprovalTx()}
                           disabled={approvalLoading || !canPollApprovalStatus}
                         >
-                          再取得
+                          {t("cases.detail.signer.tx.actions.reload")}
                         </Button>
                       </div>
                       <div className={styles.signerTxNote}>
                         {canReprepareApproval
-                          ? "期限切れのため再準備が必要です。"
-                          : "1分ごとに自動更新します。"}
+                          ? t("cases.detail.signer.tx.note.expired")
+                          : t("cases.detail.signer.tx.note.refresh")}
                       </div>
                     </div>
                   ) : null}
                   {approvalLoading ? (
-                    <div className={styles.muted}>署名対象を読み込み中...</div>
+                    <div className={styles.muted}>{t("cases.detail.signer.tx.loading")}</div>
                   ) : null}
                   {approvalTxJson ? (
                     <details className={styles.collapsible}>
                       <summary className={styles.collapsibleSummary}>
                         <div className={styles.collapsibleText}>
-                          <div className={styles.collapsibleTitle}>署名内容を確認</div>
+                          <div className={styles.collapsibleTitle}>
+                            {t("cases.detail.signer.tx.details.title")}
+                          </div>
                           <div className={styles.collapsibleHint}>{signerTxSummary}</div>
                         </div>
                         <span className={styles.collapsibleChevron} aria-hidden="true" />
@@ -1663,9 +1807,12 @@ export default function CaseDetailPage({
                               variant="ghost"
                               className={styles.copyButton}
                               onClick={() =>
-                                handleCopy("送金元", String(approvalTxJson.Account ?? ""))
+                                handleCopy(
+                                  t("cases.detail.signer.labels.from"),
+                                  String(approvalTxJson.Account ?? "")
+                                )
                               }
-                              aria-label="送金元をコピー"
+                              aria-label={t("cases.detail.signer.tx.copy.from")}
                             >
                               <Copy />
                             </Button>
@@ -1683,18 +1830,20 @@ export default function CaseDetailPage({
                               className={styles.copyButton}
                               onClick={() =>
                                 handleCopy(
-                                  "送金先",
+                                  t("cases.detail.signer.labels.to"),
                                   String(approvalTxJson.Destination ?? "")
                                 )
                               }
-                              aria-label="送金先をコピー"
+                              aria-label={t("cases.detail.signer.tx.copy.to")}
                             >
                               <Copy />
                             </Button>
                           </div>
                           <div className={styles.signerTxRow}>
                             <div>
-                              <div className={styles.signerTxLabel}>Memo</div>
+                              <div className={styles.signerTxLabel}>
+                                {t("cases.detail.signer.tx.memoLabel")}
+                              </div>
                               <div className={styles.signerTxValue}>
                                 {approvalTx?.memo ?? "-"}
                               </div>
@@ -1703,8 +1852,10 @@ export default function CaseDetailPage({
                               size="icon"
                               variant="ghost"
                               className={styles.copyButton}
-                              onClick={() => handleCopy("Memo", approvalTx?.memo ?? "")}
-                              aria-label="Memoをコピー"
+                              onClick={() =>
+                                handleCopy(t("cases.detail.signer.tx.memoLabel"), approvalTx?.memo ?? "")
+                              }
+                              aria-label={t("cases.detail.signer.tx.copy.memo")}
                             >
                               <Copy />
                             </Button>
@@ -1712,7 +1863,7 @@ export default function CaseDetailPage({
                         </div>
                         <div className={styles.amountGrid}>
                           <div className={styles.amountField}>
-                            <FormField label="Amount (drops)">
+                            <FormField label={t("cases.detail.signer.tx.amount.dropsLabel")}>
                               <Input
                                 value={approvalAmountDrops}
                                 placeholder="-"
@@ -1723,14 +1874,19 @@ export default function CaseDetailPage({
                               size="icon"
                               variant="ghost"
                               className={styles.copyButton}
-                              onClick={() => handleCopy("Amount (drops)", approvalAmountDrops)}
-                              aria-label="Amount (drops)をコピー"
+                              onClick={() =>
+                                handleCopy(
+                                  t("cases.detail.signer.tx.amount.dropsLabel"),
+                                  approvalAmountDrops
+                                )
+                              }
+                              aria-label={t("cases.detail.signer.tx.copy.amountDrops")}
                             >
                               <Copy />
                             </Button>
                           </div>
                           <div className={styles.amountField}>
-                            <FormField label="Amount (XRP)">
+                            <FormField label={t("cases.detail.signer.tx.amount.xrpLabel")}>
                               <Input
                                 value={approvalAmountXrp}
                                 placeholder="-"
@@ -1741,8 +1897,13 @@ export default function CaseDetailPage({
                               size="icon"
                               variant="ghost"
                               className={styles.copyButton}
-                              onClick={() => handleCopy("Amount (XRP)", approvalAmountXrp)}
-                              aria-label="Amount (XRP)をコピー"
+                              onClick={() =>
+                                handleCopy(
+                                  t("cases.detail.signer.tx.amount.xrpLabel"),
+                                  approvalAmountXrp
+                                )
+                              }
+                              aria-label={t("cases.detail.signer.tx.copy.amountXrp")}
                             >
                               <Copy />
                             </Button>
@@ -1751,16 +1912,18 @@ export default function CaseDetailPage({
                       </div>
                     </details>
                   ) : (
-                    <div className={styles.muted}>署名対象が未生成です。</div>
+                    <div className={styles.muted}>{t("cases.detail.signer.tx.empty")}</div>
                   )}
                 </div>
               ) : (
                 <div className={styles.signerTxSection}>
                   <div className={styles.signerTxHeader}>
                     <div className={styles.signerTxHeaderMain}>
-                      <div className={styles.signerTxTitle}>送信後の状態</div>
+                      <div className={styles.signerTxTitle}>
+                        {t("cases.detail.signer.tx.afterTitle")}
+                      </div>
                       <div className={styles.signerTxHint}>
-                        ネットワーク反映の状況を確認できます。
+                        {t("cases.detail.signer.tx.afterHint")}
                       </div>
                     </div>
                     <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
@@ -1768,7 +1931,9 @@ export default function CaseDetailPage({
                   <div className={styles.signerTxStatus}>
                     <div className={styles.signerTxRow}>
                       <div>
-                        <div className={styles.signerTxLabel}>送信Tx</div>
+                        <div className={styles.signerTxLabel}>
+                          {t("cases.detail.signer.tx.sentLabel")}
+                        </div>
                         <div className={styles.signerTxValue}>
                           {approvalSubmittedTxHash || "-"}
                         </div>
@@ -1778,8 +1943,10 @@ export default function CaseDetailPage({
                           size="icon"
                           variant="ghost"
                           className={styles.copyButton}
-                          onClick={() => handleCopy("送信Tx", approvalSubmittedTxHash)}
-                          aria-label="送信Txをコピー"
+                          onClick={() =>
+                            handleCopy(t("cases.detail.signer.tx.sentLabel"), approvalSubmittedTxHash)
+                          }
+                          aria-label={t("cases.detail.signer.tx.copy.sentTx")}
                         >
                           <Copy />
                         </Button>
@@ -1787,7 +1954,9 @@ export default function CaseDetailPage({
                     </div>
                     <div className={styles.signerTxRow}>
                       <div>
-                        <div className={styles.signerTxLabel}>送信後の状態</div>
+                        <div className={styles.signerTxLabel}>
+                          {t("cases.detail.signer.tx.afterLabel")}
+                        </div>
                         <div className={styles.signerTxValue}>
                           {approvalNetworkDetail}
                         </div>
@@ -1800,7 +1969,7 @@ export default function CaseDetailPage({
                           onClick={handleReprepareApproval}
                           disabled={prepareLoading}
                         >
-                          再準備
+                          {t("cases.detail.signer.tx.actions.reprepare")}
                         </Button>
                       ) : null}
                       <Button
@@ -1810,38 +1979,39 @@ export default function CaseDetailPage({
                         onClick={() => void fetchApprovalTx()}
                         disabled={approvalLoading || !canPollApprovalStatus}
                       >
-                        再取得
+                        {t("cases.detail.signer.tx.actions.reload")}
                       </Button>
                     </div>
                     <div className={styles.signerTxNote}>
                       {canReprepareApproval
-                        ? "期限切れのため再準備が必要です。"
-                        : "1分ごとに自動更新します。"}
+                        ? t("cases.detail.signer.tx.note.expired")
+                        : t("cases.detail.signer.tx.note.refresh")}
                     </div>
                   </div>
                 </div>
               )}
               {showSignerDetails ? (
                 <div className={styles.signerGuide}>
-                  <div className={styles.signerGuideTitle}>署名の流れ</div>
+                  <div className={styles.signerGuideTitle}>
+                    {t("cases.detail.signer.guide.title")}
+                  </div>
                   <ol className={styles.signerGuideList}>
                     <li>
-                      署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配する
-                      XRPLトランザクションです。
+                      {t("cases.detail.signer.guide.steps.tx")}
                     </li>
-                    <li>登録済みの相続人ウォレットでMultiSign署名を行います。</li>
+                    <li>{t("cases.detail.signer.guide.steps.multisign")}</li>
                     <li>
-                      シークレットを入力すると署名を自動で作成します（サーバーには送信しません）。
+                      {t("cases.detail.signer.guide.steps.secret")}
                     </li>
-                    <li>署名を送信すると同意が反映されます。</li>
-                    <li>必要な署名が揃うと相続実行の送信が自動で行われます。</li>
+                    <li>{t("cases.detail.signer.guide.steps.submit")}</li>
+                    <li>{t("cases.detail.signer.guide.steps.autoExecute")}</li>
                   </ol>
                 </div>
               ) : null}
               {shouldShowSignerActions(approvalTx?.status ?? null) ? (
                 <div className={styles.signerActions}>
                   <div className={styles.signerActionBlock}>
-                    <FormField label="シークレット">
+                    <FormField label={t("cases.detail.signer.secret.label")}>
                       <Input
                         value={signerSeed}
                         onChange={(event) => setSignerSeed(event.target.value)}
@@ -1852,10 +2022,10 @@ export default function CaseDetailPage({
                     </FormField>
                     <div className={styles.signerAutoNote}>
                       {signerSigning
-                        ? "署名を作成中です..."
+                        ? t("cases.detail.signer.autoNote.signing")
                         : signerSignedBlob
-                          ? "署名の準備ができました。"
-                          : "シークレットを入力すると署名を自動で作成します。"}
+                          ? t("cases.detail.signer.autoNote.ready")
+                          : t("cases.detail.signer.autoNote.hint")}
                     </div>
                   </div>
                   <div className={styles.signerActionBlock}>
@@ -1865,17 +2035,19 @@ export default function CaseDetailPage({
                         onClick={handleSubmitSignerSignature}
                         disabled={!canSubmitSignature}
                       >
-                        {signerSubmitting ? "送信中..." : "署名を送信"}
+                        {signerSubmitting
+                          ? t("cases.detail.signer.actions.submitting")
+                          : t("cases.detail.signer.actions.submit")}
                       </Button>
                     </div>
                     <div className={styles.signerSecretNote}>
-                      シークレットはこの端末内だけで使われます。
+                      {t("cases.detail.signer.secret.note")}
                     </div>
                   </div>
                 </div>
               ) : null}
-              {signerDisabledReason ? (
-                <div className={styles.signerNote}>{signerDisabledReason}</div>
+              {signerDisabledText ? (
+                <div className={styles.signerNote}>{signerDisabledText}</div>
               ) : null}
                 </div>
               </div>
@@ -1883,39 +2055,55 @@ export default function CaseDetailPage({
             <div className={styles.distributionSection}>
               <div className={styles.distributionHeader}>
                 <div className={styles.distributionHeaderMain}>
-                  <div className={styles.distributionTitle}>分配を実行</div>
+                  <div className={styles.distributionTitle}>
+                    {t("cases.detail.distribution.title")}
+                  </div>
                   <div className={styles.distributionHint}>
-                    相続用ウォレットから受取用ウォレットへ送金します。
+                    {t("cases.detail.distribution.hint")}
                   </div>
                 </div>
                 <span className={styles.distributionBadge}>{distributionStatusLabel}</span>
               </div>
               {distributionError ? (
-                <FormAlert variant="error">{distributionError}</FormAlert>
+                <FormAlert variant="error">{t(distributionError)}</FormAlert>
               ) : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>成功</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.distribution.labels.success")}
+                  </div>
                   <div className={styles.signerValue}>
-                    {formatDistributionProgressText(distribution)}
+                    {distributionProgressText}
                   </div>
                 </div>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>失敗</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.distribution.labels.failed")}
+                  </div>
                   <div className={styles.signerValue}>
-                    {distribution?.failedCount ?? 0} 件
+                    {t("cases.detail.distribution.count", {
+                      count: distribution?.failedCount ?? 0
+                    })}
                   </div>
                 </div>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>スキップ</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.distribution.labels.skipped")}
+                  </div>
                   <div className={styles.signerValue}>
-                    {distribution?.skippedCount ?? 0} 件
+                    {t("cases.detail.distribution.count", {
+                      count: distribution?.skippedCount ?? 0
+                    })}
                   </div>
                 </div>
                 <div className={styles.signerRow}>
-                  <div className={styles.signerLabel}>エスカレ</div>
+                  <div className={styles.signerLabel}>
+                    {t("cases.detail.distribution.labels.escalation")}
+                  </div>
                   <div className={styles.signerValue}>
-                    {distribution?.escalationCount ?? 0} 件
+                    {t("cases.detail.distribution.count", {
+                      count: distribution?.escalationCount ?? 0
+                    })}
                   </div>
                 </div>
               </div>
@@ -1926,29 +2114,33 @@ export default function CaseDetailPage({
                   disabled={!canExecuteDistribution}
                 >
                   {distributionExecuting
-                    ? "実行中..."
+                    ? t("cases.detail.distribution.actions.executing")
                     : distribution?.status === "PARTIAL" || distribution?.status === "FAILED"
-                      ? "再開"
-                      : "分配を実行"}
+                      ? t("cases.detail.distribution.actions.resume")
+                      : t("cases.detail.distribution.actions.execute")}
                 </Button>
                 {distribution?.status === "RUNNING" ? (
-                  <span className={styles.distributionNote}>1分ごとに自動更新します。</span>
+                  <span className={styles.distributionNote}>
+                    {t("cases.detail.distribution.note.refresh")}
+                  </span>
                 ) : null}
               </div>
-              {distributionDisabledReason ? (
-                <div className={styles.distributionNote}>{distributionDisabledReason}</div>
+              {distributionDisabledText ? (
+                <div className={styles.distributionNote}>{distributionDisabledText}</div>
               ) : null}
             </div>
           </div>
         ) : (
           <div className={styles.panel}>
             <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>相続実行</h2>
+              <h2 className={styles.panelTitle}>{t("cases.detail.deathClaims.title")}</h2>
             </div>
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>相続待ちになるまで操作できません</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.deathClaims.unavailable.title")}
+              </div>
               <div className={styles.emptyBody}>
-                相続待ちに更新されると相続実行の手続きを進められます。
+                {t("cases.detail.deathClaims.unavailable.body")}
               </div>
             </div>
           </div>
@@ -1958,11 +2150,11 @@ export default function CaseDetailPage({
       {tab === "heirs" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>相続人</h2>
+            <h2 className={styles.panelTitle}>{t("cases.detail.heirs.title")}</h2>
           </div>
           {isOwner && !isLocked ? (
             <form className={styles.form} onSubmit={handleInviteSubmit}>
-              <FormField label="メールアドレス">
+              <FormField label={t("cases.detail.heirs.form.email")}>
                 <Input
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
@@ -1970,7 +2162,7 @@ export default function CaseDetailPage({
                   type="email"
                 />
               </FormField>
-              <FormField label="関係">
+              <FormField label={t("cases.detail.heirs.form.relation")}>
                 <select
                   className={styles.select}
                   value={inviteRelation}
@@ -1978,44 +2170,54 @@ export default function CaseDetailPage({
                 >
                   {relationOptions.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {renderRelationLabel(option)}
                     </option>
                   ))}
                 </select>
               </FormField>
-              {inviteRelation === "その他" ? (
-                <FormField label="関係（自由入力）">
+              {inviteRelation === relationOtherValue ? (
+                <FormField label={t("cases.detail.heirs.form.relationOther")}>
                   <Input
                     value={inviteRelationOther}
                     onChange={(event) => setInviteRelationOther(event.target.value)}
-                    placeholder="例: 同居人"
+                    placeholder={t("cases.detail.heirs.form.relationOtherPlaceholder")}
                   />
                 </FormField>
               ) : null}
-              <FormField label="メモ（任意）">
+              <FormField label={t("cases.detail.heirs.form.memo")}>
                 <Textarea
                   value={inviteMemo}
                   onChange={(event) => setInviteMemo(event.target.value)}
-                  placeholder="例: 生前からの連絡先"
+                  placeholder={t("cases.detail.heirs.form.memoPlaceholder")}
                 />
               </FormField>
               <div className={styles.formActions}>
                 <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
-                  {inviting ? "送信中..." : "招待を送る"}
+                  {inviting
+                    ? t("cases.detail.heirs.form.submitting")
+                    : t("cases.detail.heirs.form.submit")}
                 </Button>
               </div>
             </form>
           ) : isOwner && isLocked ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>資産ロック後は閲覧のみです</div>
-              <div className={styles.emptyBody}>相続人の追加や編集はできません。</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.heirs.locked.title")}
+              </div>
+              <div className={styles.emptyBody}>
+                {t("cases.detail.heirs.locked.body")}
+              </div>
             </div>
           ) : null}
           {loading ? null : isOwner ? (
             ownerInvites.length === 0 ? (
               <div className={styles.emptyState}>
-                <div className={styles.emptyTitle}>まだ招待がありません</div>
-                <div className={styles.emptyBody}>相続人に招待を送信できます。</div>
+                <div className={styles.emptyTitle}>
+                  {t("cases.detail.heirs.invites.empty.title")}
+                </div>
+                <div className={styles.emptyBody}>
+                  {t("cases.detail.heirs.invites.empty.body")}
+                </div>
               </div>
             ) : (
               <div className={styles.list}>
@@ -2024,19 +2226,17 @@ export default function CaseDetailPage({
                     <div className={styles.rowMain}>
                       <div className={styles.rowTitle}>{invite.email}</div>
                       <div className={styles.rowMeta}>
-                        関係:{" "}
-                        {invite.relationLabel === "その他"
-                          ? invite.relationOther ?? "その他"
-                          : invite.relationLabel}
+                        {t("cases.detail.heirs.relationLabel")}:{" "}
+                        {renderRelationLabel(invite.relationLabel, invite.relationOther)}
                       </div>
                     </div>
                     <div className={styles.rowSide}>
                       <span className={styles.statusBadge}>
                         {invite.status === "pending"
-                          ? "招待中"
+                          ? t("cases.detail.heirs.invites.status.pending")
                           : invite.status === "accepted"
-                            ? "参加中"
-                            : "辞退"}
+                            ? t("cases.detail.heirs.invites.status.accepted")
+                            : t("cases.detail.heirs.invites.status.declined")}
                       </span>
                     </div>
                   </div>
@@ -2045,8 +2245,12 @@ export default function CaseDetailPage({
             )
           ) : heirs.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>相続人が登録されていません</div>
-              <div className={styles.emptyBody}>承認済みの相続人がここに表示されます。</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.heirs.empty.title")}
+              </div>
+              <div className={styles.emptyBody}>
+                {t("cases.detail.heirs.empty.body")}
+              </div>
             </div>
           ) : (
             <div className={styles.list}>
@@ -2055,15 +2259,15 @@ export default function CaseDetailPage({
                   <div className={styles.rowMain}>
                     <div className={styles.rowTitle}>{heir.email}</div>
                     <div className={styles.rowMeta}>
-                      関係:{" "}
-                      {heir.relationLabel === "その他"
-                        ? heir.relationOther ?? "その他"
-                        : heir.relationLabel}
+                      {t("cases.detail.heirs.relationLabel")}:{" "}
+                      {renderRelationLabel(heir.relationLabel, heir.relationOther)}
                     </div>
                   </div>
                   <div className={styles.rowSide}>
                     <div className={styles.rowBadgeStack}>
-                      <span className={styles.statusBadge}>承認済み</span>
+                      <span className={styles.statusBadge}>
+                        {t("cases.detail.heirs.status.accepted")}
+                      </span>
                       {heir.walletStatus ? (
                         <span className={styles.statusBadge}>
                           {walletStatusLabels[heir.walletStatus] ?? heir.walletStatus}
@@ -2081,34 +2285,40 @@ export default function CaseDetailPage({
       {tab === "wallet" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>受取用ウォレット</h2>
+            <h2 className={styles.panelTitle}>{t("cases.detail.wallet.title")}</h2>
           </div>
           {isOwner === false ? (
             <div className={styles.walletSection}>
               <div className={styles.walletRow}>
-                <span className={styles.walletLabel}>ステータス</span>
+                <span className={styles.walletLabel}>
+                  {t("cases.detail.wallet.statusLabel")}
+                </span>
                 <span className={styles.walletStatus}>
                   {isHeirWalletVerified
-                    ? "所有確認済み"
+                    ? t("cases.detail.wallet.status.verified")
                     : hasHeirWallet
-                      ? "未確認"
-                      : "未登録"}
+                      ? t("cases.detail.wallet.status.pending")
+                      : t("cases.detail.wallet.status.unregistered")}
                 </span>
               </div>
-              {heirWalletError ? <FormAlert variant="error">{heirWalletError}</FormAlert> : null}
+              {heirWalletError ? (
+                <FormAlert variant="error">{t(heirWalletError)}</FormAlert>
+              ) : null}
               {heirWalletLoading ? (
-                <div className={styles.badgeMuted}>ウォレット情報を読み込み中...</div>
+                <div className={styles.badgeMuted}>{t("cases.detail.wallet.loading")}</div>
               ) : null}
               {hasHeirWallet ? (
                 <div className={styles.walletAddress}>
-                  <div className={styles.walletAddressLabel}>ウォレットアドレス</div>
+                  <div className={styles.walletAddressLabel}>
+                    {t("cases.detail.wallet.addressLabel")}
+                  </div>
                   <div className={styles.walletAddressValue}>{heirWallet?.address}</div>
                 </div>
               ) : null}
               <div className={styles.walletActions}>
                 {isHeirWalletVerified ? null : (
                   <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
-                    登録/変更
+                    {t("cases.detail.wallet.actions.register")}
                   </Button>
                 )}
                 {isHeirWalletVerified ? null : (
@@ -2118,7 +2328,7 @@ export default function CaseDetailPage({
                     onClick={() => handleOpenWalletDialog("verify")}
                     disabled={!hasHeirWallet}
                   >
-                    所有確認
+                    {t("cases.detail.wallet.actions.verify")}
                   </Button>
                 )}
               </div>
@@ -2127,25 +2337,25 @@ export default function CaseDetailPage({
                   <DialogHeader>
                     <DialogTitle>
                       {walletDialogMode === "verify"
-                        ? "受取用ウォレットの所有確認"
-                        : "受取用ウォレットを登録"}
+                        ? t("cases.detail.wallet.dialog.verifyTitle")
+                        : t("cases.detail.wallet.dialog.registerTitle")}
                     </DialogTitle>
                     <DialogDescription>
-                      ウォレットアドレスの登録と所有確認を行います。
+                      {t("cases.detail.wallet.dialog.description")}
                     </DialogDescription>
                   </DialogHeader>
                   {heirWalletError ? (
-                    <FormAlert variant="error">{heirWalletError}</FormAlert>
+                    <FormAlert variant="error">{t(heirWalletError)}</FormAlert>
                   ) : null}
                   {heirWalletVerifyError ? (
-                    <FormAlert variant="error">{heirWalletVerifyError}</FormAlert>
+                    <FormAlert variant="error">{t(heirWalletVerifyError)}</FormAlert>
                   ) : null}
                   {heirWalletVerifySuccess ? (
-                    <FormAlert variant="success">{heirWalletVerifySuccess}</FormAlert>
+                    <FormAlert variant="success">{t(heirWalletVerifySuccess)}</FormAlert>
                   ) : null}
                   {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
                   <div className={styles.walletForm}>
-                    <FormField label="ウォレットアドレス">
+                    <FormField label={t("cases.detail.wallet.form.addressLabel")}>
                       <Input
                         value={heirWalletAddressInput}
                         onChange={(event) => setHeirWalletAddressInput(event.target.value)}
@@ -2158,7 +2368,9 @@ export default function CaseDetailPage({
                         onClick={handleSaveHeirWallet}
                         disabled={heirWalletSaving}
                       >
-                        {heirWalletSaving ? "保存中..." : "登録する"}
+                        {heirWalletSaving
+                          ? t("cases.detail.wallet.form.saving")
+                          : t("cases.detail.wallet.form.save")}
                       </Button>
                       {hasHeirWallet ? (
                         <Button
@@ -2167,7 +2379,7 @@ export default function CaseDetailPage({
                           onClick={handleRequestHeirWalletChallenge}
                           disabled={heirWalletVerifyLoading}
                         >
-                          所有確認を開始
+                          {t("cases.detail.wallet.form.startVerify")}
                         </Button>
                       ) : null}
                     </div>
@@ -2188,9 +2400,11 @@ export default function CaseDetailPage({
                   ) : (
                     walletDialogMode === "verify" && (
                       <div className={styles.emptyState}>
-                        <div className={styles.emptyTitle}>まずは登録してください</div>
+                        <div className={styles.emptyTitle}>
+                          {t("cases.detail.wallet.dialog.empty.title")}
+                        </div>
                         <div className={styles.emptyBody}>
-                          受取用ウォレットの登録後に所有確認が可能です。
+                          {t("cases.detail.wallet.dialog.empty.body")}
                         </div>
                       </div>
                     )
@@ -2198,7 +2412,7 @@ export default function CaseDetailPage({
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button type="button" variant="ghost">
-                        閉じる
+                        {t("common.close")}
                       </Button>
                     </DialogClose>
                   </DialogFooter>
@@ -2207,9 +2421,11 @@ export default function CaseDetailPage({
             </div>
           ) : (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>相続人のみ操作できます</div>
+              <div className={styles.emptyTitle}>
+                {t("cases.detail.wallet.unavailable.title")}
+              </div>
               <div className={styles.emptyBody}>
-                受取用ウォレットの登録は相続人本人が行います。
+                {t("cases.detail.wallet.unavailable.body")}
               </div>
             </div>
           )}
@@ -2219,22 +2435,28 @@ export default function CaseDetailPage({
       {tab === "tasks" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>タスク</h2>
-            <span className={styles.badgeMuted}>進捗には影響しません</span>
+            <h2 className={styles.panelTitle}>{t("cases.detail.tasks.title")}</h2>
+            <span className={styles.badgeMuted}>{t("cases.detail.tasks.note")}</span>
           </div>
-          {taskError ? <FormAlert variant="error">{taskError}</FormAlert> : null}
-          {taskLoading ? <div className={styles.badgeMuted}>読み込み中...</div> : null}
+          {taskError ? <FormAlert variant="error">{t(taskError)}</FormAlert> : null}
+          {taskLoading ? <div className={styles.badgeMuted}>{t("common.loading")}</div> : null}
           <div className={styles.taskSection}>
             <div className={styles.taskSectionHeader}>
-              <h3 className={styles.taskSectionTitle}>自分用タスク</h3>
+              <h3 className={styles.taskSectionTitle}>
+                {t("cases.detail.tasks.personal.title")}
+              </h3>
               <span className={styles.taskSectionMeta}>
-                {isOwner ? "被相続人" : "相続人"}
+                {isOwner ? t("cases.detail.tasks.role.owner") : t("cases.detail.tasks.role.heir")}
               </span>
             </div>
             {visiblePersonalTasks.length === 0 ? (
               <div className={styles.emptyState}>
-                <div className={styles.emptyTitle}>個人タスクはありません</div>
-                <div className={styles.emptyBody}>Todoマスターが更新されると表示されます。</div>
+                <div className={styles.emptyTitle}>
+                  {t("cases.detail.tasks.personal.empty.title")}
+                </div>
+                <div className={styles.emptyBody}>
+                  {t("cases.detail.tasks.personal.empty.body")}
+                </div>
               </div>
             ) : (
               <div className={styles.taskList}>
@@ -2255,7 +2477,7 @@ export default function CaseDetailPage({
                       <span className={styles.taskContent}>
                         <span className={styles.taskDescription}>{task.description}</span>
                         {walletNotice ? (
-                          <span className={styles.taskBadge}>{walletNotice}</span>
+                          <span className={styles.taskBadge}>{t(walletNotice)}</span>
                         ) : null}
                       </span>
                     </label>

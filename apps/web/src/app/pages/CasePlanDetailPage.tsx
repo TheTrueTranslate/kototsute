@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import Tabs from "../../features/shared/components/tabs";
@@ -26,27 +27,8 @@ import {
 import { getCase, type CaseSummary } from "../api/cases";
 import { listCaseHeirs, type CaseHeir } from "../api/invites";
 import { useAuth } from "../../features/auth/auth-provider";
+import { getRelationOptionKey, relationOtherValue } from "@kototsute/shared";
 import styles from "../../styles/caseDetailPage.module.css";
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "作成中",
-  SHARED: "有効",
-  INACTIVE: "無効"
-};
-
-const formatDate = (value: string | null | undefined) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString();
-};
-
-const formatDateTime = (value: string | null | undefined) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString();
-};
 
 const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") => {
   if (!Number.isFinite(value)) return "-";
@@ -54,13 +36,6 @@ const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") =>
 };
 
 type TabKey = "summary" | "assets" | "heirs" | "history";
-
-const tabItems: { key: TabKey; label: string }[] = [
-  { key: "summary", label: "概要" },
-  { key: "assets", label: "内容" },
-  { key: "heirs", label: "相続人" },
-  { key: "history", label: "履歴" }
-];
 
 type CasePlanDetailPageProps = {
   initialCaseData?: CaseSummary | null;
@@ -70,6 +45,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   const { caseId, planId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, i18n } = useTranslation();
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<PlanAsset[]>([]);
@@ -82,7 +58,34 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const title = useMemo(() => plan?.title ?? "指図詳細", [plan]);
+  const statusLabels: Record<string, string> = {
+    DRAFT: t("plans.status.draft"),
+    SHARED: t("plans.status.shared"),
+    INACTIVE: t("plans.status.inactive")
+  };
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString(i18n.language);
+  };
+
+  const formatDateTime = (value: string | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString(i18n.language);
+  };
+
+  const tabItems: { key: TabKey; label: string }[] = [
+    { key: "summary", label: t("plans.detail.tabs.summary") },
+    { key: "assets", label: t("plans.detail.tabs.assets") },
+    { key: "heirs", label: t("plans.detail.tabs.heirs") },
+    { key: "history", label: t("plans.detail.tabs.history") }
+  ];
+
+  const title = useMemo(() => plan?.title ?? t("plans.detail.title"), [plan, t]);
   const isOwner = useMemo(() => {
     if (plan?.ownerUid && user?.uid) {
       return plan.ownerUid === user.uid;
@@ -105,7 +108,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
 
   useEffect(() => {
     if (!caseId || !planId) {
-      setError("指図IDが取得できません");
+      setError("plans.detail.error.planIdMissing");
       setLoading(false);
       return;
     }
@@ -122,7 +125,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
         const historyItems = await listPlanHistory(caseId, planId).catch(() => []);
         setHistory(historyItems);
       } catch (err: any) {
-        setError(err?.message ?? "指図の取得に失敗しました");
+        setError(err?.message ?? "plans.detail.error.fetchFailed");
       } finally {
         setLoading(false);
       }
@@ -132,7 +135,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
 
   const handleDelete = async () => {
     if (!caseId || !planId) {
-      setDeleteError("指図IDが取得できません");
+      setDeleteError("plans.detail.error.planIdMissing");
       return;
     }
     setDeleteError(null);
@@ -141,10 +144,19 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       await deletePlan(caseId, planId);
       navigate(`/cases/${caseId}`);
     } catch (err: any) {
-      setDeleteError(err?.message ?? "指図の削除に失敗しました");
+      setDeleteError(err?.message ?? "plans.detail.error.deleteFailed");
     } finally {
       setDeleting(false);
     }
+  };
+
+  const renderRelationLabel = (relationLabel?: string | null, relationOther?: string | null) => {
+    if (!relationLabel) return t("common.unset");
+    if (relationLabel === relationOtherValue) {
+      return relationOther?.trim() ? relationOther : t("relations.other");
+    }
+    const relationKey = getRelationOptionKey(relationLabel);
+    return relationKey ? t(relationKey) : relationLabel;
   };
 
   return (
@@ -152,9 +164,11 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       <header className={styles.header}>
         <Breadcrumbs
           items={[
-            { label: "ケース", href: "/cases" },
-            caseId ? { label: "ケース詳細", href: `/cases/${caseId}` } : { label: "ケース詳細" },
-            { label: "指図" }
+            { label: t("nav.cases"), href: "/cases" },
+            caseId
+              ? { label: t("cases.detail.title"), href: `/cases/${caseId}` }
+              : { label: t("cases.detail.title") },
+            { label: t("plans.detail.breadcrumb") }
           ]}
         />
         <div className={styles.headerRow}>
@@ -165,14 +179,18 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
                 <span className={styles.statusBadge}>
                   {statusLabels[plan.status] ?? plan.status}
                 </span>
-                <span className={styles.metaText}>更新: {formatDate(plan.updatedAt)}</span>
+                <span className={styles.metaText}>
+                  {t("plans.detail.updatedAt", { date: formatDate(plan.updatedAt) })}
+                </span>
               </div>
             ) : null}
           </div>
           {isOwner && caseId && planId && !isLocked ? (
             <div className={styles.headerActions}>
               <Button asChild size="sm">
-                <Link to={`/cases/${caseId}/plans/${planId}/edit`}>編集する</Link>
+                <Link to={`/cases/${caseId}/plans/${planId}/edit`}>
+                  {t("plans.detail.actions.edit")}
+                </Link>
               </Button>
               <Dialog
                 open={deleteOpen}
@@ -183,27 +201,31 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
               >
                 <DialogTrigger asChild>
                   <Button size="sm" variant="destructive" disabled={!canDelete || deleting}>
-                    指図を削除
+                    {t("plans.detail.actions.delete")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>指図を削除しますか？</DialogTitle>
+                    <DialogTitle>{t("plans.detail.deleteDialog.title")}</DialogTitle>
                     <DialogDescription>
-                      資産が追加されていない指図のみ削除できます。
+                      {t("plans.detail.deleteDialog.description")}
                     </DialogDescription>
                   </DialogHeader>
-                  {deleteError ? <FormAlert variant="error">{deleteError}</FormAlert> : null}
+                  {deleteError ? (
+                    <FormAlert variant="error">{t(deleteError)}</FormAlert>
+                  ) : null}
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button variant="ghost">キャンセル</Button>
+                      <Button variant="ghost">{t("common.cancel")}</Button>
                     </DialogClose>
                     <Button
                       variant="destructive"
                       onClick={handleDelete}
                       disabled={!canDelete || deleting}
                     >
-                      {deleting ? "削除中..." : "削除する"}
+                      {deleting
+                        ? t("plans.detail.actions.deleting")
+                        : t("plans.detail.actions.confirmDelete")}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -212,32 +234,32 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
           ) : null}
         </div>
         {isOwner && !isLocked && hasAssets ? (
-          <div className={styles.muted}>資産が追加されているため削除できません。</div>
+          <div className={styles.muted}>{t("plans.detail.deleteLocked")}</div>
         ) : null}
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       <Tabs items={tabItems} value={tab} onChange={(value) => setTab(value as TabKey)} />
 
       {tab === "summary" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>概要</h2>
+            <h2 className={styles.panelTitle}>{t("plans.detail.summary.title")}</h2>
           </div>
           {loading ? null : plan ? (
             <div className={styles.list}>
               <div className={styles.row}>
                 <div className={styles.rowMain}>
-                  <div className={styles.rowTitle}>最終更新</div>
+                  <div className={styles.rowTitle}>{t("plans.detail.summary.updatedAt")}</div>
                   <div className={styles.rowMeta}>{formatDate(plan.updatedAt)}</div>
                 </div>
               </div>
             </div>
           ) : (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>指図が見つかりません</div>
-              <div className={styles.emptyBody}>アクセス権限を確認してください。</div>
+              <div className={styles.emptyTitle}>{t("plans.detail.summary.empty.title")}</div>
+              <div className={styles.emptyBody}>{t("plans.detail.summary.empty.body")}</div>
             </div>
           )}
         </div>
@@ -246,28 +268,30 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       {tab === "assets" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>内容</h2>
+            <h2 className={styles.panelTitle}>{t("plans.detail.assets.title")}</h2>
           </div>
           {loading ? null : assets.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>指図に含まれる資産がありません</div>
-              <div className={styles.emptyBody}>指図に設定した資産がここに表示されます。</div>
+              <div className={styles.emptyTitle}>{t("plans.detail.assets.empty.title")}</div>
+              <div className={styles.emptyBody}>{t("plans.detail.assets.empty.body")}</div>
             </div>
           ) : (
             <div className={styles.list}>
               {assets.map((asset) => (
                 <div key={asset.planAssetId} className={styles.row}>
                   <div className={styles.rowMain}>
-                    <div className={styles.rowTitle}>{asset.assetLabel || "未設定"}</div>
+                    <div className={styles.rowTitle}>
+                      {asset.assetLabel || t("common.unset")}
+                    </div>
                     <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
                     {asset.allocations?.length ? (
                       <div className={styles.allocations}>
                         {asset.allocations.map((allocation, index) => {
                           const heirLabel =
                             allocation.isUnallocated || !allocation.heirUid
-                              ? "未分配"
+                              ? t("plans.edit.allocations.unallocated")
                               : heirs.find((heir) => heir.acceptedByUid === allocation.heirUid)
-                                  ?.email ?? "未登録";
+                                  ?.email ?? t("common.unregistered");
                           return (
                             <div
                               key={`${asset.planAssetId}-${index}`}
@@ -282,11 +306,15 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
                         })}
                       </div>
                     ) : (
-                      <div className={styles.rowMeta}>分配が設定されていません</div>
+                      <div className={styles.rowMeta}>
+                        {t("plans.detail.assets.allocationsEmpty")}
+                      </div>
                     )}
                   </div>
                   <div className={styles.rowSide}>
-                    {asset.unitType === "AMOUNT" ? "金額" : "割合"}
+                    {asset.unitType === "AMOUNT"
+                      ? t("plans.edit.allocations.unit.amount")
+                      : t("plans.edit.allocations.unit.percent")}
                   </div>
                 </div>
               ))}
@@ -298,12 +326,12 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       {tab === "heirs" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>相続人</h2>
+            <h2 className={styles.panelTitle}>{t("plans.detail.heirs.title")}</h2>
           </div>
           {loading ? null : heirs.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>承認済みの相続人がいません</div>
-              <div className={styles.emptyBody}>招待が承認されるとここに表示されます。</div>
+              <div className={styles.emptyTitle}>{t("plans.detail.heirs.empty.title")}</div>
+              <div className={styles.emptyBody}>{t("plans.detail.heirs.empty.body")}</div>
             </div>
           ) : (
             <div className={styles.list}>
@@ -312,13 +340,11 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
                   <div className={styles.rowMain}>
                     <div className={styles.rowTitle}>{heir.email}</div>
                     <div className={styles.rowMeta}>
-                      関係:{" "}
-                      {heir.relationLabel === "その他"
-                        ? heir.relationOther ?? "その他"
-                        : heir.relationLabel}
+                      {t("plans.detail.heirs.relation")}:{" "}
+                      {renderRelationLabel(heir.relationLabel, heir.relationOther)}
                     </div>
                   </div>
-                  <div className={styles.rowSide}>承認済み</div>
+                  <div className={styles.rowSide}>{t("plans.detail.heirs.accepted")}</div>
                 </div>
               ))}
             </div>
@@ -329,12 +355,12 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
       {tab === "history" ? (
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>履歴</h2>
+            <h2 className={styles.panelTitle}>{t("plans.detail.history.title")}</h2>
           </div>
           {loading ? null : history.length === 0 ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>履歴はまだありません</div>
-              <div className={styles.emptyBody}>指図の操作履歴がここに表示されます。</div>
+              <div className={styles.emptyTitle}>{t("plans.detail.history.empty.title")}</div>
+              <div className={styles.emptyBody}>{t("plans.detail.history.empty.body")}</div>
             </div>
           ) : (
             <div className={styles.list}>
