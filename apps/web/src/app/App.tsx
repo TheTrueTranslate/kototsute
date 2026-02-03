@@ -22,11 +22,14 @@ import { AuthProvider, useAuth } from "../features/auth/auth-provider";
 import RequireAuth from "../features/auth/require-auth";
 import { useEffect, useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
+import { LocaleProvider } from "../features/shared/providers/LocaleProvider";
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <LocaleProvider>
+        <AppShell />
+      </LocaleProvider>
     </AuthProvider>
   );
 }

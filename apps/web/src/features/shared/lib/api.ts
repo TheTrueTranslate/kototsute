@@ -1,3 +1,4 @@
+import { getLocale } from "@kototsute/shared";
 import { auth } from "./firebase";
 
 const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -21,6 +22,7 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      "X-Locale": getLocale(),
       ...(options.headers ?? {})
     }
   });
