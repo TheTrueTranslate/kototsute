@@ -63,16 +63,16 @@ export default function RegisterPage({ className }: PageProps) {
 
   return (
     <AuthLayout
-      title="新規登録"
-      lead="メールアドレスとパスワードだけで登録できます。"
+      title={t("auth.register.title")}
+      lead={t("auth.register.lead")}
       className={className}
       footer={
         <div className={styles.footerActions}>
           <Button asChild variant="ghost">
-            <Link to="/login">ログインへ</Link>
+            <Link to="/login">{t("auth.register.footer.login")}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/reset">パスワード再設定</Link>
+            <Link to="/reset">{t("auth.register.footer.reset")}</Link>
           </Button>
         </div>
       }
@@ -81,35 +81,43 @@ export default function RegisterPage({ className }: PageProps) {
         {status ? (
           <FormAlert variant={status.type}>{status.message}</FormAlert>
         ) : null}
-        <FormField label="表示名" error={errors.displayName?.message} htmlFor={displayNameId}>
+        <FormField
+          label={t("auth.register.form.displayName")}
+          error={errors.displayName?.message}
+          htmlFor={displayNameId}
+        >
           <Input
             id={displayNameId}
             type="text"
             autoComplete="name"
-            placeholder="例: 山田 太郎"
+            placeholder={t("auth.register.form.displayNamePlaceholder")}
             {...register("displayName")}
           />
         </FormField>
-        <FormField label="メールアドレス" error={errors.email?.message} htmlFor={emailId}>
+        <FormField label={t("auth.common.email")} error={errors.email?.message} htmlFor={emailId}>
           <Input
             id={emailId}
             type="email"
             autoComplete="email"
-            placeholder="example@kototsute.jp"
+            placeholder={t("auth.common.emailPlaceholder")}
             {...register("email")}
           />
         </FormField>
-        <FormField label="パスワード" error={errors.password?.message} htmlFor={passwordId}>
+        <FormField
+          label={t("auth.common.password")}
+          error={errors.password?.message}
+          htmlFor={passwordId}
+        >
           <Input
             id={passwordId}
             type="password"
             autoComplete="new-password"
-            placeholder="8文字以上"
+            placeholder={t("auth.common.passwordPlaceholder")}
             {...register("password")}
           />
         </FormField>
         <FormField
-          label="パスワード（確認）"
+          label={t("auth.register.form.confirmPassword")}
           error={errors.confirmPassword?.message}
           htmlFor={confirmId}
         >
@@ -117,12 +125,12 @@ export default function RegisterPage({ className }: PageProps) {
             id={confirmId}
             type="password"
             autoComplete="new-password"
-            placeholder="同じパスワードを入力"
+            placeholder={t("auth.register.form.confirmPasswordPlaceholder")}
             {...register("confirmPassword")}
           />
         </FormField>
         <Button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "登録中..." : "登録する"}
+          {isSubmitting ? t("auth.register.submitting") : t("auth.register.submit")}
         </Button>
       </form>
     </AuthLayout>

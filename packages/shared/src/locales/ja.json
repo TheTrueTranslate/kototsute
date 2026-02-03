@@ -51,6 +51,68 @@
     "userNotFound": "メールアドレスまたはパスワードが正しくありません",
     "tooManyRequests": "試行回数が多すぎます。しばらく待って再度お試しください"
   },
+  "auth": {
+    "common": {
+      "email": "メールアドレス",
+      "emailPlaceholder": "example@kototsute.jp",
+      "password": "パスワード",
+      "passwordPlaceholder": "8文字以上"
+    },
+    "login": {
+      "title": "ログイン",
+      "lead": "登録済みのメールアドレスでログインしてください。",
+      "footer": {
+        "reset": "パスワードを忘れた方",
+        "register": "新規登録"
+      },
+      "submit": "ログイン",
+      "submitting": "ログイン中...",
+      "registered": "登録が完了しました。ログインしてください。"
+    },
+    "register": {
+      "title": "新規登録",
+      "lead": "メールアドレスとパスワードだけで登録できます。",
+      "footer": {
+        "login": "ログインへ",
+        "reset": "パスワード再設定"
+      },
+      "form": {
+        "displayName": "表示名",
+        "displayNamePlaceholder": "例: 山田 太郎",
+        "confirmPassword": "パスワード（確認）",
+        "confirmPasswordPlaceholder": "同じパスワードを入力"
+      },
+      "submit": "登録する",
+      "submitting": "登録中..."
+    },
+    "reset": {
+      "title": "パスワード再設定",
+      "lead": "登録済みのメールアドレスに再設定用リンクを送信します。",
+      "footer": {
+        "login": "ログインへ戻る",
+        "register": "新規登録"
+      },
+      "submit": "再設定メールを送る",
+      "submitting": "送信中...",
+      "success": "パスワード再設定メールを送信しました。"
+    }
+  },
+  "home": {
+    "title": "ログイン後ホーム（仮）",
+    "lead": "認証後に表示されるホームは現在準備中です。",
+    "footer": {
+      "login": "ログインへ戻る",
+      "register": "新規登録"
+    },
+    "placeholder": {
+      "lead": "ここから被相続人が相続人を招待する導線を配置予定です。",
+      "items": {
+        "invite": "招待リンクの発行",
+        "cases": "相続案件の一覧",
+        "timeline": "状況のタイムライン"
+      }
+    }
+  },
   "myPage": {
     "language": {
       "label": "表示言語",

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import { Button } from "../../features/shared/components/ui/button";
 import styles from "../../styles/authPages.module.css";
@@ -8,28 +9,29 @@ type PageProps = {
 };
 
 export default function HomePage({ className }: PageProps) {
+  const { t } = useTranslation();
   return (
     <AuthLayout
-      title="ログイン後ホーム（仮）"
-      lead="認証後に表示されるホームは現在準備中です。"
+      title={t("home.title")}
+      lead={t("home.lead")}
       className={className}
       footer={
         <div className={styles.footerActions}>
           <Button asChild variant="ghost">
-            <Link to="/login">ログインへ戻る</Link>
+            <Link to="/login">{t("home.footer.login")}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/register">新規登録</Link>
+            <Link to="/register">{t("home.footer.register")}</Link>
           </Button>
         </div>
       }
     >
       <div className={styles.placeholder}>
-        <p>ここから被相続人が相続人を招待する導線を配置予定です。</p>
+        <p>{t("home.placeholder.lead")}</p>
         <ul>
-          <li>招待リンクの発行</li>
-          <li>相続案件の一覧</li>
-          <li>状況のタイムライン</li>
+          <li>{t("home.placeholder.items.invite")}</li>
+          <li>{t("home.placeholder.items.cases")}</li>
+          <li>{t("home.placeholder.items.timeline")}</li>
         </ul>
       </div>
     </AuthLayout>

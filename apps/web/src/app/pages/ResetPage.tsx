@@ -43,7 +43,7 @@ export default function ResetPage({ className }: PageProps) {
       await sendPasswordResetEmail(auth, data.email);
       setStatus({
         type: "success",
-        message: "パスワード再設定メールを送信しました。"
+        message: t("auth.reset.success")
       });
     } catch (error) {
       setStatus({ type: "error", message: t(getAuthErrorMessage(error)) });
@@ -52,16 +52,16 @@ export default function ResetPage({ className }: PageProps) {
 
   return (
     <AuthLayout
-      title="パスワード再設定"
-      lead="登録済みのメールアドレスに再設定用リンクを送信します。"
+      title={t("auth.reset.title")}
+      lead={t("auth.reset.lead")}
       className={className}
       footer={
         <div className={styles.footerActions}>
           <Button asChild variant="ghost">
-            <Link to="/login">ログインへ戻る</Link>
+            <Link to="/login">{t("auth.reset.footer.login")}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/register">新規登録</Link>
+            <Link to="/register">{t("auth.reset.footer.register")}</Link>
           </Button>
         </div>
       }
@@ -70,17 +70,17 @@ export default function ResetPage({ className }: PageProps) {
         {status ? (
           <FormAlert variant={status.type}>{status.message}</FormAlert>
         ) : null}
-        <FormField label="メールアドレス" error={errors.email?.message} htmlFor={emailId}>
+        <FormField label={t("auth.common.email")} error={errors.email?.message} htmlFor={emailId}>
           <Input
             id={emailId}
             type="email"
             autoComplete="email"
-            placeholder="example@kototsute.jp"
+            placeholder={t("auth.common.emailPlaceholder")}
             {...register("email")}
           />
         </FormField>
         <Button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "送信中..." : "再設定メールを送る"}
+          {isSubmitting ? t("auth.reset.submitting") : t("auth.reset.submit")}
         </Button>
       </form>
     </AuthLayout>
