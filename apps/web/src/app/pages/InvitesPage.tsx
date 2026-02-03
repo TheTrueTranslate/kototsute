@@ -18,8 +18,10 @@ import {
   type InviteListItem
 } from "../api/invites";
 import styles from "../../styles/casesPage.module.css";
+import { useTranslation } from "react-i18next";
 
 export default function InvitesPage() {
+  const { t } = useTranslation();
   const [invites, setInvites] = useState<InviteListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function InvitesPage() {
         setInvites([]);
         return;
       }
-      setError(err?.message ?? "招待の取得に失敗しました");
+      setError(err?.message ?? "invites.error.loadFailed");
     } finally {
       setLoading(false);
     }
@@ -58,7 +60,7 @@ export default function InvitesPage() {
       }
       await load();
     } catch (err: any) {
-      setError(err?.message ?? "招待の処理に失敗しました");
+      setError(err?.message ?? "invites.error.actionFailed");
     } finally {
       setProcessingInviteId(null);
     }
@@ -74,18 +76,18 @@ export default function InvitesPage() {
     <>
       <section className={styles.page}>
       <header className={styles.header}>
-        <Breadcrumbs items={[{ label: "招待" }]} />
+        <Breadcrumbs items={[{ label: t("invites.title") }]} />
         <div className={styles.headerRow}>
-          <h1 className="text-title">招待</h1>
+          <h1 className="text-title">{t("invites.title")}</h1>
         </div>
       </header>
 
-      {error ? <FormAlert variant="error">{error}</FormAlert> : null}
+      {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
       {loading ? null : invites.length === 0 ? (
         <div className={styles.emptyState}>
-          <div className={styles.emptyTitle}>まだ招待がありません</div>
-          <div className={styles.emptyBody}>招待が届くとここに表示されます。</div>
+          <div className={styles.emptyTitle}>{t("invites.empty.title")}</div>
+          <div className={styles.emptyBody}>{t("invites.empty.body")}</div>
         </div>
       ) : (
         <div className={styles.list}>
@@ -93,8 +95,12 @@ export default function InvitesPage() {
             <div key={invite.inviteId} className={styles.row}>
               <div className={styles.rowMain}>
                 <div className={styles.rowTitle}>
-                  「{invite.caseOwnerDisplayName ?? invite.ownerDisplayName ?? "招待者"}」さんから
-                  招待がきています。
+                  {t("invites.list.from", {
+                    name:
+                      invite.caseOwnerDisplayName ??
+                      invite.ownerDisplayName ??
+                      t("invites.list.inviterFallback")
+                  })}
                 </div>
               </div>
               <div className={styles.rowSide}>
@@ -106,19 +112,21 @@ export default function InvitesPage() {
                       onClick={() => setDeclineTarget(invite)}
                       disabled={processingInviteId === invite.inviteId}
                     >
-                      辞退
+                      {t("invites.actions.decline")}
                     </Button>
                     <Button
                       size="sm"
                       onClick={() => handleInviteAction(invite, "accept")}
                       disabled={processingInviteId === invite.inviteId}
                     >
-                      承認
+                      {t("invites.actions.accept")}
                     </Button>
                   </div>
                 ) : (
                   <span className={styles.statusBadge}>
-                    {invite.status === "accepted" ? "参加中" : "辞退"}
+                    {invite.status === "accepted"
+                      ? t("invites.status.accepted")
+                      : t("invites.status.declined")}
                   </span>
                 )}
               </div>
@@ -133,21 +141,24 @@ export default function InvitesPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>招待を辞退しますか？</DialogTitle>
+            <DialogTitle>{t("invites.dialog.decline.title")}</DialogTitle>
             <DialogDescription>
-              「
-              {declineTarget?.caseOwnerDisplayName ?? declineTarget?.ownerDisplayName ?? "招待者"}
-              」さんからの招待を辞退します。
+              {t("invites.dialog.decline.description", {
+                name:
+                  declineTarget?.caseOwnerDisplayName ??
+                  declineTarget?.ownerDisplayName ??
+                  t("invites.list.inviterFallback")
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
-                キャンセル
+                {t("invites.dialog.decline.cancel")}
               </Button>
             </DialogClose>
             <Button type="button" variant="destructive" onClick={handleDecline}>
-              辞退する
+              {t("invites.dialog.decline.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

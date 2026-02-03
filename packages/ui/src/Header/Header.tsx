@@ -33,7 +33,7 @@ export default function Header({
           <span className={styles.brandText}>{brand}</span>
         </a>
         {showNav ? (
-          <nav className={styles.nav} aria-label="メインメニュー">
+          <nav className={styles.nav} aria-label="Main menu">
             {navItems.map((item) => (
               <a key={item.href} href={item.href} className={styles.navLink}>
                 {item.label}
