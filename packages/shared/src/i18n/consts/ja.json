@@ -6,7 +6,12 @@
     "unset": "未設定",
     "unregistered": "未登録",
     "loading": "読み込み中...",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "copy": {
+      "empty": "コピーできる値がありません",
+      "success": "{{label}}をコピーしました",
+      "failed": "コピーに失敗しました"
+    }
   },
   "errors": {
     "UNAUTHORIZED": "認証が必要です",
@@ -21,7 +26,14 @@
       "required": "表示名を入力してください",
       "max": "表示名は50文字以内で入力してください"
     },
-    "email": { "invalid": "正しいメールアドレスを入力してください" },
+    "email": {
+      "required": "メールアドレスを入力してください",
+      "invalid": "正しいメールアドレスを入力してください"
+    },
+    "password": {
+      "min": "パスワードは8文字以上で入力してください",
+      "mismatch": "パスワードが一致しません"
+    },
     "relation": { "required": "関係は必須です" },
     "relationOther": { "required": "その他の関係を入力してください" },
     "memo": { "max": "メモは400文字以内で入力してください" },
@@ -517,14 +529,15 @@
           "title": "相続人のみ操作できます",
           "body": "受取用ウォレットの登録は相続人本人が行います。"
         },
-        "error": {
-          "loadFailed": "ウォレットの取得に失敗しました",
-          "addressRequired": "ウォレットアドレスを入力してください",
-          "saveFailed": "ウォレットの登録に失敗しました",
-          "challengeFailed": "検証コードの取得に失敗しました",
-          "caseIdMissing": "ケースIDが取得できません",
-          "addressMissing": "ウォレットアドレスが取得できません"
-        },
+    "error": {
+      "loadFailed": "ウォレットの取得に失敗しました",
+      "addressRequired": "ウォレットアドレスを入力してください",
+      "saveFailed": "ウォレットの登録に失敗しました",
+      "challengeFailed": "検証コードの取得に失敗しました",
+      "caseIdMissing": "ケースIDが取得できません",
+      "addressMissing": "ウォレットアドレスが取得できません",
+      "secretRequired": "シークレットを入力してください"
+    },
         "verify": {
           "success": "所有確認が完了しました",
           "error": "所有確認に失敗しました"
@@ -691,7 +704,10 @@
         "memoEmpty": "未発行",
         "challengeError": "検証コードの取得に失敗しました",
         "success": "検証が完了しました",
-        "error": "自動検証に失敗しました"
+        "error": "自動検証に失敗しました",
+        "errorCaseMissing": "ケース情報が取得できません",
+        "errorAddressMissing": "アドレスが取得できません",
+        "errorSecretRequired": "シークレットを入力してください"
       },
       "history": {
         "title": "履歴",
@@ -1088,10 +1104,210 @@
     }
   },
   "myPage": {
+    "title": "マイページ",
+    "lead": "登録情報の確認とプロフィールの管理ができます。",
+    "section": {
+      "account": "アカウント"
+    },
+    "labels": {
+      "email": "メールアドレス",
+      "displayName": "表示名",
+      "uid": "UID",
+      "logout": "ログアウト"
+    },
+    "placeholders": {
+      "displayName": "例: 山田 太郎"
+    },
+    "actions": {
+      "update": "更新",
+      "updating": "更新中..."
+    },
+    "status": {
+      "displayNameUpdated": "表示名を更新しました。"
+    },
+    "error": {
+      "authMissing": "ログイン情報が取得できません。再ログインしてください。",
+      "displayNameUpdateFailed": "表示名の更新に失敗しました。",
+      "logoutFailed": "ログアウトに失敗しました。"
+    },
+    "logout": {
+      "title": "ログアウトしますか？",
+      "description": "現在のセッションを終了します。",
+      "cancel": "キャンセル",
+      "confirm": "ログアウト"
+    },
     "language": {
       "label": "表示言語",
       "ja": "日本語",
       "en": "English"
+    }
+  },
+  "invites": {
+    "title": "招待",
+    "empty": {
+      "title": "まだ招待がありません",
+      "body": "招待が届くとここに表示されます。"
+    },
+    "error": {
+      "loadFailed": "招待の取得に失敗しました",
+      "actionFailed": "招待の処理に失敗しました"
+    },
+    "list": {
+      "from": "「{{name}}」さんから招待がきています。",
+      "inviterFallback": "招待者"
+    },
+    "actions": {
+      "decline": "辞退",
+      "accept": "承認",
+      "declineConfirm": "辞退する"
+    },
+    "status": {
+      "accepted": "参加中",
+      "declined": "辞退"
+    },
+    "dialog": {
+      "decline": {
+        "title": "招待を辞退しますか？",
+        "description": "「{{name}}」さんからの招待を辞退します。",
+        "cancel": "キャンセル",
+        "confirm": "辞退する"
+      }
+    }
+  },
+  "notifications": {
+    "title": "通知",
+    "table": {
+      "content": "内容",
+      "receivedAt": "受信日時",
+      "action": "操作"
+    },
+    "actions": {
+      "markRead": "既読にする",
+      "reload": "再読み込み",
+      "markAll": "すべて既読"
+    },
+    "empty": {
+      "title": "通知はまだありません",
+      "body": "招待や指図の更新があると表示されます。"
+    },
+    "error": {
+      "loadFailed": "通知の取得に失敗しました",
+      "markReadFailed": "既読更新に失敗しました",
+      "markAllFailed": "一括既読に失敗しました"
+    }
+  },
+  "deathClaims": {
+    "title": "死亡診断書",
+    "lead": "提出書類の管理と相続人同意を行います。",
+    "breadcrumb": {
+      "cases": "ケース",
+      "deathClaim": "死亡診断書"
+    },
+    "backToCase": "ケース詳細へ戻る",
+    "status": {
+      "submitted": "提出済み",
+      "adminApproved": "運営承認済み",
+      "adminRejected": "差し戻し",
+      "confirmed": "確定済み"
+    },
+    "currentAction": {
+      "title": "現在のアクション",
+      "submit": {
+        "description": "死亡診断書を提出してください。",
+        "action": "死亡診断書を提出",
+        "actioning": "提出中..."
+      },
+      "resubmit": {
+        "description": "差し戻し内容を確認して再提出してください。",
+        "action": "再提出",
+        "actioning": "再提出中..."
+      },
+      "confirm": {
+        "description": "運営承認済みです。死亡確定への同意を進めてください。",
+        "action": "同意する",
+        "actioning": "同意中..."
+      },
+      "confirmed": {
+        "description": "死亡確定済みです。"
+      },
+      "confirmedByMe": {
+        "description": "同意済みです。ほかの相続人の同意を待っています。"
+      },
+      "uploading": {
+        "description": "運営確認中です。必要があればファイルを追加してください。"
+      },
+      "waiting": {
+        "description": "運営の確認を待っています。"
+      }
+    },
+    "panel": {
+      "status": "申請ステータス",
+      "files": "提出ファイル"
+    },
+    "steps": {
+      "submit": "提出・ファイル追加",
+      "review": "運営確認",
+      "consent": "相続人同意",
+      "confirmed": "確定"
+    },
+    "loading": "読み込み中...",
+    "empty": {
+      "noClaim": {
+        "title": "まだ死亡診断書が提出されていません",
+        "body": "提出後、運営承認と相続人同意で死亡確定となります。",
+        "action": "死亡診断書を提出",
+        "actioning": "提出中..."
+      },
+      "noFiles": "提出済みのファイルはありません。"
+    },
+    "consent": {
+      "label": "同意状況",
+      "confirmed": "死亡確定済みです。",
+      "confirmedByMe": "あなたは同意済みです。",
+      "awaitingApproval": "運営の承認後に同意できます。"
+    },
+    "rejected": {
+      "title": "差し戻し",
+      "noteFallback": "運営から差し戻しされました。"
+    },
+    "files": {
+      "note": "PDF/JPG/PNG（10MBまで、100件目安）",
+      "open": "開く",
+      "opening": "取得中...",
+      "openingAria": "ファイルを取得中",
+      "openAria": "ファイルを開く"
+    },
+    "upload": {
+      "label": "ファイルを追加",
+      "action": "アップロード",
+      "actioning": "アップロード中...",
+      "disabled": "運営承認後はファイルを追加できません。"
+    },
+    "modal": {
+      "confirm": {
+        "title": "同意の確認",
+        "message": "この同意は死亡確定への同意です。相続の実行はこの操作では行われません。",
+        "cancel": "キャンセル",
+        "confirm": "同意する",
+        "confirming": "同意中..."
+      },
+      "resubmit": {
+        "title": "再提出の確認",
+        "message": "差し戻し内容を確認した上で、死亡診断書を再提出しますか？",
+        "cancel": "キャンセル",
+        "confirm": "再提出する",
+        "confirming": "再提出中..."
+      }
+    },
+    "errors": {
+      "loadFailed": "死亡診断書の取得に失敗しました",
+      "submitFailed": "死亡診断書の提出に失敗しました",
+      "noFileSelected": "アップロードするファイルを選択してください",
+      "fileTypeUnknown": "ファイル形式を判定できませんでした",
+      "uploadFailed": "ファイルのアップロードに失敗しました",
+      "confirmFailed": "同意に失敗しました",
+      "resubmitFailed": "再提出に失敗しました",
+      "fileDownloadFailed": "ファイルの取得に失敗しました"
     }
   },
   "nav": {

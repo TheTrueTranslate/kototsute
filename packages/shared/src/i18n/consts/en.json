@@ -6,7 +6,12 @@
     "unset": "Not set",
     "unregistered": "Unregistered",
     "loading": "Loading...",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "copy": {
+      "empty": "Nothing to copy",
+      "success": "Copied {{label}}",
+      "failed": "Failed to copy"
+    }
   },
   "errors": {
     "UNAUTHORIZED": "Authentication required",
@@ -21,7 +26,14 @@
       "required": "Display name is required",
       "max": "Display name must be 50 characters or fewer"
     },
-    "email": { "invalid": "Please enter a valid email address" },
+    "email": {
+      "required": "Email is required",
+      "invalid": "Please enter a valid email address"
+    },
+    "password": {
+      "min": "Password must be at least 8 characters",
+      "mismatch": "Passwords do not match"
+    },
     "relation": { "required": "Relation is required" },
     "relationOther": { "required": "Please enter the relation" },
     "memo": { "max": "Memo must be 400 characters or fewer" },
@@ -517,14 +529,15 @@
           "title": "Only heirs can operate",
           "body": "Only the heir can register a receiving wallet."
         },
-        "error": {
-          "loadFailed": "Failed to load wallet",
-          "addressRequired": "Please enter a wallet address",
-          "saveFailed": "Failed to register wallet",
-          "challengeFailed": "Failed to get verification code",
-          "caseIdMissing": "Case ID is unavailable",
-          "addressMissing": "Wallet address is unavailable"
-        },
+    "error": {
+      "loadFailed": "Failed to load wallet",
+      "addressRequired": "Please enter a wallet address",
+      "saveFailed": "Failed to register wallet",
+      "challengeFailed": "Failed to get verification code",
+      "caseIdMissing": "Case ID is unavailable",
+      "addressMissing": "Wallet address is unavailable",
+      "secretRequired": "Please enter the secret"
+    },
         "verify": {
           "success": "Ownership verification completed",
           "error": "Ownership verification failed"
@@ -691,7 +704,10 @@
         "memoEmpty": "Not issued",
         "challengeError": "Failed to get verification code",
         "success": "Verification completed",
-        "error": "Automatic verification failed"
+        "error": "Automatic verification failed",
+        "errorCaseMissing": "Case info is unavailable",
+        "errorAddressMissing": "Address is unavailable",
+        "errorSecretRequired": "Please enter the secret"
       },
       "history": {
         "title": "History",
@@ -1088,10 +1104,210 @@
     }
   },
   "myPage": {
+    "title": "My page",
+    "lead": "Review account info and manage your profile.",
+    "section": {
+      "account": "Account"
+    },
+    "labels": {
+      "email": "Email",
+      "displayName": "Display name",
+      "uid": "UID",
+      "logout": "Sign out"
+    },
+    "placeholders": {
+      "displayName": "e.g. Taro Yamada"
+    },
+    "actions": {
+      "update": "Update",
+      "updating": "Updating..."
+    },
+    "status": {
+      "displayNameUpdated": "Display name updated."
+    },
+    "error": {
+      "authMissing": "Login info is unavailable. Please sign in again.",
+      "displayNameUpdateFailed": "Failed to update display name.",
+      "logoutFailed": "Failed to sign out."
+    },
+    "logout": {
+      "title": "Sign out?",
+      "description": "End the current session.",
+      "cancel": "Cancel",
+      "confirm": "Sign out"
+    },
     "language": {
       "label": "Language",
       "ja": "Japanese",
       "en": "English"
+    }
+  },
+  "invites": {
+    "title": "Invites",
+    "empty": {
+      "title": "No invites yet",
+      "body": "Invites will appear here."
+    },
+    "error": {
+      "loadFailed": "Failed to load invites",
+      "actionFailed": "Failed to process invite"
+    },
+    "list": {
+      "from": "Invite from {{name}}.",
+      "inviterFallback": "Inviter"
+    },
+    "actions": {
+      "decline": "Decline",
+      "accept": "Accept",
+      "declineConfirm": "Decline"
+    },
+    "status": {
+      "accepted": "Joined",
+      "declined": "Declined"
+    },
+    "dialog": {
+      "decline": {
+        "title": "Decline this invite?",
+        "description": "Decline the invite from {{name}}.",
+        "cancel": "Cancel",
+        "confirm": "Decline"
+      }
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "table": {
+      "content": "Content",
+      "receivedAt": "Received",
+      "action": "Action"
+    },
+    "actions": {
+      "markRead": "Mark as read",
+      "reload": "Reload",
+      "markAll": "Mark all as read"
+    },
+    "empty": {
+      "title": "No notifications yet",
+      "body": "Invites and plan updates will appear here."
+    },
+    "error": {
+      "loadFailed": "Failed to load notifications",
+      "markReadFailed": "Failed to mark as read",
+      "markAllFailed": "Failed to mark all as read"
+    }
+  },
+  "deathClaims": {
+    "title": "Death certificate",
+    "lead": "Manage submitted documents and heir consent.",
+    "breadcrumb": {
+      "cases": "Cases",
+      "deathClaim": "Death certificate"
+    },
+    "backToCase": "Back to case details",
+    "status": {
+      "submitted": "Submitted",
+      "adminApproved": "Admin approved",
+      "adminRejected": "Rejected",
+      "confirmed": "Confirmed"
+    },
+    "currentAction": {
+      "title": "Current action",
+      "submit": {
+        "description": "Submit the death certificate.",
+        "action": "Submit death certificate",
+        "actioning": "Submitting..."
+      },
+      "resubmit": {
+        "description": "Review the rejection reason and resubmit.",
+        "action": "Resubmit",
+        "actioning": "Resubmitting..."
+      },
+      "confirm": {
+        "description": "Admin approved. Proceed with consent for confirmation.",
+        "action": "Consent",
+        "actioning": "Consenting..."
+      },
+      "confirmed": {
+        "description": "Confirmed."
+      },
+      "confirmedByMe": {
+        "description": "You already consented. Waiting for other heirs."
+      },
+      "uploading": {
+        "description": "Under review. Add files if needed."
+      },
+      "waiting": {
+        "description": "Waiting for admin review."
+      }
+    },
+    "panel": {
+      "status": "Application status",
+      "files": "Submitted files"
+    },
+    "steps": {
+      "submit": "Submit / Add files",
+      "review": "Admin review",
+      "consent": "Heir consent",
+      "confirmed": "Confirmed"
+    },
+    "loading": "Loading...",
+    "empty": {
+      "noClaim": {
+        "title": "No death certificate submitted yet",
+        "body": "After submission, admin approval and heir consent confirm the death.",
+        "action": "Submit death certificate",
+        "actioning": "Submitting..."
+      },
+      "noFiles": "No submitted files."
+    },
+    "consent": {
+      "label": "Consent status",
+      "confirmed": "Confirmed.",
+      "confirmedByMe": "You have consented.",
+      "awaitingApproval": "You can consent after admin approval."
+    },
+    "rejected": {
+      "title": "Rejected",
+      "noteFallback": "Rejected by admin."
+    },
+    "files": {
+      "note": "PDF/JPG/PNG (up to 10MB, around 100 files)",
+      "open": "Open",
+      "opening": "Opening...",
+      "openingAria": "Opening file",
+      "openAria": "Open file"
+    },
+    "upload": {
+      "label": "Add files",
+      "action": "Upload",
+      "actioning": "Uploading...",
+      "disabled": "You cannot add files after admin approval."
+    },
+    "modal": {
+      "confirm": {
+        "title": "Confirm consent",
+        "message": "This consent confirms death. It does not execute inheritance.",
+        "cancel": "Cancel",
+        "confirm": "Consent",
+        "confirming": "Consenting..."
+      },
+      "resubmit": {
+        "title": "Confirm resubmission",
+        "message": "Review the rejection and resubmit the death certificate?",
+        "cancel": "Cancel",
+        "confirm": "Resubmit",
+        "confirming": "Resubmitting..."
+      }
+    },
+    "errors": {
+      "loadFailed": "Failed to load death certificate",
+      "submitFailed": "Failed to submit death certificate",
+      "noFileSelected": "Select files to upload",
+      "fileTypeUnknown": "Could not determine file type",
+      "uploadFailed": "Failed to upload files",
+      "confirmFailed": "Failed to consent",
+      "resubmitFailed": "Failed to resubmit",
+      "fileDownloadFailed": "Failed to download file"
     }
   },
   "nav": {
