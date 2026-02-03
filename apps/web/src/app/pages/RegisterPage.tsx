@@ -4,6 +4,7 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -12,6 +13,7 @@ import { Input } from "../../features/shared/components/ui/input";
 import { auth, db } from "../../features/shared/lib/firebase";
 import { getAuthErrorMessage } from "../../features/auth/authError";
 import { registerSchema, type RegisterForm } from "../../features/auth/validators";
+import { resolveBrowserLocale } from "../../features/shared/lib/i18n";
 import styles from "../../styles/authPages.module.css";
 
 type FormStatus = {
@@ -30,6 +32,7 @@ export default function RegisterPage({ className }: PageProps) {
   const confirmId = useId();
   const navigate = useNavigate();
   const [status, setStatus] = useState<FormStatus | null>(null);
+  const { t } = useTranslation();
 
   const {
     register,
@@ -48,12 +51,13 @@ export default function RegisterPage({ className }: PageProps) {
       await setDoc(doc(db, "profiles", credential.user.uid), {
         uid: credential.user.uid,
         displayName: data.displayName,
+        locale: resolveBrowserLocale(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       navigate("/login", { state: { registered: true } });
     } catch (error) {
-      setStatus({ type: "error", message: getAuthErrorMessage(error) });
+      setStatus({ type: "error", message: t(getAuthErrorMessage(error)) });
     }
   });
 

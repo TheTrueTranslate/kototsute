@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -32,6 +33,7 @@ export default function LoginPage({ className }: PageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [status, setStatus] = useState<FormStatus | null>(null);
+  const { t } = useTranslation();
 
   const {
     register,
@@ -58,7 +60,7 @@ export default function LoginPage({ className }: PageProps) {
       await signInWithEmailAndPassword(auth, data.email, data.password);
       navigate("/");
     } catch (error) {
-      setStatus({ type: "error", message: getAuthErrorMessage(error) });
+      setStatus({ type: "error", message: t(getAuthErrorMessage(error)) });
     }
   });
 

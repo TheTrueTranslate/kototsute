@@ -41,5 +41,20 @@
         "percentMax": "割合の合計は100%以下にしてください"
       }
     }
+  },
+  "authErrors": {
+    "default": "認証に失敗しました。もう一度お試しください。",
+    "emailAlreadyInUse": "このメールアドレスは既に登録されています",
+    "invalidEmail": "正しいメールアドレスを入力してください",
+    "weakPassword": "パスワードは8文字以上で入力してください",
+    "userNotFound": "メールアドレスまたはパスワードが正しくありません",
+    "tooManyRequests": "試行回数が多すぎます。しばらく待って再度お試しください"
+  },
+  "myPage": {
+    "language": {
+      "label": "表示言語",
+      "ja": "日本語",
+      "en": "English"
+    }
   }
 }

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -25,6 +26,7 @@ type PageProps = {
 export default function ResetPage({ className }: PageProps) {
   const emailId = useId();
   const [status, setStatus] = useState<FormStatus | null>(null);
+  const { t } = useTranslation();
 
   const {
     register,
@@ -44,7 +46,7 @@ export default function ResetPage({ className }: PageProps) {
         message: "パスワード再設定メールを送信しました。"
       });
     } catch (error) {
-      setStatus({ type: "error", message: getAuthErrorMessage(error) });
+      setStatus({ type: "error", message: t(getAuthErrorMessage(error)) });
     }
   });
 

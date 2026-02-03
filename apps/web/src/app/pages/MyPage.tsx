@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { signOut, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { displayNameSchema } from "@kototsute/shared";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../../features/auth/auth-provider";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Button } from "../../features/shared/components/ui/button";
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "../../features/shared/components/ui/dialog";
+import { useLocale } from "../../features/shared/providers/LocaleProvider";
 
 type FormStatus = {
   type: "success" | "error";
@@ -27,6 +29,8 @@ type FormStatus = {
 
 export default function MyPage() {
   const { user } = useAuth();
+  const { locale, updateLocale } = useLocale();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [lastSavedName, setLastSavedName] = useState(user?.displayName ?? "");
@@ -46,12 +50,15 @@ export default function MyPage() {
     if (!parsed.success) {
       setStatus({
         type: "error",
-        message: parsed.error.issues[0]?.message ?? "入力が不正です"
+        message: t(parsed.error.issues[0]?.message ?? "errors.VALIDATION_ERROR")
       });
       return;
     }
     if (!auth.currentUser) {
-      setStatus({ type: "error", message: "ログイン情報が取得できません。再ログインしてください。" });
+      setStatus({
+        type: "error",
+        message: "ログイン情報が取得できません。再ログインしてください。"
+      });
       return;
     }
     if (parsed.data === lastSavedName) {
@@ -72,7 +79,10 @@ export default function MyPage() {
       setLastSavedName(parsed.data);
       setStatus({ type: "success", message: "表示名を更新しました。" });
     } catch (err: any) {
-      setStatus({ type: "error", message: err?.message ?? "表示名の更新に失敗しました。" });
+      setStatus({
+        type: "error",
+        message: err?.message ?? "表示名の更新に失敗しました。"
+      });
     } finally {
       setSaving(false);
     }
@@ -131,6 +141,27 @@ export default function MyPage() {
               </Button>
             </div>
           </form>
+          <div className={styles.row}>
+            <span className={styles.label}>{t("myPage.language.label")}</span>
+            <div className={styles.actionsInline}>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "ja" ? "default" : "outline"}
+                onClick={() => updateLocale("ja")}
+              >
+                {t("myPage.language.ja")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "en" ? "default" : "outline"}
+                onClick={() => updateLocale("en")}
+              >
+                {t("myPage.language.en")}
+              </Button>
+            </div>
+          </div>
           <div className={styles.row}>
             <span className={styles.label}>UID</span>
             <span className={styles.valueMono}>{user?.uid ?? "-"}</span>

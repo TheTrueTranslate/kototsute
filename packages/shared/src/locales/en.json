@@ -41,5 +41,20 @@
         "percentMax": "Total percentage must be 100% or less"
       }
     }
+  },
+  "authErrors": {
+    "default": "Authentication failed. Please try again.",
+    "emailAlreadyInUse": "This email is already registered",
+    "invalidEmail": "Please enter a valid email address",
+    "weakPassword": "Password must be at least 8 characters",
+    "userNotFound": "Email or password is incorrect",
+    "tooManyRequests": "Too many attempts. Please try again later."
+  },
+  "myPage": {
+    "language": {
+      "label": "Language",
+      "ja": "Japanese",
+      "en": "English"
+    }
   }
 }
