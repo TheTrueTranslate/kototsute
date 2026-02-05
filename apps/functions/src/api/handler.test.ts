@@ -233,6 +233,7 @@ vi.mock("@kototsute/shared", async () => {
     sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
     sendTokenPayment: async () => ({ txHash: "tx-token" }),
     sendSignerListSet: async () => ({ txHash: "tx-signer" }),
+    createNftSellOffer: async () => ({ offerId: "offer-1", txHash: "tx-nft" }),
     getWalletAddressFromSeed: vi.fn(() => "rDest"),
     createLocalXrplWallet: vi.fn(() => ({
       address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
@@ -4552,6 +4553,111 @@ describe("createApiHandler", () => {
       .get();
     const item = itemsSnap.docs[0]?.data() ?? {};
     expect(Number(item.amount ?? "0")).toBeLessThan(100000000);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("creates nft offers during distribution", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "1000000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "1000000", reserve_inc: "200000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const db = getFirestore();
+    const caseId = "case_distribution_nft";
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+    await db.collection(`cases/${caseId}/assetLock`).doc("state").set({
+      wallet: { address: "rLock", seedEncrypted: encryptPayload("sLock") }
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      status: "SUBMITTED",
+      submittedTxHash: "tx-hash"
+    });
+    await db.collection(`cases/${caseId}/assets`).doc("asset-1").set({
+      label: "Asset",
+      address: "rAsset",
+      xrplSummary: {
+        status: "ok",
+        nfts: [{ tokenId: "nft-1", issuer: "rIssuer", uri: "https://example.com/nft/1" }]
+      }
+    });
+    await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
+      planId: "plan-1",
+      status: "DRAFT",
+      title: "指図A",
+      ownerUid: "owner_1",
+      heirUids: ["heir_1"],
+      heirs: [{ uid: "heir_1", email: "heir@example.com" }]
+    });
+    await db.collection(`cases/${caseId}/plans/plan-1/assets`).doc("plan-asset-1").set({
+      planAssetId: "plan-asset-1",
+      assetId: "asset-1",
+      unitType: "PERCENT",
+      allocations: [],
+      nftAllocations: [{ tokenId: "nft-1", heirUid: "heir_1" }]
+    });
+    await db.collection(`cases/${caseId}/assetLockItems`).doc("item-1").set({
+      assetId: "asset-1",
+      assetLabel: "Asset",
+      token: null,
+      plannedAmount: "0"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/execute`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    const itemsSnap = await db
+      .collection(`cases/${caseId}/distribution`)
+      .doc("state")
+      .collection("items")
+      .get();
+    const nftItems = itemsSnap.docs
+      .map((doc) => doc.data())
+      .filter((item) => item.type === "NFT");
+    expect(nftItems.length).toBe(1);
+    expect(nftItems[0]?.tokenId).toBe("nft-1");
+    expect(nftItems[0]?.offerId).toBeDefined();
     (globalThis as any).fetch = fetchOriginal;
   });
 
