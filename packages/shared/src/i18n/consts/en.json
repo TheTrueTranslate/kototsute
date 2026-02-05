@@ -821,6 +821,9 @@
       "rulesEmpty": "Allocation rules are not set",
       "allocationsEmpty": "No allocations set",
       "rulesLoading": "Loading allocation rules...",
+      "tokenTitle": "Token allocations",
+      "tokenMeta": "{{currency}} / {{issuer}}",
+      "nftTitle": "NFT allocations",
       "unit": {
         "percent": "Percent",
         "amount": "Amount"

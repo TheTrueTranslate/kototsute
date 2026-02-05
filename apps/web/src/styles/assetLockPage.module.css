@@ -245,6 +245,18 @@
   @apply text-[11px] text-muted-foreground;
 }
 
+.ruleSubTitle {
+  @apply mt-2 text-meta font-semibold text-foreground;
+}
+
+.ruleTokenSection {
+  @apply mt-2 grid gap-1;
+}
+
+.ruleTokenMeta {
+  @apply text-meta text-muted-foreground;
+}
+
 .ruleAllocations {
   @apply mt-2 grid gap-1;
 }
@@ -259,6 +271,18 @@
 
 .ruleValue {
   @apply font-semibold text-foreground;
+}
+
+.ruleNftSection {
+  @apply mt-2 grid gap-1;
+}
+
+.ruleNftList {
+  @apply mt-1 grid gap-1;
+}
+
+.ruleTokenId {
+  @apply text-foreground break-all;
 }
 
 .transferList {

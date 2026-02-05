@@ -821,6 +821,9 @@
       "rulesEmpty": "分配ルールが未設定です",
       "allocationsEmpty": "配分が未設定です",
       "rulesLoading": "分配ルールを読み込み中...",
+      "tokenTitle": "トークン割当",
+      "tokenMeta": "{{currency}} / {{issuer}}",
+      "nftTitle": "NFT割当",
       "unit": {
         "percent": "割合",
         "amount": "数量"

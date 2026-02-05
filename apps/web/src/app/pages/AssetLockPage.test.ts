@@ -120,6 +120,61 @@ it("shows plan previews and confirm button for owner", async () => {
   expect(html).toContain("確認しました");
 });
 
+it("shows token and nft allocations in plan preview", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const heirs: PlanHeir[] = [
+    { uid: "heir-1", email: "a@example.com", relationLabel: "長男", relationOther: null },
+    { uid: "heir-2", email: "b@example.com", relationLabel: "次男", relationOther: null }
+  ];
+  const planAssets: PlanAsset[] = [
+    {
+      planAssetId: "pa-1",
+      assetId: "asset-1",
+      assetType: "XRPL",
+      assetLabel: "Testnet Wallet",
+      assetAddress: "rTest",
+      token: { currency: "USD", issuer: "rIssuer", isNative: false },
+      unitType: "PERCENT",
+      allocations: [
+        { heirUid: "heir-1", value: 70 },
+        { heirUid: "heir-2", value: 30 }
+      ],
+      nfts: [
+        { tokenId: "nft-1", issuer: "rIssuer", uri: null },
+        { tokenId: "nft-2", issuer: "rIssuer", uri: null }
+      ],
+      nftAllocations: [{ tokenId: "nft-1", heirUid: "heir-1" }]
+    }
+  ];
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialIsOwner: true,
+        initialPlans: [
+          {
+            planId: "plan-1",
+            title: "分配プランA",
+            status: "DRAFT",
+            sharedAt: null,
+            updatedAt: "2024-01-01"
+          }
+        ],
+        initialPlanHeirs: { "plan-1": heirs },
+        initialPlanAssets: { "plan-1": planAssets }
+      })
+    )
+  );
+  expect(html).toContain("トークン割当");
+  expect(html).toContain("USD");
+  expect(html).toContain("rIssuer");
+  expect(html).toContain("NFT割当");
+  expect(html).toContain("nft-1");
+  expect(html).toContain("nft-2");
+  expect(html).toContain("未割当");
+});
+
 it("disables confirm when no active plans", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const html = renderToString(

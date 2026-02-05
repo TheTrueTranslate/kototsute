@@ -432,6 +432,13 @@ export default function AssetLockPage({
     return `${value}`;
   };
 
+  const formatTokenMeta = (token: PlanAsset["token"] | null) => {
+    if (!token) return "-";
+    const currency = token.isNative ? "XRP" : token.currency;
+    const issuer = token.isNative ? "-" : token.issuer ?? "-";
+    return t("assetLock.planPreview.tokenMeta", { currency, issuer });
+  };
+
   const formatRegularKeyStatus = (status: "VERIFIED" | "UNVERIFIED" | "ERROR") => {
     if (status === "VERIFIED") return t("assetLock.status.regularKey.verified");
     if (status === "ERROR") return t("assetLock.status.regularKey.error");
@@ -691,6 +698,7 @@ export default function AssetLockPage({
                           <div className={styles.ruleList}>
                             {planAssetsById[plan.planId].map((asset) => {
                               const heirs = planHeirsById[plan.planId] ?? [];
+                              const tokenMeta = asset.token ? formatTokenMeta(asset.token) : null;
                               return (
                                 <div key={asset.planAssetId} className={styles.ruleItem}>
                                   <div className={styles.ruleHeader}>
@@ -701,6 +709,14 @@ export default function AssetLockPage({
                                         : t("assetLock.planPreview.unit.amount")}
                                     </span>
                                   </div>
+                                  {asset.token ? (
+                                    <div className={styles.ruleTokenSection}>
+                                      <div className={styles.ruleSubTitle}>
+                                        {t("assetLock.planPreview.tokenTitle")}
+                                      </div>
+                                      <div className={styles.ruleTokenMeta}>{tokenMeta}</div>
+                                    </div>
+                                  ) : null}
                                   {asset.allocations?.length ? (
                                     <div className={styles.ruleAllocations}>
                                       {asset.allocations.map((allocation, index) => {
@@ -722,6 +738,37 @@ export default function AssetLockPage({
                                       {t("assetLock.planPreview.allocationsEmpty")}
                                     </div>
                                   )}
+                                  {(asset.nfts ?? []).length > 0 ? (
+                                    <div className={styles.ruleNftSection}>
+                                      <div className={styles.ruleSubTitle}>
+                                        {t("assetLock.planPreview.nftTitle")}
+                                      </div>
+                                      <div className={styles.ruleNftList}>
+                                        {(asset.nfts ?? []).map((nft) => {
+                                          const allocation = (asset.nftAllocations ?? []).find(
+                                            (item) => item.tokenId === nft.tokenId
+                                          );
+                                          const heir = heirs.find(
+                                            (item) => item.uid === allocation?.heirUid
+                                          ) ?? null;
+                                          const isUnallocated = !allocation?.heirUid;
+                                          return (
+                                            <div
+                                              key={`${asset.planAssetId}-${nft.tokenId}`}
+                                              className={styles.ruleRow}
+                                            >
+                                              <span className={styles.ruleTokenId}>
+                                                {nft.tokenId}
+                                              </span>
+                                              <span className={styles.ruleHeir}>
+                                                {renderHeirLabel(heir, isUnallocated)}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                               );
                             })}
