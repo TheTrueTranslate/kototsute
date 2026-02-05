@@ -47,6 +47,7 @@ import {
   getWalletAddressFromSeed,
   issueAndSendToken,
   mintAndSendNft,
+  createNftSellOffer,
   resolveXrplWsUrl,
   sendSignerListSet,
   sendTokenPayment,
@@ -213,6 +214,29 @@ describe("xrpl-wallet", () => {
         Account: "rHolder"
       })
     );
+    expect(result.txHash).toBe("SIGNED_HASH");
+  });
+
+  it("creates nft sell offer with destination", async () => {
+    const result = await createNftSellOffer({
+      sellerSeed: "seed",
+      sellerAddress: "rSeller",
+      tokenId: "nftoken",
+      destinationAddress: "rDest",
+      amountDrops: "0"
+    });
+
+    expect(mocks.autofill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TransactionType: "NFTokenCreateOffer",
+        Account: "rSeller",
+        NFTokenID: "nftoken",
+        Destination: "rDest",
+        Amount: "0",
+        Flags: 1
+      })
+    );
+    expect(result.offerId).toBe("offer");
     expect(result.txHash).toBe("SIGNED_HASH");
   });
 });
