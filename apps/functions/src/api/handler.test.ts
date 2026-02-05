@@ -3512,12 +3512,16 @@ describe("createApiHandler", () => {
     const db = getFirestore();
     await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
       {
+        reserveNfts: ["nft-1"],
         xrplSummary: {
           status: "ok",
           balanceXrp: "0",
           ledgerIndex: 1,
           tokens: [],
-          nfts: [{ tokenId: "nft-1", issuer: "rIssuer", uri: "https://example.com/nft/1" }]
+          nfts: [
+            { tokenId: "nft-1", issuer: "rIssuer", uri: "https://example.com/nft/1" },
+            { tokenId: "nft-2", issuer: "rIssuer", uri: "https://example.com/nft/2" }
+          ]
         }
       },
       { merge: true }
@@ -3525,7 +3529,10 @@ describe("createApiHandler", () => {
     if (planAssetId) {
       await db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId).set(
         {
-          nftAllocations: [{ tokenId: "nft-1", heirUid: "heir_1" }]
+          nftAllocations: [
+            { tokenId: "nft-1", heirUid: "heir_1" },
+            { tokenId: "nft-2", heirUid: "heir_2" }
+          ]
         },
         { merge: true }
       );
@@ -3543,8 +3550,10 @@ describe("createApiHandler", () => {
     expect(listRes.statusCode).toBe(200);
     expect(listRes.body?.data?.length).toBe(1);
     expect(listRes.body?.data?.[0]?.assetLabel).toBe("XRP Wallet");
-    expect(listRes.body?.data?.[0]?.nfts?.[0]?.tokenId).toBe("nft-1");
-    expect(listRes.body?.data?.[0]?.nftAllocations?.[0]?.tokenId).toBe("nft-1");
+    expect(listRes.body?.data?.[0]?.nfts?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.nfts?.[0]?.tokenId).toBe("nft-2");
+    expect(listRes.body?.data?.[0]?.nftAllocations?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.nftAllocations?.[0]?.tokenId).toBe("nft-2");
   });
 
   it("deletes case plan when no assets", async () => {

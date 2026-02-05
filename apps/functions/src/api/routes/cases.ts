@@ -3992,12 +3992,22 @@ export const casesRoutes = () => {
     const data = planAssets.map((planAsset) => {
       const assetId = String(planAsset.assetId ?? "");
       const asset = assetMap.get(assetId) ?? {};
+      const reserveNfts = Array.isArray(asset.reserveNfts) ? asset.reserveNfts : [];
+      const reserveSet = new Set(reserveNfts.map((id: any) => String(id)));
       const nfts = Array.isArray(asset.xrplSummary?.nfts)
         ? asset.xrplSummary.nfts.map((nft: any) => ({
             tokenId: String(nft.tokenId ?? ""),
             issuer: typeof nft.issuer === "string" ? nft.issuer : null,
             uri: typeof nft.uri === "string" ? nft.uri : null
           }))
+            .filter((nft: any) => nft.tokenId && !reserveSet.has(nft.tokenId))
+        : [];
+      const nftAllocations = Array.isArray(planAsset.nftAllocations)
+        ? planAsset.nftAllocations.filter((item: any) => {
+            const tokenId = item?.tokenId;
+            if (!tokenId) return true;
+            return !reserveSet.has(String(tokenId));
+          })
         : [];
       return {
         planAssetId: planAsset.planAssetId,
@@ -4008,9 +4018,7 @@ export const casesRoutes = () => {
         token: null,
         unitType: planAsset.unitType ?? "PERCENT",
         allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : [],
-        nftAllocations: Array.isArray(planAsset.nftAllocations)
-          ? planAsset.nftAllocations
-          : [],
+        nftAllocations,
         nfts
       };
     });
