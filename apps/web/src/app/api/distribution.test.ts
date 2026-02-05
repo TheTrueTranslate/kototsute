@@ -13,4 +13,13 @@ describe("distribution api", () => {
       method: "POST"
     });
   });
+
+  it("calls items endpoint", async () => {
+    const { listDistributionItems } = await import("./distribution");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await listDistributionItems("case-1");
+    expect(apiFetch).toHaveBeenCalledWith("/v1/cases/case-1/distribution/items", {
+      method: "GET"
+    });
+  });
 });
