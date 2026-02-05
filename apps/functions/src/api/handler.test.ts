@@ -4368,6 +4368,42 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.totalCount).toBe(0);
   });
 
+  it("lists distribution items", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_distribution_items";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/distribution/state/items`).doc("item-1").set({
+      type: "NFT",
+      tokenId: "nft-1",
+      offerId: "offer-1",
+      heirUid: "heir_1",
+      status: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "GET",
+      path: `/v1/cases/${caseId}/distribution/items`
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.[0]?.tokenId).toBe("nft-1");
+  });
+
   it("creates distribution items when plan includes heirs even if status is DRAFT", async () => {
     const fetchOriginal = (globalThis as any).fetch;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {

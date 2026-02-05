@@ -1346,6 +1346,35 @@ export const casesRoutes = () => {
     });
   });
 
+  app.get(":caseId/distribution/items", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const itemsSnap = await caseRef
+      .collection("distribution")
+      .doc("state")
+      .collection("items")
+      .get();
+    const items = itemsSnap.docs.map((doc) => ({
+      itemId: doc.id,
+      ...(doc.data() ?? {})
+    }));
+
+    return jsonOk(c, items);
+  });
+
   app.post(":caseId/distribution/execute", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
