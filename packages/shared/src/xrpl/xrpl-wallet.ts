@@ -337,3 +337,31 @@ export const createNftSellOffer = async (input: {
     await client.disconnect();
   }
 };
+
+export const acceptNftSellOffer = async (input: {
+  buyerSeed: string;
+  buyerAddress: string;
+  offerId: string;
+}) => {
+  const client = new Client(getXrplWsUrl());
+  await client.connect();
+  try {
+    const buyerWallet = Wallet.fromSeed(input.buyerSeed);
+    const acceptPrepared = await client.autofill({
+      TransactionType: "NFTokenAcceptOffer",
+      Account: input.buyerAddress,
+      NFTokenSellOffer: input.offerId
+    });
+    const acceptSigned = buyerWallet.sign(acceptPrepared);
+    const acceptResult = await client.submit(acceptSigned.tx_blob);
+    const acceptEngineResult = acceptResult?.result?.engine_result;
+    if (acceptEngineResult && !["tesSUCCESS", "terQUEUED"].includes(acceptEngineResult)) {
+      throw new Error(`XRPL submit failed: ${acceptEngineResult}`);
+    }
+    return {
+      txHash: acceptSigned.hash ?? acceptResult?.result?.tx_json?.hash ?? ""
+    };
+  } finally {
+    await client.disconnect();
+  }
+};
