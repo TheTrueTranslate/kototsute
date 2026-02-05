@@ -10,6 +10,7 @@ import {
   getWalletAddressFromSeed,
   inviteCreateSchema,
   planAllocationSchema,
+  planNftAllocationSchema,
   planCreateSchema,
   sendSignerListSet,
   sendTokenPayment,
@@ -3991,6 +3992,13 @@ export const casesRoutes = () => {
     const data = planAssets.map((planAsset) => {
       const assetId = String(planAsset.assetId ?? "");
       const asset = assetMap.get(assetId) ?? {};
+      const nfts = Array.isArray(asset.xrplSummary?.nfts)
+        ? asset.xrplSummary.nfts.map((nft: any) => ({
+            tokenId: String(nft.tokenId ?? ""),
+            issuer: typeof nft.issuer === "string" ? nft.issuer : null,
+            uri: typeof nft.uri === "string" ? nft.uri : null
+          }))
+        : [];
       return {
         planAssetId: planAsset.planAssetId,
         assetId,
@@ -3999,7 +4007,11 @@ export const casesRoutes = () => {
         assetAddress: asset.address ?? null,
         token: null,
         unitType: planAsset.unitType ?? "PERCENT",
-        allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : []
+        allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : [],
+        nftAllocations: Array.isArray(planAsset.nftAllocations)
+          ? planAsset.nftAllocations
+          : [],
+        nfts
       };
     });
 
@@ -4152,6 +4164,60 @@ export const casesRoutes = () => {
             : assignedTotal
       }
     });
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/plans/:planId/assets/:planAssetId/nfts", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const planAssetId = c.req.param("planAssetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = planNftAllocationSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        parsed.error.issues[0]?.message ?? "入力が不正です"
+      );
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
+
+    const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId);
+    await planAssetRef.set(
+      {
+        nftAllocations: parsed.data.allocations,
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+    await planRef.set({ updatedAt: c.get("deps").now() }, { merge: true });
+    await appendPlanHistory(planRef, {
+      type: "PLAN_NFT_ALLOCATIONS_UPDATED",
+      title: "NFT割当を更新しました",
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
+
     return jsonOk(c);
   });
 

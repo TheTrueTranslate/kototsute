@@ -38,3 +38,25 @@ export const planAllocationSchema = z
       }
     }
   });
+
+export const planNftAllocationSchema = z
+  .object({
+    allocations: z.array(
+      z.object({
+        tokenId: z
+          .string({ required_error: "validation.plan.nft.required" })
+          .min(1, "validation.plan.nft.required"),
+        heirUid: z.string().nullable()
+      })
+    )
+  })
+  .superRefine((value, ctx) => {
+    const ids = value.allocations.map((item) => item.tokenId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["allocations"],
+        message: "validation.plan.nft.duplicate"
+      });
+    }
+  });
