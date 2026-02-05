@@ -123,7 +123,7 @@
 }
 
 .combinedGrid {
-  @apply grid gap-6 lg:grid-cols-2 lg:items-start;
+  @apply grid gap-6 items-start;
 }
 
 .combinedSection {
@@ -131,7 +131,7 @@
 }
 
 .combinedSectionAlt {
-  @apply border-t border-border/60 pt-6 lg:border-t-0 lg:border-l lg:pl-6;
+  @apply border-t border-border/60 pt-6;
 }
 
 .sectionTitle {
@@ -287,11 +287,11 @@
 }
 
 .nftInfo {
-  @apply grid gap-1;
+  @apply grid gap-1 min-w-0;
 }
 
 .nftTokenId {
-  @apply font-mono text-foreground;
+  @apply font-mono text-foreground break-all;
 }
 
 .nftUri {
