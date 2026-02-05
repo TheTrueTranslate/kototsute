@@ -963,9 +963,9 @@
         "backToDetail": "指図詳細へ戻る"
       },
       "flow": {
-        "title": "編集の流れ",
-        "text": "基本情報 → 相続人 → 資産 → 配分"
-      },
+      "title": "編集の流れ",
+      "text": "基本情報 → 相続人 → 資産 → 配分 → NFT"
+    },
       "section": {
         "basic": "1. 基本情報",
         "heirs": "2. 相続人",
@@ -1013,7 +1013,7 @@
         },
         "unset": "未設定"
       },
-      "allocations": {
+    "allocations": {
         "emptyPlan": {
           "title": "指図が読み込めません",
           "body": "再読み込みしてからもう一度お試しください。"
@@ -1034,19 +1034,27 @@
         "saving": "保存中...",
         "unallocated": "未分配",
         "totalPercent": "合計: {{total}}% / 未分配: {{unallocated}}%",
-        "totalAmount": "合計: {{total}}"
-      },
-      "error": {
-        "planIdMissing": "指図IDが取得できません",
-        "loadFailed": "指図の取得に失敗しました",
-        "titleUpdateFailed": "指図タイトルの更新に失敗しました",
-        "addAssetFailed": "資産の追加に失敗しました",
-        "removeAssetFailed": "資産の削除に失敗しました",
-        "addHeirFailed": "相続人の追加に失敗しました",
-        "removeHeirFailed": "相続人の削除に失敗しました",
-        "allocationUpdateFailed": "配分の更新に失敗しました"
-      }
+      "totalAmount": "合計: {{total}}"
     },
+    "nft": {
+      "title": "5. NFT割当",
+      "empty": "割当できるNFTがありません",
+      "unassigned": "未割当",
+      "save": "NFT割当を保存",
+      "saving": "保存中..."
+    },
+    "error": {
+      "planIdMissing": "指図IDが取得できません",
+      "loadFailed": "指図の取得に失敗しました",
+      "titleUpdateFailed": "指図タイトルの更新に失敗しました",
+      "addAssetFailed": "資産の追加に失敗しました",
+        "removeAssetFailed": "資産の削除に失敗しました",
+      "addHeirFailed": "相続人の追加に失敗しました",
+      "removeHeirFailed": "相続人の削除に失敗しました",
+      "allocationUpdateFailed": "配分の更新に失敗しました",
+      "nftAllocationFailed": "NFT割当の更新に失敗しました"
+    }
+  },
     "detail": {
       "title": "指図詳細",
       "breadcrumb": "指図",

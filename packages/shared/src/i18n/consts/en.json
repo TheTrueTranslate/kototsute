@@ -962,10 +962,10 @@
       "actions": {
         "backToDetail": "Back to plan details"
       },
-      "flow": {
-        "title": "Edit flow",
-        "text": "Basic info → Heirs → Assets → Allocation"
-      },
+    "flow": {
+      "title": "Edit flow",
+      "text": "Basic info → Heirs → Assets → Allocation → NFT"
+    },
       "section": {
         "basic": "1. Basic info",
         "heirs": "2. Heirs",
@@ -1013,7 +1013,7 @@
         },
         "unset": "Unset"
       },
-      "allocations": {
+    "allocations": {
         "emptyPlan": {
           "title": "Plan cannot be loaded",
           "body": "Reload and try again."
@@ -1034,19 +1034,27 @@
         "saving": "Saving...",
         "unallocated": "Unallocated",
         "totalPercent": "Total: {{total}}% / Unallocated: {{unallocated}}%",
-        "totalAmount": "Total: {{total}}"
-      },
-      "error": {
-        "planIdMissing": "Plan ID is missing",
-        "loadFailed": "Failed to load plan",
-        "titleUpdateFailed": "Failed to update plan title",
-        "addAssetFailed": "Failed to add asset",
-        "removeAssetFailed": "Failed to remove asset",
-        "addHeirFailed": "Failed to add heir",
-        "removeHeirFailed": "Failed to remove heir",
-        "allocationUpdateFailed": "Failed to update allocation"
-      }
+      "totalAmount": "Total: {{total}}"
     },
+    "nft": {
+      "title": "5. NFT allocation",
+      "empty": "No NFTs available for allocation",
+      "unassigned": "Unassigned",
+      "save": "Save NFT allocation",
+      "saving": "Saving..."
+    },
+    "error": {
+      "planIdMissing": "Plan ID is missing",
+      "loadFailed": "Failed to load plan",
+      "titleUpdateFailed": "Failed to update plan title",
+      "addAssetFailed": "Failed to add asset",
+        "removeAssetFailed": "Failed to remove asset",
+      "addHeirFailed": "Failed to add heir",
+      "removeHeirFailed": "Failed to remove heir",
+      "allocationUpdateFailed": "Failed to update allocation",
+      "nftAllocationFailed": "Failed to update NFT allocation"
+    }
+  },
     "detail": {
       "title": "Plan details",
       "breadcrumb": "Plan",

@@ -25,6 +25,7 @@ import {
   listPlanAssets,
   removePlanHeir,
   updatePlanAllocations,
+  updatePlanNftAllocations,
   updatePlanTitle,
   type PlanAsset,
   type PlanDetail
@@ -45,6 +46,7 @@ export default function PlanEditPage() {
   const [caseAssets, setCaseAssets] = useState<AssetListItem[]>([]);
   const [caseHeirs, setCaseHeirs] = useState<CaseHeir[]>([]);
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, AllocationDraft>>({});
+  const [nftDrafts, setNftDrafts] = useState<Record<string, Record<string, string>>>({});
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export default function PlanEditPage() {
   const [addingHeirUid, setAddingHeirUid] = useState<string | null>(null);
   const [removingHeirUid, setRemovingHeirUid] = useState<string | null>(null);
   const [savingAllocationId, setSavingAllocationId] = useState<string | null>(null);
+  const [savingNftAssetId, setSavingNftAssetId] = useState<string | null>(null);
   const [heirModalOpen, setHeirModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
 
@@ -74,6 +77,11 @@ export default function PlanEditPage() {
     const usedIds = new Set(planAssets.map((asset) => asset.assetId));
     return caseAssets.filter((asset) => !usedIds.has(asset.assetId));
   }, [caseAssets, planAssets]);
+
+  const nftAssets = useMemo(
+    () => planAssets.filter((asset) => (asset.nfts ?? []).length > 0),
+    [planAssets]
+  );
 
   const planHeirUids = useMemo(
     () => new Set((plan?.heirs ?? []).map((heir) => heir.uid)),
@@ -132,6 +140,20 @@ export default function PlanEditPage() {
     });
     setAllocationDrafts(nextDrafts);
   }, [plan, planAssets]);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, Record<string, string>> = {};
+    planAssets.forEach((asset) => {
+      const values: Record<string, string> = {};
+      const allocations = Array.isArray(asset.nftAllocations) ? asset.nftAllocations : [];
+      (asset.nfts ?? []).forEach((nft) => {
+        const allocation = allocations.find((item) => item.tokenId === nft.tokenId);
+        values[nft.tokenId] = allocation?.heirUid ?? "";
+      });
+      nextDrafts[asset.planAssetId] = values;
+    });
+    setNftDrafts(nextDrafts);
+  }, [planAssets]);
 
   const refreshAssets = async () => {
     if (!caseId || !planId) return;
@@ -302,6 +324,38 @@ export default function PlanEditPage() {
       setError(err?.message ?? t("plans.edit.error.allocationUpdateFailed"));
     } finally {
       setSavingAllocationId(null);
+    }
+  };
+
+  const handleNftAllocationChange = (planAssetId: string, tokenId: string, value: string) => {
+    setNftDrafts((prev) => ({
+      ...prev,
+      [planAssetId]: {
+        ...(prev[planAssetId] ?? {}),
+        [tokenId]: value
+      }
+    }));
+  };
+
+  const handleSaveNftAllocations = async (asset: PlanAsset) => {
+    if (!caseId || !planId) {
+      setError(t("plans.edit.error.planIdMissing"));
+      return;
+    }
+    setSavingNftAssetId(asset.planAssetId);
+    setError(null);
+    try {
+      const draft = nftDrafts[asset.planAssetId] ?? {};
+      const allocations = (asset.nfts ?? []).map((nft) => ({
+        tokenId: nft.tokenId,
+        heirUid: draft[nft.tokenId] ? draft[nft.tokenId] : null
+      }));
+      await updatePlanNftAllocations(caseId, planId, asset.planAssetId, { allocations });
+      await refreshAssets();
+    } catch (err: any) {
+      setError(err?.message ?? t("plans.edit.error.nftAllocationFailed"));
+    } finally {
+      setSavingNftAssetId(null);
     }
   };
 
@@ -744,6 +798,70 @@ export default function PlanEditPage() {
                         })}
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("plans.edit.nft.title")}</h2>
+        {loading ? null : !plan || nftAssets.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyTitle}>{t("plans.edit.nft.empty")}</div>
+          </div>
+        ) : (
+          <div className={styles.sectionBody}>
+            {nftAssets.map((asset) => {
+              const draft = nftDrafts[asset.planAssetId] ?? {};
+              const isSaving = savingNftAssetId === asset.planAssetId;
+              return (
+                <div key={asset.planAssetId} className={styles.assetCard}>
+                  <div className={styles.assetHeader}>
+                    <div>
+                      <div className={styles.assetTitle}>
+                        {asset.assetLabel || t("plans.edit.assets.unset")}
+                      </div>
+                      <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleSaveNftAllocations(asset)}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? t("plans.edit.nft.saving") : t("plans.edit.nft.save")}
+                    </Button>
+                  </div>
+                  <div className={styles.sectionBody}>
+                    {(asset.nfts ?? []).map((nft) => (
+                      <div key={nft.tokenId} className={styles.nftRow}>
+                        <div className={styles.nftMeta}>
+                          <div className={styles.nftToken}>{nft.tokenId}</div>
+                          {nft.uri ? <div className={styles.rowMeta}>{nft.uri}</div> : null}
+                        </div>
+                        <select
+                          className={styles.select}
+                          value={draft[nft.tokenId] ?? ""}
+                          onChange={(event) =>
+                            handleNftAllocationChange(
+                              asset.planAssetId,
+                              nft.tokenId,
+                              event.target.value
+                            )
+                          }
+                          disabled={isSaving}
+                        >
+                          <option value="">{t("plans.edit.nft.unassigned")}</option>
+                          {plan.heirs.map((heir) => (
+                            <option key={heir.uid} value={heir.uid}>
+                              {heir.email}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );

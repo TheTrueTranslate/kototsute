@@ -31,4 +31,9 @@ describe("PlanEditPage", () => {
     const html = await render();
     expect(html).not.toContain("共有");
   });
+
+  it("renders nft allocation section", async () => {
+    const html = await render();
+    expect(html).toContain("NFT割当");
+  });
 });
