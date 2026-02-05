@@ -18,6 +18,7 @@ let distributionStateData = {
   skippedCount: 0,
   escalationCount: 0
 };
+let distributionItemsData: Array<any> = [];
 let caseData = {
   caseId: "case-1",
   ownerUid: "owner",
@@ -100,7 +101,8 @@ vi.mock("../api/invites", () => ({
 
 vi.mock("../api/distribution", () => ({
   getDistributionState: async () => distributionStateData,
-  executeDistribution: async () => distributionStateData
+  executeDistribution: async () => distributionStateData,
+  listDistributionItems: async () => distributionItemsData
 }));
 
 vi.mock("../../features/auth/auth-provider", () => ({
@@ -128,6 +130,7 @@ describe("CaseDetailPage", () => {
       skippedCount: 0,
       escalationCount: 0
     };
+    distributionItemsData = [];
     caseData = {
       caseId: "case-1",
       ownerUid: "owner",
@@ -481,6 +484,25 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("分配を実行");
+  });
+
+  it("shows nft receive block", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("NFT受取");
   });
 
   it("hides manual sign button in consent section", async () => {

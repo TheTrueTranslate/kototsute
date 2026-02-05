@@ -271,6 +271,36 @@
           "executeFailed": "分配の実行に失敗しました"
         }
       },
+      "nftReceive": {
+        "title": "NFT受取",
+        "hint": "相続用ウォレットのNFTを一括で受け取ります。",
+        "seed": {
+          "label": "シークレット",
+          "note": "シークレットはこの端末内だけで使われます。"
+        },
+        "actions": {
+          "execute": "NFTを受け取る",
+          "executing": "受取中..."
+        },
+        "summary": "成功 {{success}} / {{total}} 件",
+        "failedCount": "失敗 {{count}} 件",
+        "labels": {
+          "tokenId": "Token ID",
+          "status": "状態"
+        },
+        "status": {
+          "pending": "未実行",
+          "success": "成功",
+          "failed": "失敗"
+        },
+        "empty": "受取対象のNFTはありません。",
+        "error": {
+          "loadFailed": "NFT受取対象の取得に失敗しました",
+          "seedRequired": "シークレットを入力してください",
+          "walletRequired": "受取用ウォレットの登録が必要です",
+          "acceptFailed": "NFTの受取に失敗しました"
+        }
+      },
       "signer": {
         "status": {
           "label": "署名状況",

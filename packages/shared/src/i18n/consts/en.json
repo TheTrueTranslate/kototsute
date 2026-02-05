@@ -271,6 +271,36 @@
           "executeFailed": "Failed to execute distribution"
         }
       },
+      "nftReceive": {
+        "title": "Receive NFTs",
+        "hint": "Bulk receive NFTs from the inheritance wallet.",
+        "seed": {
+          "label": "Secret",
+          "note": "Your secret stays on this device."
+        },
+        "actions": {
+          "execute": "Receive NFTs",
+          "executing": "Receiving..."
+        },
+        "summary": "Success {{success}} / {{total}} items",
+        "failedCount": "Failed {{count}} items",
+        "labels": {
+          "tokenId": "Token ID",
+          "status": "Status"
+        },
+        "status": {
+          "pending": "Not started",
+          "success": "Success",
+          "failed": "Failed"
+        },
+        "empty": "No NFTs to receive.",
+        "error": {
+          "loadFailed": "Failed to load NFT receive targets",
+          "seedRequired": "Please enter your secret",
+          "walletRequired": "Receiving wallet registration is required",
+          "acceptFailed": "Failed to receive NFT"
+        }
+      },
       "signer": {
         "status": {
           "label": "Signing status",
