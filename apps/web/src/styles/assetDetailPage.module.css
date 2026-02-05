@@ -270,6 +270,34 @@
   @apply w-full max-w-[160px];
 }
 
+.reserveNftBlock {
+  @apply grid gap-2;
+}
+
+.nftList {
+  @apply grid gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3;
+}
+
+.nftRow {
+  @apply flex items-start gap-3 text-body-sm;
+}
+
+.nftCheckbox {
+  @apply mt-1 h-4 w-4 accent-primary;
+}
+
+.nftInfo {
+  @apply grid gap-1;
+}
+
+.nftTokenId {
+  @apply font-mono text-foreground;
+}
+
+.nftUri {
+  @apply text-meta text-muted-foreground break-all;
+}
+
 .reserveActions {
   @apply flex justify-end;
 }
