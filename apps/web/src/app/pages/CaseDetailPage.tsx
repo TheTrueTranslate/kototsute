@@ -296,8 +296,6 @@ const formatTxAmount = (amount: any) => {
   return "-";
 };
 
-type RelationOption = (typeof relationOptions)[number];
-
 type AssetRowProps = {
   caseId?: string;
   asset: AssetListItem;
@@ -441,7 +439,6 @@ export default function CaseDetailPage({
   const [prepareSuccess, setPrepareSuccess] = useState<string | null>(null);
   const [signerSeed, setSignerSeed] = useState("");
   const [signerSignedBlob, setSignerSignedBlob] = useState("");
-  const [signerSignedHash, setSignerSignedHash] = useState("");
   const [signerSigning, setSignerSigning] = useState(false);
   const [signerSubmitting, setSignerSubmitting] = useState(false);
   const autoSignKeyRef = useRef("");
@@ -594,7 +591,8 @@ export default function CaseDetailPage({
   const signerStatusKey = signerList?.status ?? "NOT_READY";
   const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
   const approvalStatusLabel = approvalTx?.status
-    ? approvalStatusLabels[approvalTx.status] ?? approvalTx.status
+    ? approvalStatusLabels[approvalTx.status as keyof typeof approvalStatusLabels] ??
+      approvalTx.status
     : t("cases.detail.signer.approvalStatus.unset");
   const approvalSubmittedTxHash = approvalTx?.submittedTxHash ?? "";
   const approvalNetworkStatus = approvalTx?.networkStatus ?? null;
@@ -1036,7 +1034,6 @@ export default function CaseDetailPage({
       await prepareApprovalTx(caseId);
       setPrepareSuccess("cases.detail.signer.prepare.success");
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       autoSignKeyRef.current = "";
       await fetchSignerList();
       await fetchApprovalTx();
@@ -1065,7 +1062,6 @@ export default function CaseDetailPage({
       await prepareApprovalTx(caseId, { force: true });
       setPrepareSuccess("cases.detail.signer.prepare.reprepareSuccess");
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       autoSignKeyRef.current = "";
       await fetchSignerList();
       await fetchApprovalTx();
@@ -1198,11 +1194,9 @@ export default function CaseDetailPage({
       try {
         const result = signForMultisign(approvalTx.txJson, secret);
         setSignerSignedBlob(result.blob);
-        setSignerSignedHash(result.hash);
         return true;
       } catch (err: any) {
         setSignerSignedBlob("");
-        setSignerSignedHash("");
         setSignerError(err?.message ?? "cases.detail.signer.error.signFailed");
         return false;
       } finally {
@@ -1216,7 +1210,6 @@ export default function CaseDetailPage({
     if (!approvalTx?.txJson || signerDisabledReason !== null || signerList?.signedByMe) {
       autoSignKeyRef.current = "";
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       return;
     }
     if (signerSigning || signerSubmitting) {
@@ -1226,7 +1219,6 @@ export default function CaseDetailPage({
     if (!secret) {
       autoSignKeyRef.current = "";
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       return;
     }
     const autoSignKey = `${secret}::${approvalTxJsonText}`;
@@ -1269,7 +1261,6 @@ export default function CaseDetailPage({
         signedByMe: result.signedByMe
       }));
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       setSignerSeed("");
       void fetchApprovalTx();
     } catch (err: any) {

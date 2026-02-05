@@ -958,7 +958,6 @@ export default function AssetLockPage({
                   <div className={styles.emptyState}>{t("assetLock.transfer.emptyTargets")}</div>
                 ) : (
                   (lockState?.items ?? []).map((item) => {
-                    const assetAddress = resolveAssetAddress(item.assetId);
                     const canAppTransfer = Boolean(lockState?.wallet?.address);
                     return (
                       <div key={item.itemId} className={styles.transferRow}>

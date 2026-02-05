@@ -12,6 +12,10 @@ vi.mock("./xrpl-actions.js", () => ({
   runNftMintSend: mocks.runNftMintSend
 }));
 
+vi.mock("node:crypto", () => ({
+  randomUUID: () => "test-uuid"
+}));
+
 import { runXrplCli } from "./xrpl-cli.js";
 
 describe("xrpl cli", () => {
@@ -45,8 +49,7 @@ describe("xrpl cli", () => {
         minterSeed: "seed",
         minterAddress: "rMinter",
         recipientSeed: "holder",
-        recipientAddress: "rHolder",
-        uri: "https://example.com/nft/1"
+        recipientAddress: "rHolder"
       });
 
     const result = await runXrplCli({ prompt });
@@ -56,7 +59,7 @@ describe("xrpl cli", () => {
       minterAddress: "rMinter",
       recipientSeed: "holder",
       recipientAddress: "rHolder",
-      uri: "https://example.com/nft/1"
+      uri: "urn:uuid:test-uuid"
     });
     expect(result).toEqual({ txHash: "nft-hash" });
   });

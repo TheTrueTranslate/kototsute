@@ -9,5 +9,5 @@
     "emitDeclarationOnly": false,
     "noEmit": false
   },
-  "include": ["src"]
+  "include": ["src", "src/**/*.json"]
 }

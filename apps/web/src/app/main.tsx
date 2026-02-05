@@ -6,12 +6,15 @@ import "../features/shared/lib/firebase";
 import { initWebI18n, resolveBrowserLocale } from "../features/shared/lib/i18n";
 import "../index.css";
 
-void initWebI18n(resolveBrowserLocale());
+const bootstrap = async () => {
+  await initWebI18n(resolveBrowserLocale());
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </React.StrictMode>
+  );
+};
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>
-);
+void bootstrap();

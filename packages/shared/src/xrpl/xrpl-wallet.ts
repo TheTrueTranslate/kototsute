@@ -249,6 +249,7 @@ export const mintAndSendNft = async (input: {
   try {
     const minterWallet = Wallet.fromSeed(input.minterSeed);
     const recipientWallet = Wallet.fromSeed(input.recipientSeed);
+    const sellOfferFlag = 1;
     const mintPrepared = await client.autofill({
       TransactionType: "NFTokenMint",
       Account: input.minterAddress,
@@ -272,7 +273,8 @@ export const mintAndSendNft = async (input: {
       Account: input.minterAddress,
       NFTokenID: tokenId,
       Destination: input.recipientAddress,
-      Amount: "0"
+      Amount: "0",
+      Flags: sellOfferFlag
     });
     const offerSigned = minterWallet.sign(offerPrepared);
     const offerResult = await client.submit(offerSigned.tx_blob);

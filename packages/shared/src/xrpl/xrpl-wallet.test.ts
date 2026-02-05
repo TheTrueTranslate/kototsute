@@ -203,7 +203,8 @@ describe("xrpl-wallet", () => {
       expect.objectContaining({
         TransactionType: "NFTokenCreateOffer",
         Account: "rMinter",
-        Destination: "rHolder"
+        Destination: "rHolder",
+        Flags: 1
       })
     );
     expect(mocks.autofill).toHaveBeenCalledWith(
