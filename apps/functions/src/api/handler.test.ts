@@ -1773,7 +1773,8 @@ describe("createApiHandler", () => {
           syncedAt: new Date("2024-01-01T00:00:00.000Z")
         },
         reserveXrp: "1",
-        reserveTokens: [{ currency: "JPYC", issuer: "rIssuer", reserveAmount: "1" }]
+        reserveTokens: [{ currency: "JPYC", issuer: "rIssuer", reserveAmount: "1" }],
+        reserveNfts: []
       },
       { merge: true }
     );
@@ -2039,7 +2040,8 @@ describe("createApiHandler", () => {
           syncedAt: new Date("2024-01-01T00:00:00.000Z")
         },
         reserveXrp: "1",
-        reserveTokens: []
+        reserveTokens: [],
+        reserveNfts: []
       },
       { merge: true }
     );
@@ -2144,7 +2146,8 @@ describe("createApiHandler", () => {
           syncedAt: new Date("2024-01-01T00:00:00.000Z")
         },
         reserveXrp: "1",
-        reserveTokens: []
+        reserveTokens: [],
+        reserveNfts: []
       },
       { merge: true }
     );
@@ -2252,7 +2255,8 @@ describe("createApiHandler", () => {
           syncedAt: new Date("2024-01-01T00:00:00.000Z")
         },
         reserveXrp: "1",
-        reserveTokens: [{ currency: "JPYC", issuer: "rIssuer", reserveAmount: "2" }]
+        reserveTokens: [{ currency: "JPYC", issuer: "rIssuer", reserveAmount: "2" }],
+        reserveNfts: []
       },
       { merge: true }
     );
