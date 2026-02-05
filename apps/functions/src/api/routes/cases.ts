@@ -2017,6 +2017,7 @@ export const casesRoutes = () => {
       verificationStatus: "UNVERIFIED",
       reserveXrp: "0",
       reserveTokens: [],
+      reserveNfts: [],
       createdAt: now,
       updatedAt: now
     });
@@ -2201,6 +2202,7 @@ export const casesRoutes = () => {
       verificationAddress: XRPL_VERIFY_ADDRESS,
       reserveXrp: typeof assetData.reserveXrp === "string" ? assetData.reserveXrp : "0",
       reserveTokens: Array.isArray(assetData.reserveTokens) ? assetData.reserveTokens : [],
+      reserveNfts: Array.isArray(assetData.reserveNfts) ? assetData.reserveNfts : [],
       xrpl: xrpl ?? null,
       syncLogs
     });
@@ -2296,7 +2298,8 @@ export const casesRoutes = () => {
     const body = await c.req.json().catch(() => ({}));
     const parsed = assetReserveSchema.safeParse({
       reserveXrp: body?.reserveXrp,
-      reserveTokens: body?.reserveTokens ?? []
+      reserveTokens: body?.reserveTokens ?? [],
+      reserveNfts: body?.reserveNfts ?? []
     });
     if (!parsed.success) {
       return jsonError(
@@ -2327,6 +2330,7 @@ export const casesRoutes = () => {
       {
         reserveXrp: parsed.data.reserveXrp,
         reserveTokens: parsed.data.reserveTokens,
+        reserveNfts: parsed.data.reserveNfts,
         updatedAt: deps.now()
       },
       { merge: true }

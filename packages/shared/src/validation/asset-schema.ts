@@ -26,11 +26,31 @@ export const assetReserveSchema = z
         issuer: z.string().nullable(),
         reserveAmount: numericStringSchema
       })
-    )
+    ),
+    reserveNfts: z
+      .array(
+        z
+          .string({ required_error: "validation.asset.nft.required" })
+          .min(1, "validation.asset.nft.required")
+      )
+      .default([])
   })
-  .refine((value) => {
+  .superRefine((value, ctx) => {
     const keys = value.reserveTokens.map(
       (token) => `${token.currency}::${token.issuer ?? ""}`
     );
-    return new Set(keys).size === keys.length;
-  }, "validation.asset.token.duplicate");
+    if (new Set(keys).size !== keys.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reserveTokens"],
+        message: "validation.asset.token.duplicate"
+      });
+    }
+    if (new Set(value.reserveNfts).size !== value.reserveNfts.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reserveNfts"],
+        message: "validation.asset.nft.duplicate"
+      });
+    }
+  });
