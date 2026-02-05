@@ -28,6 +28,7 @@ import {
   decodeHex,
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
+  fetchXrplAccountNfts,
   fetchXrplReserve,
   fetchXrplTx,
   fetchXrplValidatedLedgerIndex
@@ -2092,11 +2093,19 @@ export const casesRoutes = () => {
               balance: String(token.balance ?? "0")
             }))
           : [];
+        const nfts = Array.isArray(summary.nfts)
+          ? summary.nfts.map((nft: any) => ({
+              tokenId: String(nft.tokenId ?? ""),
+              issuer: typeof nft.issuer === "string" ? nft.issuer : null,
+              uri: typeof nft.uri === "string" ? nft.uri : null
+            }))
+          : [];
         return {
           status: "ok",
           balanceXrp: typeof summary.balanceXrp === "string" ? summary.balanceXrp : "0",
           ledgerIndex: summary.ledgerIndex ?? null,
           tokens,
+          nfts,
           syncedAt: formatDate(summary.syncedAt)
         };
       }
@@ -2120,7 +2129,12 @@ export const casesRoutes = () => {
       if (xrpl.status === "ok") {
         const lines = await fetchXrplAccountLines(address);
         if (lines.status === "ok") {
-          xrpl = { ...xrpl, tokens: lines.tokens };
+          const nfts = await fetchXrplAccountNfts(address);
+          if (nfts.status === "ok") {
+            xrpl = { ...xrpl, tokens: lines.tokens, nfts: nfts.nfts };
+          } else {
+            xrpl = { status: "error", message: nfts.message };
+          }
         } else {
           xrpl = { status: "error", message: lines.message };
         }
@@ -2133,6 +2147,7 @@ export const casesRoutes = () => {
               balanceXrp: xrpl.balanceXrp,
               ledgerIndex: xrpl.ledgerIndex ?? null,
               tokens: xrpl.tokens ?? [],
+              nfts: xrpl.nfts ?? [],
               syncedAt
             }
           : { status: "error", message: xrpl.message, syncedAt };

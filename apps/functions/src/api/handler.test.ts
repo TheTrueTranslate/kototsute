@@ -1419,6 +1419,22 @@ describe("createApiHandler", () => {
           })
         } as any;
       }
+      if (body.method === "account_nfts") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              account_nfts: [
+                {
+                  NFTokenID: "00090000AABBCC",
+                  Issuer: "rIssuer",
+                  URI: "68747470733A2F2F6578616D706C652E636F6D2F6E66742F31"
+                }
+              ]
+            }
+          })
+        } as any;
+      }
       return { ok: false, json: async () => ({}) } as any;
     });
     (globalThis as any).fetch = fetchMock;
@@ -1486,6 +1502,9 @@ describe("createApiHandler", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body?.data?.xrpl?.tokens?.[0]?.currency).toBe("JPYC");
+    expect(res.body?.data?.xrpl?.nfts?.[0]?.tokenId).toBe("00090000AABBCC");
+    expect(res.body?.data?.xrpl?.nfts?.[0]?.issuer).toBe("rIssuer");
+    expect(res.body?.data?.xrpl?.nfts?.[0]?.uri).toBe("https://example.com/nft/1");
   });
 
   it("returns cached wallet info when includeXrpl is false", async () => {
