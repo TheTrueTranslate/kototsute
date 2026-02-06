@@ -7,19 +7,13 @@ import {
   rejectDeathClaim,
   type AdminDeathClaimDetail
 } from "../api/death-claims";
+import { FileList } from "../components/file-list";
 
 const formatBytes = (value: number) => {
   if (!Number.isFinite(value)) return "-";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString("ja-JP");
 };
 
 export const decodeBase64ToBytes = (dataBase64: string) => {
@@ -232,33 +226,29 @@ export default function ClaimDetailPage() {
           </div>
           <div className="section">
             <div className="section-title">提出ファイル</div>
-            {detail.files.length === 0 ? (
-              <div className="muted">ファイルがありません。</div>
-            ) : (
-              <div className="file-list">
-                {detail.files.map((file) => (
-                  <div key={file.fileId} className="file-row">
-                    <div className="row-title">{file.fileName}</div>
-                    {file.fileId ? (
-                      <button
-                        className="icon-button"
-                        type="button"
-                        onClick={() => handleOpenFile(file.fileId)}
-                        disabled={openingFileId === file.fileId}
-                        aria-label={
-                          openingFileId === file.fileId ? "ファイルを取得中" : "ファイルを開く"
-                        }
-                        title="ファイルを開く"
-                      >
-                        <FileOpenIcon />
-                      </button>
-                    ) : (
-                      <div className="row-meta">閲覧できません。</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <FileList
+              items={detail.files.map((file) => ({
+                id: file.fileId,
+                name: file.fileName,
+                meta: `${file.contentType} / ${formatBytes(file.size)}`,
+                action: file.fileId ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => handleOpenFile(file.fileId)}
+                    disabled={openingFileId === file.fileId}
+                    aria-label={openingFileId === file.fileId ? "ファイルを取得中" : "ファイルを開く"}
+                    title="ファイルを開く"
+                  >
+                    <FileOpenIcon />
+                    <span>{openingFileId === file.fileId ? "取得中..." : "開く"}</span>
+                  </button>
+                ) : (
+                  <div className="row-meta">閲覧できません。</div>
+                )
+              }))}
+              emptyMessage="ファイルがありません。"
+            />
           </div>
         </>
       ) : (

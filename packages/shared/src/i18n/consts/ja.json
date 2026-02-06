@@ -370,30 +370,9 @@
           "signedBlobRequired": "署名済みデータを入力してください",
           "submitFailed": "署名の送信に失敗しました"
         },
-        "fromLabel": "送金元：被相続人の相続用ウォレット",
-        "fromValue": "被相続人の相続用ウォレット",
-        "toLabel": "送金先：システムのウォレット",
-        "toValue": "システムのウォレット",
-        "labels": {
-          "from": "送金元",
-          "to": "送金先",
-          "signers": "署名者",
-          "system": "システム署名者",
-          "mine": "あなたの受取用ウォレット",
-          "heir": "相続人の受取用ウォレット"
-        },
-        "multiSign": {
-          "title": "MultiSignのしくみ（アドレス）",
-          "empty": "署名の準備が完了すると表示します。"
-        },
-        "multiSignNote": {
-          "withCount": "相続人の同意が{{count}}人以上とシステム署名が揃うと成立します。",
-          "default": "相続人の過半数の同意とシステム署名が揃うと成立します。"
-        },
-        "txSummary": "送金元: {{from}} / 送金先: {{to}} / 送金額: {{amount}}",
         "tx": {
           "title": "署名内容",
-          "hint": "送金内容とMemoが正しいことを確認してください。",
+          "hint": "署名前にMemoを確認してください。",
           "sentLabel": "送信Tx",
           "afterLabel": "送信後の状態",
           "afterTitle": "送信後の状態",
@@ -411,25 +390,12 @@
             "title": "署名内容を確認"
           },
           "memoLabel": "Memo",
-          "amount": {
-            "dropsLabel": "Amount (drops)",
-            "xrpLabel": "Amount (XRP)"
-          },
-          "copy": {
-            "sentTx": "送信Txをコピー",
-            "from": "送金元をコピー",
-            "to": "送金先をコピー",
-            "memo": "Memoをコピー",
-            "amountDrops": "Amount (drops)をコピー",
-            "amountXrp": "Amount (XRP)をコピー"
-          },
           "empty": "署名対象が未生成です。"
         },
         "guide": {
           "title": "署名の流れ",
           "steps": {
             "tx": "署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配するXRPLトランザクションです。",
-            "multisign": "登録済みの相続人ウォレットでMultiSign署名を行います。",
             "secret": "シークレットを入力すると署名を自動で作成します（サーバーには送信しません）。",
             "submit": "署名を送信すると同意が反映されます。",
             "autoExecute": "必要な署名が揃うと相続実行の送信が自動で行われます。"
@@ -475,6 +441,22 @@
           "signerCompleted": {
             "title": "同意完了（相続実行待ち）",
             "description": "同意がそろいました。相続実行を待っています。"
+          }
+        },
+        "flow": {
+          "title": "相続の手順",
+          "progress": "STEP {{current}}/{{total}}",
+          "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "steps": {
+            "wallet": "受取用ウォレットを登録",
+            "deathClaim": "死亡診断書",
+            "signature": "署名",
+            "receive": "受け取り"
+          },
+          "walletGate": {
+            "title": "先に受取用ウォレットを登録してください",
+            "body": "受取用ウォレットの登録が完了すると、相続実行に進めます。",
+            "action": "受取用ウォレットを開く"
           }
         }
       },
@@ -1337,7 +1319,7 @@
       "label": "ファイルを追加",
       "action": "アップロード",
       "actioning": "アップロード中...",
-      "disabled": "運営承認後はファイルを追加できません。"
+      "disabled": "差し戻し時のみファイルを追加できます。運営確認中は追加できません。"
     },
     "modal": {
       "confirm": {

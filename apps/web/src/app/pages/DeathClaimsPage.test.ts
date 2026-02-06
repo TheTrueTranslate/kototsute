@@ -130,7 +130,7 @@ describe("DeathClaimsPage", () => {
     expect(html).not.toContain("ほかの相続人の同意を待っています");
   });
 
-  it("shows upload actions in current action and file section when rejected", async () => {
+  it("shows upload action only in file section when rejected", async () => {
     const html = await render({
       initialClaim: {
         claim: {
@@ -146,8 +146,32 @@ describe("DeathClaimsPage", () => {
       },
       initialLoading: false
     });
-    expect(html).toContain('data-testid="death-claims-action-upload"');
+    expect(html).not.toContain('data-testid="death-claims-action-upload"');
     expect(html).toContain('data-testid="death-claims-files-upload"');
+  });
+
+  it("hides upload actions in both sections while admin review is pending", async () => {
+    const html = await render({
+      initialClaim: {
+        claim: {
+          claimId: "claim-1",
+          status: "SUBMITTED",
+          submittedByUid: "heir_1"
+        },
+        files: [],
+        confirmationsCount: 0,
+        requiredCount: 1,
+        confirmedByMe: false
+      },
+      initialLoading: false
+    });
+    expect(html).not.toContain('data-testid="death-claims-action-upload"');
+    expect(html).not.toContain('data-testid="death-claims-files-upload"');
+    expect(html).not.toContain("現在のアクション");
+    expect(html).not.toContain("運営の確認を待っています。");
+    expect(html).toContain(
+      "差し戻し時のみファイルを追加できます。運営確認中は追加できません。"
+    );
   });
 
   it("shows open button for submitted files", async () => {
@@ -175,7 +199,36 @@ describe("DeathClaimsPage", () => {
     expect(html).toContain('data-testid="death-claims-file-open-file-1"');
   });
 
-  it("adds spacing between action summary and status header", async () => {
+  it("renders submitted files panel before application status panel", async () => {
+    const html = await render({
+      initialClaim: {
+        claim: {
+          claimId: "claim-1",
+          status: "SUBMITTED",
+          submittedByUid: "heir_1"
+        },
+        files: [
+          {
+            fileId: "file-1",
+            fileName: "death.pdf",
+            contentType: "application/pdf",
+            size: 1024
+          }
+        ],
+        confirmationsCount: 0,
+        requiredCount: 1,
+        confirmedByMe: false
+      },
+      initialLoading: false
+    });
+    const filesIndex = html.indexOf("提出ファイル");
+    const statusIndex = html.indexOf("申請ステータス");
+    expect(filesIndex).toBeGreaterThanOrEqual(0);
+    expect(statusIndex).toBeGreaterThanOrEqual(0);
+    expect(filesIndex).toBeLessThan(statusIndex);
+  });
+
+  it("does not render current action summary section", async () => {
     const html = await render({
       initialClaim: {
         claim: {
@@ -191,7 +244,8 @@ describe("DeathClaimsPage", () => {
       },
       initialLoading: false
     });
-    expect(html).toContain("panelHeaderSpaced");
+    expect(html).not.toContain("現在のアクション");
+    expect(html).not.toContain("panelHeaderSpaced");
   });
 
   it("uses default mock for empty state", async () => {
