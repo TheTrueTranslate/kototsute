@@ -34,11 +34,19 @@
       "min": "パスワードは8文字以上で入力してください",
       "mismatch": "パスワードが一致しません"
     },
-    "relation": { "required": "関係は必須です" },
-    "relationOther": { "required": "その他の関係を入力してください" },
-    "memo": { "max": "メモは400文字以内で入力してください" },
+    "relation": {
+      "required": "関係は必須です"
+    },
+    "relationOther": {
+      "required": "その他の関係を入力してください"
+    },
+    "memo": {
+      "max": "メモは400文字以内で入力してください"
+    },
     "asset": {
-      "label": { "required": "ラベルは必須です" },
+      "label": {
+        "required": "ラベルは必須です"
+      },
       "address": {
         "required": "アドレスは必須です",
         "invalid": "XRPアドレスが不正です"
@@ -50,7 +58,9 @@
       "numeric": "数値で入力してください"
     },
     "plan": {
-      "title": { "required": "タイトルは必須です" },
+      "title": {
+        "required": "タイトルは必須です"
+      },
       "allocation": {
         "min": "配分は0以上で入力してください",
         "percentMax": "割合の合計は100%以下にしてください"
@@ -167,7 +177,6 @@
       "tabs": {
         "assets": "資産",
         "plans": "指図",
-        "tasks": "タスク",
         "heirs": "相続人",
         "deathClaims": "相続実行",
         "wallet": "受取用ウォレット"
@@ -560,45 +569,22 @@
         },
         "memoIssuing": "発行中...",
         "memoEmpty": "未発行",
-        "notice": {
-          "register": "ウォレット登録が必要です",
-          "verify": "所有確認が必要です"
-        },
         "unavailable": {
           "title": "相続人のみ操作できます",
           "body": "受取用ウォレットの登録は相続人本人が行います。"
         },
-    "error": {
-      "loadFailed": "ウォレットの取得に失敗しました",
-      "addressRequired": "ウォレットアドレスを入力してください",
-      "saveFailed": "ウォレットの登録に失敗しました",
-      "challengeFailed": "検証コードの取得に失敗しました",
-      "caseIdMissing": "ケースIDが取得できません",
-      "addressMissing": "ウォレットアドレスが取得できません",
-      "secretRequired": "シークレットを入力してください"
-    },
+        "error": {
+          "loadFailed": "ウォレットの取得に失敗しました",
+          "addressRequired": "ウォレットアドレスを入力してください",
+          "saveFailed": "ウォレットの登録に失敗しました",
+          "challengeFailed": "検証コードの取得に失敗しました",
+          "caseIdMissing": "ケースIDが取得できません",
+          "addressMissing": "ウォレットアドレスが取得できません",
+          "secretRequired": "シークレットを入力してください"
+        },
         "verify": {
           "success": "所有確認が完了しました",
           "error": "所有確認に失敗しました"
-        }
-      },
-      "tasks": {
-        "title": "タスク",
-        "note": "進捗には影響しません",
-        "role": {
-          "owner": "被相続人",
-          "heir": "相続人"
-        },
-        "personal": {
-          "title": "自分用タスク",
-          "empty": {
-            "title": "個人タスクはありません",
-            "body": "Todoマスターが更新されると表示されます。"
-          }
-        },
-        "error": {
-          "loadFailed": "タスクの取得に失敗しました",
-          "updateFailed": "タスクの更新に失敗しました"
         }
       },
       "error": {
@@ -1005,9 +991,9 @@
         "backToDetail": "指図詳細へ戻る"
       },
       "flow": {
-      "title": "編集の流れ",
-      "text": "基本情報 → 相続人 → 資産 → 配分 → NFT"
-    },
+        "title": "編集の流れ",
+        "text": "基本情報 → 相続人 → 資産 → 配分 → NFT"
+      },
       "section": {
         "basic": "1. 基本情報",
         "heirs": "2. 相続人",
@@ -1055,7 +1041,7 @@
         },
         "unset": "未設定"
       },
-    "allocations": {
+      "allocations": {
         "emptyPlan": {
           "title": "指図が読み込めません",
           "body": "再読み込みしてからもう一度お試しください。"
@@ -1076,27 +1062,27 @@
         "saving": "保存中...",
         "unallocated": "未分配",
         "totalPercent": "合計: {{total}}% / 未分配: {{unallocated}}%",
-      "totalAmount": "合計: {{total}}"
-    },
-    "nft": {
-      "title": "5. NFT割当",
-      "empty": "割当できるNFTがありません",
-      "unassigned": "未割当",
-      "save": "NFT割当を保存",
-      "saving": "保存中..."
-    },
-    "error": {
-      "planIdMissing": "指図IDが取得できません",
-      "loadFailed": "指図の取得に失敗しました",
-      "titleUpdateFailed": "指図タイトルの更新に失敗しました",
-      "addAssetFailed": "資産の追加に失敗しました",
+        "totalAmount": "合計: {{total}}"
+      },
+      "nft": {
+        "title": "5. NFT割当",
+        "empty": "割当できるNFTがありません",
+        "unassigned": "未割当",
+        "save": "NFT割当を保存",
+        "saving": "保存中..."
+      },
+      "error": {
+        "planIdMissing": "指図IDが取得できません",
+        "loadFailed": "指図の取得に失敗しました",
+        "titleUpdateFailed": "指図タイトルの更新に失敗しました",
+        "addAssetFailed": "資産の追加に失敗しました",
         "removeAssetFailed": "資産の削除に失敗しました",
-      "addHeirFailed": "相続人の追加に失敗しました",
-      "removeHeirFailed": "相続人の削除に失敗しました",
-      "allocationUpdateFailed": "配分の更新に失敗しました",
-      "nftAllocationFailed": "NFT割当の更新に失敗しました"
-    }
-  },
+        "addHeirFailed": "相続人の追加に失敗しました",
+        "removeHeirFailed": "相続人の削除に失敗しました",
+        "allocationUpdateFailed": "配分の更新に失敗しました",
+        "nftAllocationFailed": "NFT割当の更新に失敗しました"
+      }
+    },
     "detail": {
       "title": "指図詳細",
       "breadcrumb": "指図",

@@ -34,11 +34,19 @@
       "min": "Password must be at least 8 characters",
       "mismatch": "Passwords do not match"
     },
-    "relation": { "required": "Relation is required" },
-    "relationOther": { "required": "Please enter the relation" },
-    "memo": { "max": "Memo must be 400 characters or fewer" },
+    "relation": {
+      "required": "Relation is required"
+    },
+    "relationOther": {
+      "required": "Please enter the relation"
+    },
+    "memo": {
+      "max": "Memo must be 400 characters or fewer"
+    },
     "asset": {
-      "label": { "required": "Label is required" },
+      "label": {
+        "required": "Label is required"
+      },
       "address": {
         "required": "Address is required",
         "invalid": "Invalid XRP address"
@@ -50,7 +58,9 @@
       "numeric": "Please enter a number"
     },
     "plan": {
-      "title": { "required": "Title is required" },
+      "title": {
+        "required": "Title is required"
+      },
       "allocation": {
         "min": "Allocation must be 0 or greater",
         "percentMax": "Total percentage must be 100% or less"
@@ -167,7 +177,6 @@
       "tabs": {
         "assets": "Assets",
         "plans": "Plans",
-        "tasks": "Tasks",
         "heirs": "Heirs",
         "deathClaims": "Inheritance",
         "wallet": "Receiving wallet"
@@ -560,45 +569,22 @@
         },
         "memoIssuing": "Issuing...",
         "memoEmpty": "Not issued",
-        "notice": {
-          "register": "Wallet registration is required",
-          "verify": "Ownership verification is required"
-        },
         "unavailable": {
           "title": "Only heirs can operate",
           "body": "Only the heir can register a receiving wallet."
         },
-    "error": {
-      "loadFailed": "Failed to load wallet",
-      "addressRequired": "Please enter a wallet address",
-      "saveFailed": "Failed to register wallet",
-      "challengeFailed": "Failed to get verification code",
-      "caseIdMissing": "Case ID is unavailable",
-      "addressMissing": "Wallet address is unavailable",
-      "secretRequired": "Please enter the secret"
-    },
+        "error": {
+          "loadFailed": "Failed to load wallet",
+          "addressRequired": "Please enter a wallet address",
+          "saveFailed": "Failed to register wallet",
+          "challengeFailed": "Failed to get verification code",
+          "caseIdMissing": "Case ID is unavailable",
+          "addressMissing": "Wallet address is unavailable",
+          "secretRequired": "Please enter the secret"
+        },
         "verify": {
           "success": "Ownership verification completed",
           "error": "Ownership verification failed"
-        }
-      },
-      "tasks": {
-        "title": "Tasks",
-        "note": "Does not affect progress",
-        "role": {
-          "owner": "Owner",
-          "heir": "Heir"
-        },
-        "personal": {
-          "title": "Personal tasks",
-          "empty": {
-            "title": "No personal tasks",
-            "body": "Shown when Todo master is updated."
-          }
-        },
-        "error": {
-          "loadFailed": "Failed to load tasks",
-          "updateFailed": "Failed to update tasks"
         }
       },
       "error": {
@@ -1004,10 +990,10 @@
       "actions": {
         "backToDetail": "Back to plan details"
       },
-    "flow": {
-      "title": "Edit flow",
-      "text": "Basic info → Heirs → Assets → Allocation → NFT"
-    },
+      "flow": {
+        "title": "Edit flow",
+        "text": "Basic info → Heirs → Assets → Allocation → NFT"
+      },
       "section": {
         "basic": "1. Basic info",
         "heirs": "2. Heirs",
@@ -1055,7 +1041,7 @@
         },
         "unset": "Unset"
       },
-    "allocations": {
+      "allocations": {
         "emptyPlan": {
           "title": "Plan cannot be loaded",
           "body": "Reload and try again."
@@ -1076,27 +1062,27 @@
         "saving": "Saving...",
         "unallocated": "Unallocated",
         "totalPercent": "Total: {{total}}% / Unallocated: {{unallocated}}%",
-      "totalAmount": "Total: {{total}}"
-    },
-    "nft": {
-      "title": "5. NFT allocation",
-      "empty": "No NFTs available for allocation",
-      "unassigned": "Unassigned",
-      "save": "Save NFT allocation",
-      "saving": "Saving..."
-    },
-    "error": {
-      "planIdMissing": "Plan ID is missing",
-      "loadFailed": "Failed to load plan",
-      "titleUpdateFailed": "Failed to update plan title",
-      "addAssetFailed": "Failed to add asset",
+        "totalAmount": "Total: {{total}}"
+      },
+      "nft": {
+        "title": "5. NFT allocation",
+        "empty": "No NFTs available for allocation",
+        "unassigned": "Unassigned",
+        "save": "Save NFT allocation",
+        "saving": "Saving..."
+      },
+      "error": {
+        "planIdMissing": "Plan ID is missing",
+        "loadFailed": "Failed to load plan",
+        "titleUpdateFailed": "Failed to update plan title",
+        "addAssetFailed": "Failed to add asset",
         "removeAssetFailed": "Failed to remove asset",
-      "addHeirFailed": "Failed to add heir",
-      "removeHeirFailed": "Failed to remove heir",
-      "allocationUpdateFailed": "Failed to update allocation",
-      "nftAllocationFailed": "Failed to update NFT allocation"
-    }
-  },
+        "addHeirFailed": "Failed to add heir",
+        "removeHeirFailed": "Failed to remove heir",
+        "allocationUpdateFailed": "Failed to update allocation",
+        "nftAllocationFailed": "Failed to update NFT allocation"
+      }
+    },
     "detail": {
       "title": "Plan details",
       "breadcrumb": "Plan",

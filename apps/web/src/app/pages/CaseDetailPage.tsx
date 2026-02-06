@@ -22,7 +22,6 @@ import { getCase, type CaseSummary } from "../api/cases";
 import { listAssets, type AssetListItem } from "../api/assets";
 import { listPlans, type PlanListItem } from "../api/plans";
 import type { DeathClaimSummary } from "../api/death-claims";
-import { getTaskProgress, updateMyTaskProgress } from "../api/tasks";
 import {
   getApprovalTx,
   getSignerList,
@@ -75,7 +74,6 @@ import {
   relationOtherValue,
   type RelationOption
 } from "@kototsute/shared";
-import { todoMaster, type TaskItem } from "@kototsute/tasks";
 
 type LocalizedMessage = {
   key: string;
@@ -95,11 +93,6 @@ export const formatDistributionProgressText = (
       total: distribution.totalCount
     }
   };
-};
-
-export const canUpdateTaskProgress = (input: { isLocked: boolean }) => {
-  void input;
-  return true;
 };
 
 export const resolveDistributionDisabledReason = (input: {
@@ -355,7 +348,7 @@ export const AssetRow = ({ caseId, asset }: AssetRowProps) => {
   );
 };
 
-type TabKey = "assets" | "plans" | "tasks" | "heirs" | "wallet" | "death-claims";
+type TabKey = "assets" | "plans" | "heirs" | "wallet" | "death-claims";
 
 type CaseDetailPageProps = {
   initialTab?: TabKey;
@@ -363,14 +356,13 @@ type CaseDetailPageProps = {
   initialCaseData?: CaseSummary | null;
   initialDistributionWalletAddress?: string | null;
   initialHeirWallet?: HeirWallet | null;
-  initialTaskIds?: string[];
   initialHeirs?: CaseHeir[];
   initialWalletDialogOpen?: boolean;
   initialWalletDialogMode?: "register" | "verify";
   initialDeathClaim?: DeathClaimSummary | null;
 };
 
-const allTabKeys: TabKey[] = ["assets", "plans", "tasks", "heirs", "wallet", "death-claims"];
+const allTabKeys: TabKey[] = ["assets", "plans", "heirs", "wallet", "death-claims"];
 
 const isTabKey = (value: string | null): value is TabKey =>
   Boolean(value && allTabKeys.includes(value as TabKey));
@@ -381,7 +373,6 @@ export default function CaseDetailPage({
   initialCaseData = null,
   initialDistributionWalletAddress = null,
   initialHeirWallet = null,
-  initialTaskIds = [],
   initialHeirs = [],
   initialWalletDialogOpen = false,
   initialWalletDialogMode = "register",
@@ -414,9 +405,6 @@ export default function CaseDetailPage({
     }
     return null;
   });
-  const [taskLoading, setTaskLoading] = useState(false);
-  const [taskError, setTaskError] = useState<string | null>(null);
-  const [userCompletedTaskIds, setUserCompletedTaskIds] = useState<string[]>(initialTaskIds);
   const [heirWallet, setHeirWallet] = useState<HeirWallet | null>(initialHeirWallet);
   const [heirWalletLoading, setHeirWalletLoading] = useState(false);
   const [heirWalletError, setHeirWalletError] = useState<string | null>(null);
@@ -553,17 +541,15 @@ export default function CaseDetailPage({
     const baseTabItems = [
       { key: "assets" as const, label: t("cases.detail.tabs.assets") },
       { key: "plans" as const, label: t("cases.detail.tabs.plans") },
-      { key: "tasks" as const, label: t("cases.detail.tabs.tasks") },
       { key: "heirs" as const, label: t("cases.detail.tabs.heirs") }
     ];
     if (isOwner === false) {
       return [
         baseTabItems[0],
         baseTabItems[1],
-        baseTabItems[2],
         { key: "death-claims" as const, label: t("cases.detail.tabs.deathClaims") },
         { key: "wallet" as const, label: t("cases.detail.tabs.wallet") },
-        baseTabItems[3]
+        baseTabItems[2]
       ];
     }
     return baseTabItems;
@@ -576,27 +562,14 @@ export default function CaseDetailPage({
   );
   const showOwnerDistributionWallet =
     isOwner === true && caseData?.stage === "IN_PROGRESS";
-  const personalTasks = useMemo(() => {
-    if (isOwner === true) return todoMaster.owner;
-    if (isOwner === false) return todoMaster.heir;
-    return [];
-  }, [isOwner]);
-
-  const sortTasks = (tasks: TaskItem[]) =>
-    [...tasks].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-
-  const visiblePersonalTasks = useMemo(() => sortTasks(personalTasks), [personalTasks]);
   const isHeir = isOwner === false;
   const isLocked = caseData?.assetLockStatus === "LOCKED";
-  const canUpdateTasks = canUpdateTaskProgress({ isLocked });
   const canAccessDeathClaims =
     caseData?.stage === "WAITING" ||
     caseData?.stage === "IN_PROGRESS" ||
     caseData?.stage === "COMPLETED";
   const hasHeirWallet = Boolean(heirWallet?.address);
   const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
-  const needsHeirWalletRegistration = isHeir && !hasHeirWallet;
-  const needsHeirWalletVerification = isHeir && hasHeirWallet && !isHeirWalletVerified;
   const heirWalletDestinationDisplay =
     heirWalletChallenge?.address ??
     (heirWalletVerifyLoading
@@ -607,16 +580,6 @@ export default function CaseDetailPage({
     (heirWalletVerifyLoading
       ? t("cases.detail.wallet.memoIssuing")
       : t("cases.detail.wallet.memoEmpty"));
-  const getWalletNotice = (taskId: string) => {
-    if (!isHeir) return null;
-    if (taskId === "heir.register-wallet" && needsHeirWalletRegistration) {
-      return "cases.detail.wallet.notice.register";
-    }
-    if (taskId === "heir.verify-wallet" && needsHeirWalletVerification) {
-      return "cases.detail.wallet.notice.verify";
-    }
-    return null;
-  };
   const renderRelationLabel = (label?: string | null, other?: string | null) => {
     if (!label) return t("common.unset");
     if (label === relationOtherValue) {
@@ -948,29 +911,6 @@ export default function CaseDetailPage({
       active = false;
     };
   }, [caseId, user?.uid]);
-
-  useEffect(() => {
-    if (!caseId) return;
-    let active = true;
-    const load = async () => {
-      setTaskLoading(true);
-      setTaskError(null);
-      try {
-        const progress = await getTaskProgress(caseId);
-        if (!active) return;
-        setUserCompletedTaskIds(progress.userCompletedTaskIds ?? []);
-      } catch (err: any) {
-        if (!active) return;
-        setTaskError(err?.message ?? "cases.detail.tasks.error.loadFailed");
-      } finally {
-        if (active) setTaskLoading(false);
-      }
-    };
-    load();
-    return () => {
-      active = false;
-    };
-  }, [caseId]);
 
   useEffect(() => {
     if (isTabKey(queryTab) && availableTabKeys.includes(queryTab) && queryTab !== tab) {
@@ -1486,27 +1426,6 @@ export default function CaseDetailPage({
       setError(err?.message ?? "cases.detail.heirs.invite.error.sendFailed");
     } finally {
       setInviting(false);
-    }
-  };
-
-  const buildNextTaskIds = (current: string[], taskId: string, checked: boolean) => {
-    if (checked) {
-      return Array.from(new Set([...current, taskId]));
-    }
-    return current.filter((id) => id !== taskId);
-  };
-
-  const handleTogglePersonalTask = async (taskId: string, checked: boolean) => {
-    if (!canUpdateTasks) return;
-    if (!caseId) return;
-    const prev = userCompletedTaskIds;
-    const next = buildNextTaskIds(prev, taskId, checked);
-    setUserCompletedTaskIds(next);
-    try {
-      await updateMyTaskProgress(caseId, next);
-    } catch (err: any) {
-      setUserCompletedTaskIds(prev);
-      setTaskError(err?.message ?? "cases.detail.tasks.error.updateFailed");
     }
   };
 
@@ -2699,62 +2618,6 @@ export default function CaseDetailPage({
         </div>
       ) : null}
 
-      {tab === "tasks" ? (
-        <div className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>{t("cases.detail.tasks.title")}</h2>
-            <span className={styles.badgeMuted}>{t("cases.detail.tasks.note")}</span>
-          </div>
-          {taskError ? <FormAlert variant="error">{t(taskError)}</FormAlert> : null}
-          {taskLoading ? <div className={styles.badgeMuted}>{t("common.loading")}</div> : null}
-          <div className={styles.taskSection}>
-            <div className={styles.taskSectionHeader}>
-              <h3 className={styles.taskSectionTitle}>
-                {t("cases.detail.tasks.personal.title")}
-              </h3>
-              <span className={styles.taskSectionMeta}>
-                {isOwner ? t("cases.detail.tasks.role.owner") : t("cases.detail.tasks.role.heir")}
-              </span>
-            </div>
-            {visiblePersonalTasks.length === 0 ? (
-              <div className={styles.emptyState}>
-                <div className={styles.emptyTitle}>
-                  {t("cases.detail.tasks.personal.empty.title")}
-                </div>
-                <div className={styles.emptyBody}>
-                  {t("cases.detail.tasks.personal.empty.body")}
-                </div>
-              </div>
-            ) : (
-              <div className={styles.taskList}>
-                {visiblePersonalTasks.map((task) => {
-                  const checked = userCompletedTaskIds.includes(task.id);
-                  const walletNotice = getWalletNotice(task.id);
-                  return (
-                    <label key={task.id} className={styles.taskItem}>
-                      <input
-                        type="checkbox"
-                        className={styles.taskCheckbox}
-                        checked={checked}
-                        disabled={!canUpdateTasks}
-                        onChange={(event) =>
-                          handleTogglePersonalTask(task.id, event.target.checked)
-                        }
-                      />
-                      <span className={styles.taskContent}>
-                        <span className={styles.taskDescription}>{task.description}</span>
-                        {walletNotice ? (
-                          <span className={styles.taskBadge}>{t(walletNotice)}</span>
-                        ) : null}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
