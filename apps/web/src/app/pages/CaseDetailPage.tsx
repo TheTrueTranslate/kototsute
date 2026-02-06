@@ -81,6 +81,7 @@ type LocalizedMessage = {
 };
 
 type NftReceiveStatus = "PENDING" | "SUCCESS" | "FAILED";
+const XRPL_EXPLORER_BASE = "https://testnet.xrpl.org/accounts";
 
 export const formatDistributionProgressText = (
   distribution: DistributionState | null
@@ -675,19 +676,7 @@ export default function CaseDetailPage({
   });
   const shouldShowDeathClaimDocuments = !isHeir || heirFlowStepIndex === 1;
   const shouldShowApprovalSection = !isHeir || heirFlowStepIndex === 2;
-  const shouldShowDistributionSection = useMemo(() => {
-    if (!isHeir) return true;
-    if (heirFlowStepIndex < 3) return false;
-    if (distributionLoading || distributionItemsLoading) return true;
-    if (!distribution) return true;
-    return (distribution.totalCount ?? 0) > 0;
-  }, [
-    distribution,
-    distributionItemsLoading,
-    distributionLoading,
-    heirFlowStepIndex,
-    isHeir
-  ]);
+  const shouldShowDistributionSection = !isHeir || heirFlowStepIndex >= 3;
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
   const prepareDisabledReason = useMemo(
@@ -2560,7 +2549,14 @@ export default function CaseDetailPage({
                   <div className={styles.walletAddressLabel}>
                     {t("cases.detail.wallet.addressLabel")}
                   </div>
-                  <div className={styles.walletAddressValue}>{heirWallet?.address}</div>
+                  <a
+                    className={styles.walletAddressValue}
+                    href={`${XRPL_EXPLORER_BASE}/${heirWallet?.address ?? ""}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {heirWallet?.address}
+                  </a>
                 </div>
               ) : null}
               <div className={styles.walletActions}>

@@ -751,7 +751,7 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("分配を実行");
   });
 
-  it("hides distribution and nft receive sections when there are no receivable items", async () => {
+  it("shows distribution section and hides nft receive when receivable items are empty", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
 
@@ -771,6 +771,18 @@ describe("CaseDetailPage", () => {
         signaturesCount: 1,
         requiredCount: 1,
         signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
       },
       initialDistribution: {
         status: "PENDING",
@@ -792,7 +804,7 @@ describe("CaseDetailPage", () => {
       }
     });
 
-    expect(html).not.toContain("分配を実行");
+    expect(html).toContain("分配を実行");
     expect(html).not.toContain("NFT受取");
   });
 
@@ -1250,6 +1262,7 @@ describe("CaseDetailPage", () => {
     searchParams = new URLSearchParams("tab=wallet");
 
     const html = await render({ initialIsOwner: false });
+    expect(html).not.toContain("残高確認");
     expect(html).toContain("登録/変更");
     expect(html).toContain("所有確認");
   });
@@ -1280,6 +1293,7 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
     expect(html).toContain("ウォレットアドレス");
     expect(html).toContain("rHeir");
+    expect(html).toContain("https://testnet.xrpl.org/accounts/rHeir");
   });
 
   it("shows wallet status label in wallet tab", async () => {
