@@ -229,7 +229,7 @@
 }
 
 .unitSuffix {
-  @apply text-meta text-muted-foreground;
+  @apply text-body-sm font-medium text-muted-foreground;
 }
 
 .nftRow {

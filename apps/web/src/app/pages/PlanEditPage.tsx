@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { relationOtherValue } from "@kototsute/shared";
@@ -33,8 +33,59 @@ import {
 import styles from "../../styles/plansPage.module.css";
 
 type AllocationDraft = {
-  unitType: "PERCENT" | "AMOUNT";
   values: Record<string, string>;
+};
+
+type AllocationUpdateInput = {
+  unitType: "PERCENT";
+  allocations: Array<{ heirUid: string; value: number }>;
+};
+
+const roundAllocationValue = (value: number) => Number(value.toFixed(6));
+
+export const parseAllocationValue = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export const buildAllocationUpdateInput = (
+  heirUids: string[],
+  draftValues: Record<string, string>
+): AllocationUpdateInput => ({
+  unitType: "PERCENT",
+  allocations: heirUids.map((heirUid) => ({
+    heirUid,
+    value: roundAllocationValue(parseAllocationValue(draftValues[heirUid] ?? ""))
+  }))
+});
+
+export const buildAllocationSignature = (input: AllocationUpdateInput) =>
+  JSON.stringify(
+    input.allocations.map((allocation) => ({
+      heirUid: allocation.heirUid,
+      value: roundAllocationValue(allocation.value)
+    }))
+  );
+
+const buildAllocationDraftValues = (
+  heirUids: string[],
+  allocations: PlanAsset["allocations"] | undefined
+) => {
+  const valueMap = new Map<string, number>();
+  for (const allocation of allocations ?? []) {
+    if (!allocation.heirUid || allocation.isUnallocated) continue;
+    if (!valueMap.has(allocation.heirUid)) {
+      valueMap.set(allocation.heirUid, allocation.value);
+    }
+  }
+  const values: Record<string, string> = {};
+  for (const heirUid of heirUids) {
+    const value = valueMap.get(heirUid);
+    values[heirUid] = value == null ? "" : String(value);
+  }
+  return values;
 };
 
 export default function PlanEditPage() {
@@ -55,10 +106,13 @@ export default function PlanEditPage() {
   const [removingAssetId, setRemovingAssetId] = useState<string | null>(null);
   const [addingHeirUid, setAddingHeirUid] = useState<string | null>(null);
   const [removingHeirUid, setRemovingHeirUid] = useState<string | null>(null);
-  const [savingAllocationId, setSavingAllocationId] = useState<string | null>(null);
+  const [savingAllocationIds, setSavingAllocationIds] = useState<Record<string, boolean>>({});
   const [savingNftAssetId, setSavingNftAssetId] = useState<string | null>(null);
   const [heirModalOpen, setHeirModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const savedAllocationSignaturesRef = useRef<Record<string, string>>({});
+  const queuedAllocationSignaturesRef = useRef<Record<string, string>>({});
+  const failedAllocationSignaturesRef = useRef<Record<string, string>>({});
 
   const statusLabels: Record<string, string> = {
     DRAFT: t("plans.status.draft"),
@@ -126,15 +180,11 @@ export default function PlanEditPage() {
 
   useEffect(() => {
     if (!plan) return;
+    const heirUids = plan.heirs.map((heir) => heir.uid);
     const nextDrafts: Record<string, AllocationDraft> = {};
     planAssets.forEach((asset) => {
-      const values: Record<string, string> = {};
-      plan.heirs.forEach((heir) => {
-        const allocation = asset.allocations?.find((item) => item.heirUid === heir.uid);
-        values[heir.uid] = allocation ? String(allocation.value) : "";
-      });
+      const values = buildAllocationDraftValues(heirUids, asset.allocations);
       nextDrafts[asset.planAssetId] = {
-        unitType: asset.unitType ?? "PERCENT",
         values
       };
     });
@@ -267,7 +317,7 @@ export default function PlanEditPage() {
 
   const handleAllocationChange = (planAssetId: string, heirUid: string, value: string) => {
     setAllocationDrafts((prev) => {
-      const current = prev[planAssetId] ?? { unitType: "PERCENT", values: {} };
+      const current = prev[planAssetId] ?? { values: {} };
       return {
         ...prev,
         [planAssetId]: {
@@ -281,49 +331,31 @@ export default function PlanEditPage() {
     });
   };
 
-  const handleAllocationUnitChange = (planAssetId: string, unitType: "PERCENT" | "AMOUNT") => {
-    setAllocationDrafts((prev) => {
-      const current = prev[planAssetId] ?? { unitType, values: {} };
-      return {
-        ...prev,
-        [planAssetId]: {
-          ...current,
-          unitType
-        }
-      };
-    });
-  };
-
-  const parseAllocationValue = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return 0;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const handleSaveAllocations = async (planAssetId: string) => {
-    if (!caseId || !planId || !plan) {
+  const persistAllocationDraft = async (
+    planAssetId: string,
+    input: AllocationUpdateInput,
+    signature: string
+  ) => {
+    if (!caseId || !planId) {
       setError(t("plans.edit.error.planIdMissing"));
       return;
     }
-    const draft = allocationDrafts[planAssetId];
-    if (!draft) return;
-    setSavingAllocationId(planAssetId);
+    setSavingAllocationIds((prev) => ({ ...prev, [planAssetId]: true }));
     setError(null);
     try {
-      const allocations = plan.heirs.map((heir) => ({
-        heirUid: heir.uid,
-        value: parseAllocationValue(draft.values[heir.uid] ?? "")
-      }));
-      await updatePlanAllocations(caseId, planId, planAssetId, {
-        unitType: draft.unitType,
-        allocations
-      });
-      await refreshAssets();
+      await updatePlanAllocations(caseId, planId, planAssetId, input);
+      savedAllocationSignaturesRef.current[planAssetId] = signature;
+      delete failedAllocationSignaturesRef.current[planAssetId];
     } catch (err: any) {
       setError(err?.message ?? t("plans.edit.error.allocationUpdateFailed"));
+      failedAllocationSignaturesRef.current[planAssetId] = signature;
     } finally {
-      setSavingAllocationId(null);
+      setSavingAllocationIds((prev) => {
+        const next = { ...prev };
+        delete next[planAssetId];
+        return next;
+      });
+      delete queuedAllocationSignaturesRef.current[planAssetId];
     }
   };
 
@@ -380,6 +412,59 @@ export default function PlanEditPage() {
     "#db2777"
   ];
 
+  useEffect(() => {
+    if (!plan) {
+      savedAllocationSignaturesRef.current = {};
+      queuedAllocationSignaturesRef.current = {};
+      failedAllocationSignaturesRef.current = {};
+      return;
+    }
+
+    const heirUids = plan.heirs.map((heir) => heir.uid);
+    const nextSavedSignatures: Record<string, string> = {};
+    planAssets.forEach((asset) => {
+      nextSavedSignatures[asset.planAssetId] = buildAllocationSignature(
+        buildAllocationUpdateInput(
+          heirUids,
+          buildAllocationDraftValues(heirUids, asset.allocations)
+        )
+      );
+    });
+    savedAllocationSignaturesRef.current = nextSavedSignatures;
+    queuedAllocationSignaturesRef.current = {};
+    failedAllocationSignaturesRef.current = {};
+  }, [plan, planAssets]);
+
+  useEffect(() => {
+    if (!plan || !caseId || !planId) return;
+    const heirUids = plan.heirs.map((heir) => heir.uid);
+    planAssets.forEach((asset) => {
+      const planAssetId = asset.planAssetId;
+      const input = buildAllocationUpdateInput(
+        heirUids,
+        allocationDrafts[planAssetId]?.values ?? {}
+      );
+      const signature = buildAllocationSignature(input);
+      const savedSignature = savedAllocationSignaturesRef.current[planAssetId];
+      if (savedSignature === signature) {
+        delete queuedAllocationSignaturesRef.current[planAssetId];
+        return;
+      }
+      if (failedAllocationSignaturesRef.current[planAssetId] === signature) {
+        return;
+      }
+      if (savingAllocationIds[planAssetId]) {
+        queuedAllocationSignaturesRef.current[planAssetId] = signature;
+        return;
+      }
+      if (queuedAllocationSignaturesRef.current[planAssetId] === signature) {
+        return;
+      }
+      queuedAllocationSignaturesRef.current[planAssetId] = signature;
+      void persistAllocationDraft(planAssetId, input, signature);
+    });
+  }, [allocationDrafts, caseId, plan, planAssets, planId, savingAllocationIds]);
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -421,16 +506,6 @@ export default function PlanEditPage() {
       </header>
 
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
-
-      <div className={styles.callout}>
-        <div className={styles.calloutIcon}>
-          <span className={styles.badgeMuted}>STEP</span>
-        </div>
-        <div className={styles.calloutBody}>
-          <div className={styles.calloutTitle}>{t("plans.edit.flow.title")}</div>
-          <div className={styles.calloutText}>{t("plans.edit.flow.text")}</div>
-        </div>
-      </div>
 
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("plans.edit.section.basic")}</h2>
@@ -654,16 +729,12 @@ export default function PlanEditPage() {
           <div className={styles.sectionBody}>
             {planAssets.map((asset) => {
               const draft = allocationDrafts[asset.planAssetId];
-              const unitType = draft?.unitType ?? asset.unitType ?? "PERCENT";
               const values = plan.heirs.map((heir) =>
                 parseAllocationValue(draft?.values?.[heir.uid] ?? "")
               );
               const total = values.reduce((sum, value) => sum + value, 0);
-              const unallocated =
-                unitType === "PERCENT"
-                  ? Math.max(0, Number((100 - total).toFixed(6)))
-                  : null;
-              const totalForBar = unitType === "PERCENT" ? 100 : total || 1;
+              const unallocated = Math.max(0, Number((100 - total).toFixed(6)));
+              const totalForBar = 100;
               const heirColors = plan.heirs.map((heir, index) => ({
                 heir,
                 color: palette[index % palette.length]
@@ -682,7 +753,7 @@ export default function PlanEditPage() {
                 })
                 .filter((segment) => segment.percent > 0);
               const unallocatedSegment =
-                unitType === "PERCENT" && unallocated && unallocated > 0
+                unallocated > 0
                   ? {
                       key: "unallocated",
                       label: t("plans.edit.allocations.unallocated"),
@@ -691,11 +762,8 @@ export default function PlanEditPage() {
                       color: "#e2e8f0"
                     }
                   : null;
-              const isSaving = savingAllocationId === asset.planAssetId;
-              const unitLabel =
-                unitType === "PERCENT"
-                  ? t("plans.edit.allocations.unit.percent")
-                  : t("plans.edit.allocations.unit.amount");
+              const isSaving = Boolean(savingAllocationIds[asset.planAssetId]);
+              const unitLabel = "%";
               return (
                 <div key={asset.planAssetId} className={styles.assetCard}>
                   <div className={styles.assetHeader}>
@@ -706,29 +774,11 @@ export default function PlanEditPage() {
                       <div className={styles.rowMeta}>{asset.assetAddress ?? "-"}</div>
                     </div>
                     <div className={styles.inlineRow}>
-                      <select
-                        className={styles.select}
-                        value={unitType}
-                        onChange={(event) =>
-                          handleAllocationUnitChange(
-                            asset.planAssetId,
-                            event.target.value === "AMOUNT" ? "AMOUNT" : "PERCENT"
-                          )
-                        }
-                        disabled={isSaving}
-                      >
-                        <option value="PERCENT">{t("plans.edit.allocations.unit.percent")}</option>
-                        <option value="AMOUNT">{t("plans.edit.allocations.unit.amount")}</option>
-                      </select>
-                      <Button
-                        type="button"
-                        onClick={() => handleSaveAllocations(asset.planAssetId)}
-                        disabled={isSaving}
-                      >
+                      <span className={styles.rowMeta}>
                         {isSaving
-                          ? t("plans.edit.allocations.saving")
-                          : t("plans.edit.allocations.save")}
-                      </Button>
+                          ? t("plans.edit.allocations.autoSaving")
+                          : t("plans.edit.allocations.autoSave")}
+                      </span>
                     </div>
                   </div>
                   <div className={styles.sectionBody}>
@@ -775,7 +825,7 @@ export default function PlanEditPage() {
                           type="number"
                           inputMode="decimal"
                           min="0"
-                          step={unitType === "PERCENT" ? "0.01" : "1"}
+                          step="0.01"
                           value={draft?.values?.[heir.uid] ?? ""}
                           onChange={(event) =>
                             handleAllocationChange(asset.planAssetId, heir.uid, event.target.value)
@@ -784,20 +834,12 @@ export default function PlanEditPage() {
                         <span className={styles.unitSuffix}>{unitLabel}</span>
                       </div>
                     ))}
-                    {unitType === "PERCENT" ? (
-                      <div className={styles.rowMeta}>
-                        {t("plans.edit.allocations.totalPercent", {
-                          total: Number(total.toFixed(6)),
-                          unallocated
-                        })}
-                      </div>
-                    ) : (
-                      <div className={styles.rowMeta}>
-                        {t("plans.edit.allocations.totalAmount", {
-                          total: Number(total.toFixed(6))
-                        })}
-                      </div>
-                    )}
+                    <div className={styles.rowMeta}>
+                      {t("plans.edit.allocations.totalPercent", {
+                        total: Number(total.toFixed(6)),
+                        unallocated
+                      })}
+                    </div>
                   </div>
                 </div>
               );
