@@ -718,6 +718,18 @@ describe("CaseDetailPage", () => {
         requiredCount: 1,
         signedByMe: true
       },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
       initialDistribution: {
         status: "PENDING",
         totalCount: 1,
@@ -832,6 +844,54 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("分配を実行");
   });
 
+  it("keeps signature step even when signer quorum is met but approval tx is not validated", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "PENDING",
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("分配を実行");
+  });
+
   it("hides nft receive block when receivable items are empty", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
@@ -885,6 +945,18 @@ describe("CaseDetailPage", () => {
         signaturesCount: 1,
         requiredCount: 1,
         signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
       },
       initialDistributionItems: [
         {

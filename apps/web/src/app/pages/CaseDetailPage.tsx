@@ -646,9 +646,7 @@ export default function CaseDetailPage({
   const hasDeathClaim = Boolean(deathClaim?.claim?.claimId);
   const deathClaimStepCompleted =
     hasDeathClaim && (caseData?.stage === "IN_PROGRESS" || caseData?.stage === "COMPLETED");
-  const signatureStepCompleted = Boolean(
-    signerList?.signedByMe || signerCompleted || approvalCompleted
-  );
+  const signatureStepCompleted = Boolean(approvalCompleted);
   const receiveStepCompleted = distribution?.status === "COMPLETED";
   const heirFlowSteps = useMemo(
     () => [
