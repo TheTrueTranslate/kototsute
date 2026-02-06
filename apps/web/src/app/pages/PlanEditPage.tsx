@@ -114,12 +114,6 @@ export default function PlanEditPage() {
   const queuedAllocationSignaturesRef = useRef<Record<string, string>>({});
   const failedAllocationSignaturesRef = useRef<Record<string, string>>({});
 
-  const statusLabels: Record<string, string> = {
-    DRAFT: t("plans.status.draft"),
-    SHARED: t("plans.status.shared"),
-    INACTIVE: t("plans.status.inactive")
-  };
-
   const formatDate = (value: string | null | undefined) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -482,9 +476,6 @@ export default function PlanEditPage() {
             <h1 className="text-title">{plan?.title ?? t("plans.edit.title")}</h1>
             {plan ? (
               <div className={styles.rowSide}>
-                <span className={styles.statusBadge}>
-                  {statusLabels[plan.status] ?? plan.status}
-                </span>
                 <span className={styles.rowMeta}>
                   {t("plans.edit.updatedAt", { date: formatDate(plan.updatedAt) })}
                 </span>

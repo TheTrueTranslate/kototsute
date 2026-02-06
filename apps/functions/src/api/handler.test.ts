@@ -600,7 +600,7 @@ describe("createApiHandler", () => {
     await handler(addReq as any, resAdd as any);
 
     const planSnap = await db.collection("plans").doc(planId).get();
-    expect(planSnap.data()?.status).toBe("DRAFT");
+    expect(planSnap.data()?.status).toBeUndefined();
     expect(planSnap.data()?.heirUids).toContain("heir_1");
   });
 
@@ -684,7 +684,6 @@ describe("createApiHandler", () => {
     });
     await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
       planId: "plan-1",
-      status: "DRAFT",
       ownerUid: "owner_1",
       heirUids: ["heir_1"],
       heirs: [{ uid: "heir_1", email: "heir@example.com" }]
@@ -1515,7 +1514,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -1584,7 +1582,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -1676,7 +1673,7 @@ describe("createApiHandler", () => {
       authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/asset-lock/start`,
-        body: { method: "A" }
+        body: { method: "B" }
       }) as any,
       res as any
     );
@@ -1685,6 +1682,40 @@ describe("createApiHandler", () => {
     expect(res.body?.code).toBe("NOT_READY");
     expect(res.body?.message).toBe("相続対象の指図がありません");
     (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("rejects asset lock start when method A is specified", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const startRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "A" }
+      }) as any,
+      startRes as any
+    );
+
+    expect(startRes.statusCode).toBe(400);
+    expect(startRes.body?.code).toBe("VALIDATION_ERROR");
   });
 
   it("blocks asset lock start when an active plan has no heirs", async () => {
@@ -1725,7 +1756,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: [],
       heirs: [],
@@ -1738,7 +1768,7 @@ describe("createApiHandler", () => {
       authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/asset-lock/start`,
-        body: { method: "A" }
+        body: { method: "B" }
       }) as any,
       res as any
     );
@@ -1787,7 +1817,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -1835,7 +1864,7 @@ describe("createApiHandler", () => {
       authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/asset-lock/start`,
-        body: { method: "A" }
+        body: { method: "B" }
       }) as any,
       startRes as any
     );
@@ -1849,7 +1878,7 @@ describe("createApiHandler", () => {
       .get();
     expect(lockSnap.exists).toBe(true);
     expect(lockSnap.data()?.uiStep).toBe(3);
-    expect(lockSnap.data()?.methodStep ?? null).toBeNull();
+    expect(lockSnap.data()?.methodStep).toBe("REGULAR_KEY_SET");
     expect(fetchMock).toHaveBeenCalled();
     expect(lockSnap.data()?.wallet?.address).toBe("rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe");
     const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
@@ -1880,7 +1909,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -1955,7 +1983,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -2054,7 +2081,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -2225,7 +2251,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -2285,7 +2310,7 @@ describe("createApiHandler", () => {
       authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/asset-lock/start`,
-        body: { method: "A" }
+        body: { method: "B" }
       }) as any,
       startRes as any
     );
@@ -2334,7 +2359,6 @@ describe("createApiHandler", () => {
       caseId,
       ownerUid: "owner_1",
       title: "指図A",
-      status: "DRAFT",
       sharedAt: null,
       heirUids: ["heir_1"],
       heirs: [
@@ -2382,7 +2406,7 @@ describe("createApiHandler", () => {
       authedReq("owner_1", "owner@example.com", {
         method: "POST",
         path: `/v1/cases/${caseId}/asset-lock/start`,
-        body: { method: "A" }
+        body: { method: "B" }
       }) as any,
       startRes as any
     );
@@ -3963,6 +3987,8 @@ describe("createApiHandler", () => {
 
     expect(listRes.statusCode).toBe(200);
     expect(listRes.body?.data?.length).toBe(1);
+    expect(listRes.body?.data?.[0]?.assetCount).toBe(0);
+    expect(listRes.body?.data?.[0]?.heirCount).toBe(0);
   });
 
   it("lists plans that include the member as heir", async () => {
@@ -4088,7 +4114,6 @@ describe("createApiHandler", () => {
       planId: "plan_1",
       ownerUid: "owner_1",
       title: "A",
-      status: "DRAFT",
       heirUids: [],
       heirs: []
     });
@@ -4713,7 +4738,6 @@ describe("createApiHandler", () => {
     });
     await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
       planId: "plan-1",
-      status: "DRAFT",
       title: "指図A",
       ownerUid: "owner_1",
       heirUids: ["heir_1"],
@@ -4809,7 +4833,6 @@ describe("createApiHandler", () => {
     });
     await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
       planId: "plan-1",
-      status: "DRAFT",
       title: "指図A",
       ownerUid: "owner_1",
       heirUids: ["heir_1"],
@@ -4909,7 +4932,6 @@ describe("createApiHandler", () => {
     });
     await db.collection(`cases/${caseId}/plans`).doc("plan-1").set({
       planId: "plan-1",
-      status: "DRAFT",
       title: "指図A",
       ownerUid: "owner_1",
       heirUids: ["heir_1"],

@@ -1634,7 +1634,6 @@ export const casesRoutes = () => {
     const planSnap = await caseRef.collection("plans").get();
     const eligiblePlans = planSnap.docs.filter((doc) => {
       const plan = doc.data() ?? {};
-      if ((plan.status ?? "DRAFT") === "INACTIVE") return false;
       const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
       return heirUids.length > 0;
     });
@@ -2703,7 +2702,10 @@ export const casesRoutes = () => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
     const body = await c.req.json().catch(() => ({}));
-    const method = body?.method === "B" ? "B" : "A";
+    if (body?.method !== "B") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "方式Bのみ利用できます");
+    }
+    const method = "B" as const;
 
     const db = getFirestore();
     const caseRef = db.collection("cases").doc(caseId);
@@ -2717,13 +2719,11 @@ export const casesRoutes = () => {
     }
 
     const plansSnap = await caseRef.collection("plans").get();
-    const activePlans = plansSnap.docs
-      .map((doc) => doc.data() ?? {})
-      .filter((plan) => (plan.status ?? "DRAFT") !== "INACTIVE");
-    if (activePlans.length === 0) {
+    const plans = plansSnap.docs.map((doc) => doc.data() ?? {});
+    if (plans.length === 0) {
       return jsonError(c, 400, "NOT_READY", "相続対象の指図がありません");
     }
-    const hasMissingHeirs = activePlans.some((plan) => {
+    const hasMissingHeirs = plans.some((plan) => {
       const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
       return heirUids.length === 0;
     });
@@ -2767,7 +2767,7 @@ export const casesRoutes = () => {
     }
     const now = deps.now();
     const uiStep = 3;
-    const methodStep = method === "B" ? "REGULAR_KEY_SET" : null;
+    const methodStep = "REGULAR_KEY_SET";
     await caseRef.collection("assetLock").doc("state").set({
       status: "READY",
       method,
@@ -3729,7 +3729,6 @@ export const casesRoutes = () => {
       caseId,
       ownerUid: auth.uid,
       title: parsed.data.title,
-      status: "DRAFT",
       sharedAt: null,
       heirUids: [],
       heirs: [],
@@ -3745,8 +3744,7 @@ export const casesRoutes = () => {
       actorEmail: auth.email ?? null,
       createdAt: now,
       meta: {
-        title: parsed.data.title,
-        status: "DRAFT"
+        title: parsed.data.title
       }
     });
 
@@ -3770,14 +3768,25 @@ export const casesRoutes = () => {
     }
 
     const snapshot = await db.collection(`cases/${caseId}/plans`).get();
-    const data: Array<Record<string, any>> = snapshot.docs
-      .map((doc) => ({ planId: doc.id, ...(doc.data() as Record<string, any>) }))
-      .filter((plan) => {
-        if (isOwner) return true;
-        const planData = plan as Record<string, any>;
-        const heirUids = Array.isArray(planData.heirUids) ? planData.heirUids : [];
-        return heirUids.includes(auth.uid);
-      });
+    const visiblePlanDocs = snapshot.docs.filter((doc) => {
+      if (isOwner) return true;
+      const heirUids = Array.isArray(doc.data()?.heirUids) ? doc.data()?.heirUids : [];
+      return heirUids.includes(auth.uid);
+    });
+    const data = await Promise.all(
+      visiblePlanDocs.map(async (doc) => {
+        const plan = doc.data() as Record<string, any>;
+        const { status: _status, ...rest } = plan;
+        const heirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
+        const planAssetsSnap = await doc.ref.collection("assets").get();
+        return {
+          planId: doc.id,
+          ...rest,
+          heirCount: heirUids.length,
+          assetCount: planAssetsSnap.docs.length
+        };
+      })
+    );
     return jsonOk(c, data);
   });
 
@@ -3803,18 +3812,16 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
     const planHeirUids = Array.isArray(planSnap.data()?.heirUids) ? planSnap.data()?.heirUids : [];
     if (!isOwner && !planHeirUids.includes(auth.uid)) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
     const plan = planSnap.data() ?? {};
+    const { status: _status, ...rest } = plan as Record<string, unknown>;
     return jsonOk(c, {
       planId: planSnap.id,
-      ...plan,
+      ...(rest as Record<string, unknown>),
       heirUids: Array.isArray(plan.heirUids) ? plan.heirUids : [],
       heirs: Array.isArray(plan.heirs) ? plan.heirs : []
     });
@@ -3975,9 +3982,6 @@ export const casesRoutes = () => {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
     const plan = planSnap.data() ?? {};
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
 
     const inviteSnap = await db
       .collection(`cases/${caseId}/invites`)
@@ -4060,9 +4064,6 @@ export const casesRoutes = () => {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
     const plan = planSnap.data() ?? {};
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
 
     const currentHeirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
     const currentHeirs = Array.isArray(plan.heirs) ? plan.heirs : [];
@@ -4233,9 +4234,6 @@ export const casesRoutes = () => {
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
     }
-    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
 
     const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
     const assetSnap = await assetRef.get();
@@ -4299,9 +4297,6 @@ export const casesRoutes = () => {
     const planSnap = await planRef.get();
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
     }
 
     const { unitType, allocations } = parsed.data;
@@ -4385,9 +4380,6 @@ export const casesRoutes = () => {
     const planSnap = await planRef.get();
     if (!planSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
     }
 
     const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId);

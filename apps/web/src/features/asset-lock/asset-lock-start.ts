@@ -21,5 +21,5 @@ export const resolveStartStepIndex = (
   fallbackIndex: number
 ) => {
   const index = resolveAssetLockStepIndex(lockState?.uiStep ?? null, fallbackIndex);
-  return Math.max(index, 2);
+  return Math.max(index, 1);
 };

@@ -325,10 +325,6 @@
   @apply break-all text-body text-foreground;
 }
 
-.balanceBlock {
-  @apply mt-3 grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
-}
-
 .balanceHeader {
   @apply flex items-center justify-between gap-2;
 }
@@ -363,12 +359,12 @@
 }
 
 .balanceLink {
-  @apply text-[11px] text-primary;
+  @apply text-[11px] text-primary underline underline-offset-2;
   word-break: break-all;
 }
 
 .balanceLink:hover {
-  @apply underline;
+  @apply opacity-80;
 }
 
 .balanceError {

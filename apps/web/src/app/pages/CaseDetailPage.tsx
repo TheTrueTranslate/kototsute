@@ -355,6 +355,7 @@ type CaseDetailPageProps = {
   initialTab?: TabKey;
   initialIsOwner?: boolean | null;
   initialCaseData?: CaseSummary | null;
+  initialPlans?: PlanListItem[];
   initialDistributionWalletAddress?: string | null;
   initialHeirWallet?: HeirWallet | null;
   initialHeirs?: CaseHeir[];
@@ -373,6 +374,7 @@ export default function CaseDetailPage({
   initialTab,
   initialIsOwner = null,
   initialCaseData = null,
+  initialPlans = [],
   initialDistributionWalletAddress = null,
   initialHeirWallet = null,
   initialHeirs = [],
@@ -388,7 +390,7 @@ export default function CaseDetailPage({
   const { t, i18n } = useTranslation();
   const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
-  const [plans, setPlans] = useState<PlanListItem[]>([]);
+  const [plans, setPlans] = useState<PlanListItem[]>(initialPlans);
   const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>(initialOwnerInvites);
   const [heirs, setHeirs] = useState<CaseHeir[]>(initialHeirs);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -472,14 +474,6 @@ export default function CaseDetailPage({
       WAITING: t("cases.status.waiting"),
       IN_PROGRESS: t("cases.status.inProgress"),
       COMPLETED: t("cases.status.completed")
-    }),
-    [t]
-  );
-  const planStatusLabels = useMemo(
-    () => ({
-      DRAFT: t("plans.status.draft"),
-      SHARED: t("plans.status.shared"),
-      INACTIVE: t("plans.status.inactive")
     }),
     [t]
   );
@@ -1645,16 +1639,18 @@ export default function CaseDetailPage({
                   <div className={styles.row}>
                     <div className={styles.rowMain}>
                       <div className={styles.rowTitle}>{plan.title}</div>
-                      <div className={styles.rowMeta}>
-                        {t("cases.detail.plans.updatedAt", {
-                          date: formatDate(plan.updatedAt)
-                        })}
+                      <div className={styles.rowMetaStack}>
+                        <div className={styles.rowMeta}>
+                          {t("cases.detail.plans.assetCount", {
+                            count: plan.assetCount ?? 0
+                          })}
+                        </div>
+                        <div className={styles.rowMeta}>
+                          {t("cases.detail.plans.heirCount", {
+                            count: plan.heirCount ?? 0
+                          })}
+                        </div>
                       </div>
-                    </div>
-                    <div className={styles.rowSide}>
-                      <span className={styles.statusBadge}>
-                        {planStatusLabels[plan.status] ?? plan.status}
-                      </span>
                     </div>
                   </div>
                 </Link>
