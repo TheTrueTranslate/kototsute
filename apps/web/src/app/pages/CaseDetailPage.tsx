@@ -677,7 +677,19 @@ export default function CaseDetailPage({
   });
   const shouldShowDeathClaimDocuments = !isHeir || heirFlowStepIndex === 1;
   const shouldShowApprovalSection = !isHeir || heirFlowStepIndex === 2;
-  const shouldShowDistributionSection = !isHeir || heirFlowStepIndex >= 3;
+  const shouldShowDistributionSection = useMemo(() => {
+    if (!isHeir) return true;
+    if (heirFlowStepIndex < 3) return false;
+    if (distributionLoading || distributionItemsLoading) return true;
+    if (!distribution) return true;
+    return (distribution.totalCount ?? 0) > 0;
+  }, [
+    distribution,
+    distributionItemsLoading,
+    distributionLoading,
+    heirFlowStepIndex,
+    isHeir
+  ]);
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
   const prepareDisabledReason = useMemo(

@@ -718,6 +718,14 @@ describe("CaseDetailPage", () => {
         requiredCount: 1,
         signedByMe: true
       },
+      initialDistribution: {
+        status: "PENDING",
+        totalCount: 1,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -729,6 +737,51 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("分配を実行");
+  });
+
+  it("hides distribution and nft receive sections when there are no receivable items", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialDistribution: {
+        status: "PENDING",
+        totalCount: 0,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0
+      },
+      initialDistributionItems: [],
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).not.toContain("分配を実行");
+    expect(html).not.toContain("NFT受取");
   });
 
   it("keeps signature step when approval is submitted but not validated", async () => {
