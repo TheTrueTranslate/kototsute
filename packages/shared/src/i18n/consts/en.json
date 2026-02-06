@@ -1028,7 +1028,7 @@
         "saving": "Saving..."
       },
       "heir": {
-        "helper": "Add approved heirs to the plan.",
+        "helper": "Add heirs who will receive distributed assets.",
         "add": "Add heir",
         "addConfirm": "Add",
         "adding": "Adding...",
@@ -1046,7 +1046,7 @@
         "other": "Other"
       },
       "assets": {
-        "helper": "Add registered assets from the case.",
+        "helper": "Add assets to be distributed.",
         "add": "Add asset",
         "addConfirm": "Add",
         "adding": "Adding...",
@@ -1079,6 +1079,8 @@
           "percent": "Percent",
           "amount": "Amount"
         },
+        "autoSave": "Auto-save",
+        "autoSaving": "Auto-saving...",
         "save": "Save allocation",
         "saving": "Saving...",
         "unallocated": "Unallocated",

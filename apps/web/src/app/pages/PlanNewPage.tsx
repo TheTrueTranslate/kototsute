@@ -6,8 +6,34 @@ import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
-import { createPlan } from "../api/plans";
+import { createPlan, listPlans, type PlanListItem } from "../api/plans";
 import styles from "../../styles/plansPage.module.css";
+
+const toTimestamp = (value: string | null | undefined) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+export const resolveCreatedPlanId = (input: {
+  createdPlan?: { planId?: string | null; title?: string | null } | null;
+  requestedTitle: string;
+  plans: PlanListItem[];
+}) => {
+  const directPlanId = input.createdPlan?.planId?.trim();
+  if (directPlanId) return directPlanId;
+  if (input.plans.length === 0) return null;
+
+  const normalizedTitle = (input.createdPlan?.title ?? input.requestedTitle).trim();
+  const sortedPlans = [...input.plans].sort(
+    (a, b) => toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt)
+  );
+  if (!normalizedTitle) {
+    return sortedPlans[0]?.planId ?? null;
+  }
+  const matched = sortedPlans.find((plan) => plan.title.trim() === normalizedTitle);
+  return matched?.planId ?? sortedPlans[0]?.planId ?? null;
+};
 
 export default function PlanNewPage() {
   const { caseId } = useParams();
@@ -28,10 +54,23 @@ export default function PlanNewPage() {
         return;
       }
       const createdPlan = await createPlan(caseId, { title });
-      if (!createdPlan?.planId) {
+      let nextPlanId = resolveCreatedPlanId({
+        createdPlan,
+        requestedTitle: title,
+        plans: []
+      });
+      if (!nextPlanId) {
+        const plans = await listPlans(caseId);
+        nextPlanId = resolveCreatedPlanId({
+          createdPlan,
+          requestedTitle: title,
+          plans
+        });
+      }
+      if (!nextPlanId) {
         throw new Error(t("plans.new.error.planIdMissing"));
       }
-      navigate(`/cases/${caseId}/plans/${createdPlan.planId}`);
+      navigate(`/cases/${caseId}/plans/${nextPlanId}`);
     } catch (err: any) {
       setError(err?.message ?? t("plans.new.error.createFailed"));
     } finally {
