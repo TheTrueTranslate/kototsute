@@ -249,6 +249,7 @@ export const mintAndSendNft = async (input: {
   try {
     const minterWallet = Wallet.fromSeed(input.minterSeed);
     const recipientWallet = Wallet.fromSeed(input.recipientSeed);
+    const sellOfferFlag = 1;
     const mintPrepared = await client.autofill({
       TransactionType: "NFTokenMint",
       Account: input.minterAddress,
@@ -272,7 +273,8 @@ export const mintAndSendNft = async (input: {
       Account: input.minterAddress,
       NFTokenID: tokenId,
       Destination: input.recipientAddress,
-      Amount: "0"
+      Amount: "0",
+      Flags: sellOfferFlag
     });
     const offerSigned = minterWallet.sign(offerPrepared);
     const offerResult = await client.submit(offerSigned.tx_blob);
@@ -288,6 +290,69 @@ export const mintAndSendNft = async (input: {
       NFTokenSellOffer: offerId
     });
     const acceptSigned = recipientWallet.sign(acceptPrepared);
+    const acceptResult = await client.submit(acceptSigned.tx_blob);
+    const acceptEngineResult = acceptResult?.result?.engine_result;
+    if (acceptEngineResult && !["tesSUCCESS", "terQUEUED"].includes(acceptEngineResult)) {
+      throw new Error(`XRPL submit failed: ${acceptEngineResult}`);
+    }
+    return {
+      txHash: acceptSigned.hash ?? acceptResult?.result?.tx_json?.hash ?? ""
+    };
+  } finally {
+    await client.disconnect();
+  }
+};
+
+export const createNftSellOffer = async (input: {
+  sellerSeed: string;
+  sellerAddress: string;
+  tokenId: string;
+  destinationAddress: string;
+  amountDrops?: string;
+}) => {
+  const client = new Client(getXrplWsUrl());
+  await client.connect();
+  try {
+    const sellerWallet = Wallet.fromSeed(input.sellerSeed);
+    const offerPrepared = await client.autofill({
+      TransactionType: "NFTokenCreateOffer",
+      Account: input.sellerAddress,
+      NFTokenID: input.tokenId,
+      Destination: input.destinationAddress,
+      Amount: input.amountDrops ?? "0",
+      Flags: 1
+    });
+    const offerSigned = sellerWallet.sign(offerPrepared);
+    const offerResult = await client.submit(offerSigned.tx_blob);
+    const offerEngineResult = offerResult?.result?.engine_result;
+    if (offerEngineResult && !["tesSUCCESS", "terQUEUED"].includes(offerEngineResult)) {
+      throw new Error(`XRPL submit failed: ${offerEngineResult}`);
+    }
+    const offerId = await resolveNftOfferId(client, input.tokenId, offerResult);
+    return {
+      offerId,
+      txHash: offerSigned.hash ?? offerResult?.result?.tx_json?.hash ?? ""
+    };
+  } finally {
+    await client.disconnect();
+  }
+};
+
+export const acceptNftSellOffer = async (input: {
+  buyerSeed: string;
+  buyerAddress: string;
+  offerId: string;
+}) => {
+  const client = new Client(getXrplWsUrl());
+  await client.connect();
+  try {
+    const buyerWallet = Wallet.fromSeed(input.buyerSeed);
+    const acceptPrepared = await client.autofill({
+      TransactionType: "NFTokenAcceptOffer",
+      Account: input.buyerAddress,
+      NFTokenSellOffer: input.offerId
+    });
+    const acceptSigned = buyerWallet.sign(acceptPrepared);
     const acceptResult = await client.submit(acceptSigned.tx_blob);
     const acceptEngineResult = acceptResult?.result?.engine_result;
     if (acceptEngineResult && !["tesSUCCESS", "terQUEUED"].includes(acceptEngineResult)) {

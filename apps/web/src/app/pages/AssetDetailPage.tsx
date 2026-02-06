@@ -104,6 +104,7 @@ export default function AssetDetailPage({
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [reserveXrpInput, setReserveXrpInput] = useState("0");
   const [reserveTokens, setReserveTokens] = useState<AssetReserveToken[]>([]);
+  const [reserveNfts, setReserveNfts] = useState<string[]>([]);
   const [reserveSaving, setReserveSaving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [reserveSuccess, setReserveSuccess] = useState<string | null>(null);
@@ -159,11 +160,18 @@ export default function AssetDetailPage({
     }
     return [];
   }, [asset?.xrpl]);
+  const availableNfts = useMemo(() => {
+    if (asset?.xrpl?.status === "ok") {
+      return asset.xrpl.nfts ?? [];
+    }
+    return [];
+  }, [asset?.xrpl]);
   const reserveTokenMap = useMemo(() => {
     return new Map(
       reserveTokens.map((token) => [`${token.currency}::${token.issuer ?? ""}`, token])
     );
   }, [reserveTokens]);
+  const reserveNftSet = useMemo(() => new Set(reserveNfts), [reserveNfts]);
   const inheritanceXrp = useMemo(() => {
     if (asset?.xrpl?.status !== "ok") return null;
     const balance = toNumber(asset.xrpl.balanceXrp);
@@ -186,11 +194,16 @@ export default function AssetDetailPage({
       };
     });
   }, [asset?.xrpl, reserveTokenMap]);
+  const inheritanceNftCount = useMemo(() => {
+    if (availableNfts.length === 0) return 0;
+    return availableNfts.filter((nft) => !reserveNftSet.has(nft.tokenId)).length;
+  }, [availableNfts, reserveNftSet]);
 
   useEffect(() => {
     if (!asset) return;
     setReserveXrpInput(asset.reserveXrp ?? "0");
     setReserveTokens(Array.isArray(asset.reserveTokens) ? asset.reserveTokens : []);
+    setReserveNfts(Array.isArray(asset.reserveNfts) ? asset.reserveNfts : []);
   }, [asset?.assetId]);
 
   const loadAsset = async (options?: { includeXrpl?: boolean }) => {
@@ -330,6 +343,15 @@ export default function AssetDetailPage({
     );
   };
 
+  const handleToggleReserveNft = (tokenId: string) => {
+    setReserveNfts((prev) => {
+      if (prev.includes(tokenId)) {
+        return prev.filter((id) => id !== tokenId);
+      }
+      return [...prev, tokenId];
+    });
+  };
+
   const handleSaveReserve = async () => {
     if (!caseId || !assetId) return;
     setReserveError(null);
@@ -339,7 +361,8 @@ export default function AssetDetailPage({
     try {
       await updateAssetReserve(caseId, assetId, {
         reserveXrp: normalizedXrp,
-        reserveTokens
+        reserveTokens,
+        reserveNfts
       });
       setReserveSuccess("assets.detail.reserve.success");
       setAsset((prev) =>
@@ -347,7 +370,8 @@ export default function AssetDetailPage({
           ? {
               ...prev,
               reserveXrp: normalizedXrp,
-              reserveTokens
+              reserveTokens,
+              reserveNfts
             }
           : prev
       );
@@ -626,6 +650,20 @@ export default function AssetDetailPage({
                               </div>
                             )}
                           </div>
+                          <div className={styles.inheritanceBlock}>
+                            <div className={styles.metaLabel}>
+                              {t("assets.detail.reserve.nftLabel")}
+                            </div>
+                            <div className={styles.inheritanceValue}>
+                              {inheritanceNftCount}
+                            </div>
+                            <div className={styles.inheritanceMeta}>
+                              {t("assets.detail.reserve.nftMeta", {
+                                balance: availableNfts.length,
+                                reserve: reserveNfts.length
+                              })}
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <FormAlert variant="error">{asset.xrpl.message}</FormAlert>
@@ -705,6 +743,36 @@ export default function AssetDetailPage({
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+                      </div>
+                      <div className={styles.reserveNftBlock}>
+                        <div className={styles.metaLabel}>
+                          {t("assets.detail.reserve.nftSettingsTitle")}
+                        </div>
+                        {availableNfts.length === 0 ? (
+                          <div className={styles.emptyText}>
+                            {t("assets.detail.reserve.nftHint")}
+                          </div>
+                        ) : (
+                          <div className={styles.nftList}>
+                            {availableNfts.map((nft) => (
+                              <label key={nft.tokenId} className={styles.nftRow}>
+                                <input
+                                  type="checkbox"
+                                  className={styles.nftCheckbox}
+                                  checked={reserveNftSet.has(nft.tokenId)}
+                                  onChange={() => handleToggleReserveNft(nft.tokenId)}
+                                  disabled={isLocked}
+                                />
+                                <span className={styles.nftInfo}>
+                                  <span className={styles.nftTokenId}>{nft.tokenId}</span>
+                                  {nft.uri ? (
+                                    <span className={styles.nftUri}>{nft.uri}</span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            ))}
                           </div>
                         )}
                       </div>

@@ -7,12 +7,19 @@ export type XrplToken = {
   balance: string;
 };
 
+export type XrplNft = {
+  tokenId: string;
+  issuer: string | null;
+  uri: string | null;
+};
+
 export type XrplStatus =
   | {
       status: "ok";
       balanceXrp: string;
       ledgerIndex?: number;
       tokens?: XrplToken[];
+      nfts?: XrplNft[];
       regularKey?: string | null;
       ownerCount?: number;
     }
@@ -142,6 +149,48 @@ export const fetchXrplAccountLines = async (
       balance: String(line.balance ?? "0")
     }));
     return { status: "ok", tokens };
+  } catch (error: any) {
+    return { status: "error", message: error?.message ?? "XRPL request failed" };
+  }
+};
+
+export const fetchXrplAccountNfts = async (
+  address: string
+): Promise<{ status: "ok"; nfts: XrplNft[] } | { status: "error"; message: string }> => {
+  try {
+    const res = await fetch(XRPL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "account_nfts",
+        params: [{ account: address, ledger_index: "validated" }]
+      })
+    });
+
+    const payload = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok || payload?.result?.error) {
+      return {
+        status: "error",
+        message: payload?.result?.error_message ?? payload?.error_message ?? "XRPL error"
+      };
+    }
+
+    const list = Array.isArray(payload?.result?.account_nfts)
+      ? payload.result.account_nfts
+      : [];
+    const nfts = list
+      .map((entry: any) => ({
+        tokenId: String(entry.NFTokenID ?? entry.nftoken_id ?? ""),
+        issuer:
+          typeof entry.Issuer === "string"
+            ? entry.Issuer
+            : typeof entry.issuer === "string"
+              ? entry.issuer
+              : null,
+        uri: typeof entry.URI === "string" ? decodeHex(entry.URI) : null
+      }))
+      .filter((nft: XrplNft) => nft.tokenId.length > 0);
+    return { status: "ok", nfts };
   } catch (error: any) {
     return { status: "error", message: error?.message ?? "XRPL request failed" };
   }

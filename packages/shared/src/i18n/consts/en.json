@@ -271,9 +271,40 @@
           "executeFailed": "Failed to execute distribution"
         }
       },
+      "nftReceive": {
+        "title": "Receive NFTs",
+        "hint": "Bulk receive NFTs from the inheritance wallet.",
+        "seed": {
+          "label": "Secret",
+          "note": "Your secret stays on this device."
+        },
+        "actions": {
+          "execute": "Receive NFTs",
+          "executing": "Receiving..."
+        },
+        "summary": "Success {{success}} / {{total}} items",
+        "failedCount": "Failed {{count}} items",
+        "labels": {
+          "tokenId": "Token ID",
+          "status": "Status"
+        },
+        "status": {
+          "pending": "Not started",
+          "success": "Success",
+          "failed": "Failed"
+        },
+        "empty": "No NFTs to receive.",
+        "error": {
+          "loadFailed": "Failed to load NFT receive targets",
+          "seedRequired": "Please enter your secret",
+          "walletRequired": "Receiving wallet registration is required",
+          "acceptFailed": "Failed to receive NFT"
+        }
+      },
       "signer": {
         "status": {
           "label": "Signing status",
+          "count": "{{signed}} / {{required}} signed",
           "notReady": "Preparing",
           "set": "Accepting signatures",
           "failed": "Preparation failed"
@@ -323,6 +354,7 @@
         "error": {
           "statusLoadFailed": "Failed to load signing status",
           "loadFailed": "Failed to load signable payload",
+          "accountNotFound": "The distribution wallet is not activated on XRPL. Fund the distribution wallet with XRP, then run consent preparation again.",
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",
@@ -489,6 +521,13 @@
           "pending": "Unverified",
           "verified": "Verified"
         }
+      },
+      "distributionWallet": {
+        "title": "Distribution wallet address",
+        "addressLabel": "Distribution wallet address",
+        "empty": "Not set",
+        "copyLabel": "Distribution wallet address",
+        "copyAriaLabel": "Copy distribution wallet address"
       },
       "wallet": {
         "title": "Receiving wallet",
@@ -692,6 +731,10 @@
         "xrpLabel": "XRP reserve amount (XRP)",
         "tokenLabel": "Token reserve",
         "tokenHint": "Available after syncing with XRPL.",
+        "nftLabel": "NFT",
+        "nftMeta": "Balance {{balance}} / Reserve {{reserve}}",
+        "nftSettingsTitle": "NFT reserve",
+        "nftHint": "NFTs appear after XRPL sync.",
         "save": "Save reserves",
         "saving": "Saving...",
         "success": "Reserve settings saved",
@@ -787,6 +830,9 @@
       "rulesEmpty": "Allocation rules are not set",
       "allocationsEmpty": "No allocations set",
       "rulesLoading": "Loading allocation rules...",
+      "tokenTitle": "Token allocations",
+      "tokenMeta": "{{currency}} / {{issuer}}",
+      "nftTitle": "NFT allocations",
       "unit": {
         "percent": "Percent",
         "amount": "Amount"
@@ -958,10 +1004,10 @@
       "actions": {
         "backToDetail": "Back to plan details"
       },
-      "flow": {
-        "title": "Edit flow",
-        "text": "Basic info → Heirs → Assets → Allocation"
-      },
+    "flow": {
+      "title": "Edit flow",
+      "text": "Basic info → Heirs → Assets → Allocation → NFT"
+    },
       "section": {
         "basic": "1. Basic info",
         "heirs": "2. Heirs",
@@ -1009,7 +1055,7 @@
         },
         "unset": "Unset"
       },
-      "allocations": {
+    "allocations": {
         "emptyPlan": {
           "title": "Plan cannot be loaded",
           "body": "Reload and try again."
@@ -1030,19 +1076,27 @@
         "saving": "Saving...",
         "unallocated": "Unallocated",
         "totalPercent": "Total: {{total}}% / Unallocated: {{unallocated}}%",
-        "totalAmount": "Total: {{total}}"
-      },
-      "error": {
-        "planIdMissing": "Plan ID is missing",
-        "loadFailed": "Failed to load plan",
-        "titleUpdateFailed": "Failed to update plan title",
-        "addAssetFailed": "Failed to add asset",
-        "removeAssetFailed": "Failed to remove asset",
-        "addHeirFailed": "Failed to add heir",
-        "removeHeirFailed": "Failed to remove heir",
-        "allocationUpdateFailed": "Failed to update allocation"
-      }
+      "totalAmount": "Total: {{total}}"
     },
+    "nft": {
+      "title": "5. NFT allocation",
+      "empty": "No NFTs available for allocation",
+      "unassigned": "Unassigned",
+      "save": "Save NFT allocation",
+      "saving": "Saving..."
+    },
+    "error": {
+      "planIdMissing": "Plan ID is missing",
+      "loadFailed": "Failed to load plan",
+      "titleUpdateFailed": "Failed to update plan title",
+      "addAssetFailed": "Failed to add asset",
+        "removeAssetFailed": "Failed to remove asset",
+      "addHeirFailed": "Failed to add heir",
+      "removeHeirFailed": "Failed to remove heir",
+      "allocationUpdateFailed": "Failed to update allocation",
+      "nftAllocationFailed": "Failed to update NFT allocation"
+    }
+  },
     "detail": {
       "title": "Plan details",
       "breadcrumb": "Plan",

@@ -415,6 +415,66 @@
   @apply text-meta text-muted-foreground;
 }
 
+.nftReceiveSection {
+  @apply grid gap-3 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.nftReceiveHeader {
+  @apply grid gap-1;
+}
+
+.nftReceiveTitle {
+  @apply text-body-sm font-medium text-foreground;
+}
+
+.nftReceiveHint {
+  @apply text-meta text-muted-foreground;
+}
+
+.nftReceiveSummary {
+  @apply flex flex-wrap items-center gap-3 text-meta text-muted-foreground;
+}
+
+.nftReceiveList {
+  @apply grid gap-2;
+}
+
+.nftReceiveEmpty {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.nftReceiveItem {
+  @apply grid gap-1 rounded-lg border border-border/60 bg-muted/20 px-3 py-2;
+}
+
+.nftReceiveItemRow {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.nftReceiveItemLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.nftReceiveItemValue {
+  @apply break-all text-body text-foreground;
+}
+
+.nftReceiveItemError {
+  @apply text-meta text-destructive;
+}
+
+.nftReceiveActions {
+  @apply grid gap-3 md:grid-cols-2;
+}
+
+.nftReceiveActionRow {
+  @apply grid gap-2;
+}
+
+.nftReceiveNote {
+  @apply text-meta text-muted-foreground;
+}
+
 .signerPrepareNote {
   @apply text-body-sm text-muted-foreground;
 }

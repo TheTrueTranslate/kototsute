@@ -31,3 +31,19 @@ export const executeDistribution = async (caseId: string) => {
   });
   return result.data as DistributionState;
 };
+
+export type DistributionItem = {
+  itemId: string;
+  type?: string | null;
+  tokenId?: string | null;
+  offerId?: string | null;
+  heirUid?: string | null;
+  heirAddress?: string | null;
+  status?: string | null;
+  error?: string | null;
+};
+
+export const listDistributionItems = async (caseId: string) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/distribution/items`, { method: "GET" });
+  return result.data as DistributionItem[];
+};

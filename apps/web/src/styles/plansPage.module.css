@@ -232,6 +232,18 @@
   @apply text-meta text-muted-foreground;
 }
 
+.nftRow {
+  @apply flex flex-col gap-2 md:items-start;
+}
+
+.nftMeta {
+  @apply grid gap-1;
+}
+
+.nftToken {
+  @apply text-body text-foreground break-all;
+}
+
 @keyframes flow-line {
   0% {
     background-position: 0% 50%;

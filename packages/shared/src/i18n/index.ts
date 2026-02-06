@@ -1,6 +1,4 @@
 import i18next, { type i18n, type Module } from "i18next";
-import ja from "./consts/ja.json" assert { type: "json" };
-import en from "./consts/en.json" assert { type: "json" };
 
 export const supportedLocales = ["ja", "en"] as const;
 export type SupportedLocale = (typeof supportedLocales)[number];
@@ -15,22 +13,48 @@ export const normalizeLocale = (
   return null;
 };
 
-const resources = {
-  ja: { translation: ja },
-  en: { translation: en }
+type LocaleResource = Record<string, any>;
+type Resources = Record<SupportedLocale, { translation: LocaleResource }>;
+
+const isNodeRuntime = () => typeof window === "undefined";
+
+const loadLocaleResource = async (path: string) => {
+  if (isNodeRuntime()) {
+    const { readFile } = await import("node:fs/promises");
+    const fileUrl = new URL(path, import.meta.url);
+    const json = await readFile(fileUrl, "utf8");
+    return JSON.parse(json) as LocaleResource;
+  }
+  const module = await import(path);
+  return (module as { default: LocaleResource }).default;
+};
+
+const loadResources = async (): Promise<Resources> => {
+  const [ja, en] = await Promise.all([
+    loadLocaleResource("./consts/ja.json"),
+    loadLocaleResource("./consts/en.json")
+  ]);
+  return {
+    ja: { translation: ja },
+    en: { translation: en }
+  };
 };
 
 const instance: i18n = i18next.createInstance();
 let initialized = false;
+let resources: Resources | null = null;
 
 export const initI18n = async (input?: {
   lng?: SupportedLocale;
   plugins?: Module[];
 }) => {
   if (initialized) return instance;
+  if (!resources) {
+    resources = await loadResources();
+  }
   input?.plugins?.forEach((plugin) => instance.use(plugin));
   await instance.init({
-    resources,
+    resources: resources ?? {},
     lng: input?.lng ?? "ja",
     fallbackLng: "ja",
     supportedLngs: supportedLocales,

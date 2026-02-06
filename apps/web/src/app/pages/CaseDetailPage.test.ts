@@ -18,6 +18,16 @@ let distributionStateData = {
   skippedCount: 0,
   escalationCount: 0
 };
+let distributionItemsData: Array<any> = [];
+let assetLockStateData = {
+  status: "DRAFT",
+  method: null,
+  uiStep: null,
+  methodStep: null,
+  wallet: null,
+  items: [],
+  regularKeyStatuses: []
+};
 let caseData = {
   caseId: "case-1",
   ownerUid: "owner",
@@ -100,7 +110,12 @@ vi.mock("../api/invites", () => ({
 
 vi.mock("../api/distribution", () => ({
   getDistributionState: async () => distributionStateData,
-  executeDistribution: async () => distributionStateData
+  executeDistribution: async () => distributionStateData,
+  listDistributionItems: async () => distributionItemsData
+}));
+
+vi.mock("../api/asset-lock", () => ({
+  getAssetLock: async () => assetLockStateData
 }));
 
 vi.mock("../../features/auth/auth-provider", () => ({
@@ -128,6 +143,16 @@ describe("CaseDetailPage", () => {
       skippedCount: 0,
       escalationCount: 0
     };
+    distributionItemsData = [];
+    assetLockStateData = {
+      status: "DRAFT",
+      method: null,
+      uiStep: null,
+      methodStep: null,
+      wallet: null,
+      items: [],
+      regularKeyStatuses: []
+    };
     caseData = {
       caseId: "case-1",
       ownerUid: "owner",
@@ -149,6 +174,20 @@ describe("CaseDetailPage", () => {
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
     expect(html).toContain("タスク");
+  });
+
+  it("shows distribution wallet for owner when inheritance is in progress", async () => {
+    const html = await render({
+      initialIsOwner: true,
+      initialCaseData: {
+        ...caseData,
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED"
+      },
+      initialDistributionWalletAddress: "rDistributionWallet"
+    });
+    expect(html).toContain("分配用ウォレットアドレス</span>");
+    expect(html).toContain("rDistributionWallet");
   });
 
   it("hides edit actions when asset lock is locked", async () => {
@@ -328,6 +367,34 @@ describe("CaseDetailPage", () => {
     expect(reason).toBeNull();
   });
 
+  it("allows prepare retry when signer list is failed", async () => {
+    const { resolvePrepareDisabledReason } = await import("./CaseDetailPage");
+    const reason = resolvePrepareDisabledReason({
+      caseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      signerStatusKey: "FAILED",
+      totalHeirCount: 1,
+      unverifiedHeirCount: 0,
+      approvalTx: null
+    });
+    expect(reason).toBeNull();
+  });
+
+  it("maps account-not-found signer error to localized key", async () => {
+    const { resolveSignerListErrorMessage } = await import("./CaseDetailPage");
+    expect(resolveSignerListErrorMessage("Account not found.")).toEqual({
+      key: "cases.detail.signer.error.accountNotFound"
+    });
+    expect(resolveSignerListErrorMessage("Unexpected")).toBe("Unexpected");
+  });
+
   it("ignores approval tx not found error", async () => {
     const { resolveApprovalTxErrorMessage } = await import("./CaseDetailPage");
     const message = resolveApprovalTxErrorMessage({
@@ -481,6 +548,25 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("分配を実行");
+  });
+
+  it("shows nft receive block", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("NFT受取");
   });
 
   it("hides manual sign button in consent section", async () => {

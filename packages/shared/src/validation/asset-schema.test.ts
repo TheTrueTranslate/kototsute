@@ -49,4 +49,14 @@ describe("assetReserveSchema", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("validation.asset.token.duplicate");
   });
+
+  it("rejects duplicate reserve NFTs", () => {
+    const result = assetReserveSchema.safeParse({
+      reserveXrp: "0",
+      reserveTokens: [],
+      reserveNfts: ["nft-1", "nft-1"]
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.nft.duplicate");
+  });
 });

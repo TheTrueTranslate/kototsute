@@ -34,6 +34,8 @@ import {
 import {
   executeDistribution,
   getDistributionState,
+  listDistributionItems,
+  type DistributionItem,
   type DistributionState
 } from "../api/distribution";
 import {
@@ -43,6 +45,7 @@ import {
   saveHeirWallet,
   type HeirWallet
 } from "../api/heir-wallets";
+import { getAssetLock } from "../api/asset-lock";
 import {
   createInvite,
   listCaseHeirs,
@@ -66,6 +69,7 @@ import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-veri
 import styles from "../../styles/caseDetailPage.module.css";
 import { DeathClaimsPanel } from "./DeathClaimsPage";
 import {
+  acceptNftSellOffer,
   getRelationOptionKey,
   relationOptions,
   relationOtherValue,
@@ -77,6 +81,8 @@ type LocalizedMessage = {
   key: string;
   values?: Record<string, number | string>;
 };
+
+type NftReceiveStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 export const formatDistributionProgressText = (
   distribution: DistributionState | null
@@ -224,9 +230,6 @@ export const resolvePrepareDisabledReason = (input: {
   if (input.caseData.stage !== "IN_PROGRESS") {
     return { key: "cases.detail.prepare.disabled.notInProgress" };
   }
-  if (input.signerStatusKey === "FAILED") {
-    return { key: "cases.detail.prepare.disabled.failed" };
-  }
   const approvalPrepared =
     input.approvalTx?.status === "PREPARED" ||
     input.approvalTx?.status === "SUBMITTED" ||
@@ -250,6 +253,16 @@ export const resolveApprovalTxErrorMessage = (error: any) => {
   const code = error?.data?.code;
   if (code === "NOT_FOUND") return null;
   return error?.message ?? "cases.detail.signer.error.loadFailed";
+};
+
+export const resolveSignerListErrorMessage = (
+  message: string | null | undefined
+): string | LocalizedMessage | null => {
+  if (!message) return null;
+  if (/^Account not found\.?$/i.test(message.trim())) {
+    return { key: "cases.detail.signer.error.accountNotFound" };
+  }
+  return message;
 };
 
 export const resolveSignerFromLabel = () => "cases.detail.signer.fromLabel";
@@ -295,8 +308,6 @@ const formatTxAmount = (amount: any) => {
   }
   return "-";
 };
-
-type RelationOption = (typeof relationOptions)[number];
 
 type AssetRowProps = {
   caseId?: string;
@@ -350,6 +361,7 @@ type CaseDetailPageProps = {
   initialTab?: TabKey;
   initialIsOwner?: boolean | null;
   initialCaseData?: CaseSummary | null;
+  initialDistributionWalletAddress?: string | null;
   initialHeirWallet?: HeirWallet | null;
   initialTaskIds?: string[];
   initialHeirs?: CaseHeir[];
@@ -367,6 +379,7 @@ export default function CaseDetailPage({
   initialTab,
   initialIsOwner = null,
   initialCaseData = null,
+  initialDistributionWalletAddress = null,
   initialHeirWallet = null,
   initialTaskIds = [],
   initialHeirs = [],
@@ -407,6 +420,9 @@ export default function CaseDetailPage({
   const [heirWallet, setHeirWallet] = useState<HeirWallet | null>(initialHeirWallet);
   const [heirWalletLoading, setHeirWalletLoading] = useState(false);
   const [heirWalletError, setHeirWalletError] = useState<string | null>(null);
+  const [ownerDistributionWalletAddress, setOwnerDistributionWalletAddress] = useState<
+    string | null
+  >(initialDistributionWalletAddress);
   const [deathClaim, setDeathClaim] = useState<DeathClaimSummary | null>(initialDeathClaim);
   const [heirWalletSaving, setHeirWalletSaving] = useState(false);
   const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
@@ -436,12 +452,20 @@ export default function CaseDetailPage({
   const [distributionLoading, setDistributionLoading] = useState(false);
   const [distributionError, setDistributionError] = useState<string | null>(null);
   const [distributionExecuting, setDistributionExecuting] = useState(false);
+  const [distributionItems, setDistributionItems] = useState<DistributionItem[]>([]);
+  const [distributionItemsLoading, setDistributionItemsLoading] = useState(false);
+  const [distributionItemsError, setDistributionItemsError] = useState<string | null>(null);
+  const [nftReceiveSeed, setNftReceiveSeed] = useState("");
+  const [nftReceiveExecuting, setNftReceiveExecuting] = useState(false);
+  const [nftReceiveError, setNftReceiveError] = useState<string | null>(null);
+  const [nftReceiveResults, setNftReceiveResults] = useState<
+    Record<string, { status: NftReceiveStatus; error?: string | null }>
+  >({});
   const [prepareLoading, setPrepareLoading] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [prepareSuccess, setPrepareSuccess] = useState<string | null>(null);
   const [signerSeed, setSignerSeed] = useState("");
   const [signerSignedBlob, setSignerSignedBlob] = useState("");
-  const [signerSignedHash, setSignerSignedHash] = useState("");
   const [signerSigning, setSignerSigning] = useState(false);
   const [signerSubmitting, setSignerSubmitting] = useState(false);
   const autoSignKeyRef = useRef("");
@@ -506,6 +530,14 @@ export default function CaseDetailPage({
     }),
     [t]
   );
+  const nftReceiveStatusLabels = useMemo(
+    () => ({
+      PENDING: t("cases.detail.nftReceive.status.pending"),
+      SUCCESS: t("cases.detail.nftReceive.status.success"),
+      FAILED: t("cases.detail.nftReceive.status.failed")
+    }),
+    [t]
+  );
   const formatDate = (value: string | null | undefined) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -542,6 +574,8 @@ export default function CaseDetailPage({
     () => caseData?.ownerDisplayName ?? t("cases.detail.title"),
     [caseData, t]
   );
+  const showOwnerDistributionWallet =
+    isOwner === true && caseData?.stage === "IN_PROGRESS";
   const personalTasks = useMemo(() => {
     if (isOwner === true) return todoMaster.owner;
     if (isOwner === false) return todoMaster.heir;
@@ -594,7 +628,8 @@ export default function CaseDetailPage({
   const signerStatusKey = signerList?.status ?? "NOT_READY";
   const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
   const approvalStatusLabel = approvalTx?.status
-    ? approvalStatusLabels[approvalTx.status] ?? approvalTx.status
+    ? approvalStatusLabels[approvalTx.status as keyof typeof approvalStatusLabels] ??
+      approvalTx.status
     : t("cases.detail.signer.approvalStatus.unset");
   const approvalSubmittedTxHash = approvalTx?.submittedTxHash ?? "";
   const approvalNetworkStatus = approvalTx?.networkStatus ?? null;
@@ -732,6 +767,34 @@ export default function CaseDetailPage({
   ]);
   const prepareDisabledText = resolveMessage(prepareDisabledReason);
   const distributionDisabledText = resolveMessage(distributionDisabledReason);
+  const signerListErrorText = resolveMessage(
+    resolveSignerListErrorMessage(signerList?.error ?? null)
+  );
+  const nftReceiveItems = useMemo(() => {
+    const baseItems = distributionItems.filter(
+      (item) => item.type === "NFT" && Boolean(item.offerId)
+    );
+    if (!user?.uid) return baseItems;
+    return baseItems.filter((item) => !item.heirUid || item.heirUid === user.uid);
+  }, [distributionItems, user?.uid]);
+  const nftReceiveStats = useMemo(() => {
+    let success = 0;
+    let failed = 0;
+    for (const item of nftReceiveItems) {
+      const status = nftReceiveResults[item.itemId]?.status ?? "PENDING";
+      if (status === "SUCCESS") success += 1;
+      if (status === "FAILED") failed += 1;
+    }
+    return {
+      success,
+      failed,
+      total: nftReceiveItems.length
+    };
+  }, [nftReceiveItems, nftReceiveResults]);
+  const nftReceiveSummary = t("cases.detail.nftReceive.summary", {
+    success: nftReceiveStats.success,
+    total: nftReceiveStats.total
+  });
   const canExecuteDistribution =
     !distributionDisabledReason && !distributionExecuting;
   const signerDisabledReason = useMemo(() => {
@@ -821,6 +884,7 @@ export default function CaseDetailPage({
         const owner = detail.ownerUid === user?.uid;
         setIsOwner(owner);
         if (owner) {
+          setOwnerDistributionWalletAddress(null);
           const [assetItems, planItems, inviteItems] = await Promise.all([
             listAssets(caseId),
             listPlans(caseId),
@@ -832,6 +896,16 @@ export default function CaseDetailPage({
           setOwnerInvites(inviteItems);
           setHeirs([]);
           setHeirWallet(null);
+          try {
+            const lockState = await getAssetLock(caseId);
+            if (active) {
+              setOwnerDistributionWalletAddress(lockState.wallet?.address ?? null);
+            }
+          } catch {
+            if (active) {
+              setOwnerDistributionWalletAddress(null);
+            }
+          }
         } else {
           const [planItems, heirItems] = await Promise.all([
             listPlans(caseId),
@@ -842,6 +916,7 @@ export default function CaseDetailPage({
           setPlans(planItems);
           setOwnerInvites([]);
           setHeirs(heirItems);
+          setOwnerDistributionWalletAddress(null);
           setHeirWalletLoading(true);
           setHeirWalletError(null);
           try {
@@ -972,6 +1047,20 @@ export default function CaseDetailPage({
     }
   }, [caseId]);
 
+  const fetchDistributionItems = useCallback(async () => {
+    if (!caseId) return;
+    setDistributionItemsLoading(true);
+    setDistributionItemsError(null);
+    try {
+      const data = await listDistributionItems(caseId);
+      setDistributionItems(data);
+    } catch (err: any) {
+      setDistributionItemsError(err?.message ?? "cases.detail.nftReceive.error.loadFailed");
+    } finally {
+      setDistributionItemsLoading(false);
+    }
+  }, [caseId]);
+
   useEffect(() => {
     if (
       !shouldFetchApprovalTx({
@@ -1012,6 +1101,27 @@ export default function CaseDetailPage({
   ]);
 
   useEffect(() => {
+    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+      return;
+    }
+    if (caseData?.stage !== "IN_PROGRESS") return;
+    void fetchDistributionItems();
+  }, [
+    isHeir,
+    tab,
+    caseId,
+    canAccessDeathClaims,
+    caseData?.stage,
+    distribution?.status,
+    fetchDistributionItems
+  ]);
+
+  useEffect(() => {
+    setNftReceiveResults({});
+    setNftReceiveError(null);
+  }, [caseId]);
+
+  useEffect(() => {
     if (!canPollApprovalStatus) return;
     const intervalId = window.setInterval(() => {
       void fetchApprovalTx();
@@ -1036,7 +1146,6 @@ export default function CaseDetailPage({
       await prepareApprovalTx(caseId);
       setPrepareSuccess("cases.detail.signer.prepare.success");
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       autoSignKeyRef.current = "";
       await fetchSignerList();
       await fetchApprovalTx();
@@ -1065,7 +1174,6 @@ export default function CaseDetailPage({
       await prepareApprovalTx(caseId, { force: true });
       setPrepareSuccess("cases.detail.signer.prepare.reprepareSuccess");
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       autoSignKeyRef.current = "";
       await fetchSignerList();
       await fetchApprovalTx();
@@ -1097,6 +1205,49 @@ export default function CaseDetailPage({
     } finally {
       setDistributionExecuting(false);
     }
+  };
+
+  const handleAcceptNftOffers = async () => {
+    if (!caseId) return;
+    const seed = nftReceiveSeed.trim();
+    if (!seed) {
+      setNftReceiveError("cases.detail.nftReceive.error.seedRequired");
+      return;
+    }
+    if (!heirWallet?.address) {
+      setNftReceiveError("cases.detail.nftReceive.error.walletRequired");
+      return;
+    }
+    if (nftReceiveItems.length === 0) {
+      setNftReceiveError(null);
+      return;
+    }
+    setNftReceiveExecuting(true);
+    setNftReceiveError(null);
+    for (const item of nftReceiveItems) {
+      const offerId = item.offerId;
+      if (!offerId) continue;
+      try {
+        await acceptNftSellOffer({
+          buyerSeed: seed,
+          buyerAddress: heirWallet.address,
+          offerId
+        });
+        setNftReceiveResults((prev) => ({
+          ...prev,
+          [item.itemId]: { status: "SUCCESS", error: null }
+        }));
+      } catch (err: any) {
+        setNftReceiveResults((prev) => ({
+          ...prev,
+          [item.itemId]: {
+            status: "FAILED",
+            error: err?.message ?? "cases.detail.nftReceive.error.acceptFailed"
+          }
+        }));
+      }
+    }
+    setNftReceiveExecuting(false);
   };
 
   const handleSaveHeirWallet = async () => {
@@ -1198,11 +1349,9 @@ export default function CaseDetailPage({
       try {
         const result = signForMultisign(approvalTx.txJson, secret);
         setSignerSignedBlob(result.blob);
-        setSignerSignedHash(result.hash);
         return true;
       } catch (err: any) {
         setSignerSignedBlob("");
-        setSignerSignedHash("");
         setSignerError(err?.message ?? "cases.detail.signer.error.signFailed");
         return false;
       } finally {
@@ -1216,7 +1365,6 @@ export default function CaseDetailPage({
     if (!approvalTx?.txJson || signerDisabledReason !== null || signerList?.signedByMe) {
       autoSignKeyRef.current = "";
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       return;
     }
     if (signerSigning || signerSubmitting) {
@@ -1226,7 +1374,6 @@ export default function CaseDetailPage({
     if (!secret) {
       autoSignKeyRef.current = "";
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       return;
     }
     const autoSignKey = `${secret}::${approvalTxJsonText}`;
@@ -1269,7 +1416,6 @@ export default function CaseDetailPage({
         signedByMe: result.signedByMe
       }));
       setSignerSignedBlob("");
-      setSignerSignedHash("");
       setSignerSeed("");
       void fetchApprovalTx();
     } catch (err: any) {
@@ -1391,6 +1537,38 @@ export default function CaseDetailPage({
       </header>
 
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
+
+      {showOwnerDistributionWallet ? (
+        <div className={styles.walletSection}>
+          <div className={styles.walletRow}>
+            <span className={styles.walletLabel}>
+              {t("cases.detail.distributionWallet.title")}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className={styles.copyButton}
+              onClick={() =>
+                handleCopy(
+                  t("cases.detail.distributionWallet.copyLabel"),
+                  ownerDistributionWalletAddress ?? ""
+                )
+              }
+              aria-label={t("cases.detail.distributionWallet.copyAriaLabel")}
+              disabled={!ownerDistributionWalletAddress}
+            >
+              <Copy />
+            </Button>
+          </div>
+          <div className={styles.walletAddress}>
+            <div className={styles.walletAddressValue}>
+              {ownerDistributionWalletAddress ??
+                t("cases.detail.distributionWallet.empty")}
+            </div>
+          </div>
+          {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
+        </div>
+      ) : null}
 
       <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
@@ -1613,9 +1791,7 @@ export default function CaseDetailPage({
               {prepareSuccess ? (
                 <FormAlert variant="success">{t(prepareSuccess)}</FormAlert>
               ) : null}
-              {signerList?.error ? (
-                <FormAlert variant="error">{signerList.error}</FormAlert>
-              ) : null}
+              {signerListErrorText ? <FormAlert variant="error">{signerListErrorText}</FormAlert> : null}
               {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
@@ -2128,6 +2304,97 @@ export default function CaseDetailPage({
               {distributionDisabledText ? (
                 <div className={styles.distributionNote}>{distributionDisabledText}</div>
               ) : null}
+              <div className={styles.nftReceiveSection}>
+                <div className={styles.nftReceiveHeader}>
+                  <div className={styles.nftReceiveTitle}>
+                    {t("cases.detail.nftReceive.title")}
+                  </div>
+                  <div className={styles.nftReceiveHint}>
+                    {t("cases.detail.nftReceive.hint")}
+                  </div>
+                </div>
+                {distributionItemsError ? (
+                  <FormAlert variant="error">{t(distributionItemsError)}</FormAlert>
+                ) : null}
+                {nftReceiveError ? (
+                  <FormAlert variant="error">{t(nftReceiveError)}</FormAlert>
+                ) : null}
+                <div className={styles.nftReceiveSummary}>
+                  <span>{nftReceiveSummary}</span>
+                  <span>
+                    {t("cases.detail.nftReceive.failedCount", {
+                      count: nftReceiveStats.failed
+                    })}
+                  </span>
+                </div>
+                <div className={styles.nftReceiveList}>
+                  {distributionItemsLoading ? (
+                    <div className={styles.nftReceiveNote}>{t("common.loading")}</div>
+                  ) : nftReceiveItems.length === 0 ? (
+                    <div className={styles.nftReceiveEmpty}>
+                      {t("cases.detail.nftReceive.empty")}
+                    </div>
+                  ) : (
+                    nftReceiveItems.map((item) => {
+                      const status = nftReceiveResults[item.itemId]?.status ?? "PENDING";
+                      const statusLabel = nftReceiveStatusLabels[status] ?? status;
+                      const itemError = resolveMessage(nftReceiveResults[item.itemId]?.error);
+                      return (
+                        <div key={item.itemId} className={styles.nftReceiveItem}>
+                          <div className={styles.nftReceiveItemRow}>
+                            <span className={styles.nftReceiveItemLabel}>
+                              {t("cases.detail.nftReceive.labels.tokenId")}
+                            </span>
+                            <span className={styles.nftReceiveItemValue}>
+                              {item.tokenId ?? "-"}
+                            </span>
+                          </div>
+                          <div className={styles.nftReceiveItemRow}>
+                            <span className={styles.nftReceiveItemLabel}>
+                              {t("cases.detail.nftReceive.labels.status")}
+                            </span>
+                            <span className={styles.nftReceiveItemValue}>
+                              {statusLabel}
+                            </span>
+                          </div>
+                          {itemError ? (
+                            <div className={styles.nftReceiveItemError}>{itemError}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <div className={styles.nftReceiveActions}>
+                  <FormField label={t("cases.detail.nftReceive.seed.label")}>
+                    <Input
+                      value={nftReceiveSeed}
+                      onChange={(event) => setNftReceiveSeed(event.target.value)}
+                      placeholder="s..."
+                      type="password"
+                      disabled={nftReceiveExecuting}
+                    />
+                  </FormField>
+                  <div className={styles.nftReceiveActionRow}>
+                    <Button
+                      type="button"
+                      onClick={handleAcceptNftOffers}
+                      disabled={
+                        nftReceiveExecuting ||
+                        distributionItemsLoading ||
+                        nftReceiveItems.length === 0
+                      }
+                    >
+                      {nftReceiveExecuting
+                        ? t("cases.detail.nftReceive.actions.executing")
+                        : t("cases.detail.nftReceive.actions.execute")}
+                    </Button>
+                    <div className={styles.nftReceiveNote}>
+                      {t("cases.detail.nftReceive.seed.note")}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : (

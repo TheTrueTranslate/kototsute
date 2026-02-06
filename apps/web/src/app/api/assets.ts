@@ -31,6 +31,12 @@ export type AssetReserveToken = {
   reserveAmount: string;
 };
 
+export type AssetNft = {
+  tokenId: string;
+  issuer: string | null;
+  uri: string | null;
+};
+
 export type AssetHistoryItem = {
   historyId: string;
   type: string;
@@ -53,12 +59,14 @@ export type AssetDetail = {
   verificationAddress: string;
   reserveXrp: string;
   reserveTokens: AssetReserveToken[];
+  reserveNfts: string[];
   xrpl:
     | {
         status: "ok";
         balanceXrp: string;
         ledgerIndex?: number | null;
         tokens?: Array<{ currency: string; issuer: string | null; balance: string }>;
+        nfts?: AssetNft[];
         syncedAt?: string;
       }
     | { status: "error"; message: string; syncedAt?: string }
@@ -110,7 +118,7 @@ export const confirmVerify = async (caseId: string, assetId: string, txHash: str
 export const updateAssetReserve = async (
   caseId: string,
   assetId: string,
-  input: { reserveXrp: string; reserveTokens: AssetReserveToken[] }
+  input: { reserveXrp: string; reserveTokens: AssetReserveToken[]; reserveNfts: string[] }
 ) => {
   await apiFetch(`/v1/cases/${caseId}/assets/${assetId}/reserve`, {
     method: "PATCH",

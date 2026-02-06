@@ -38,6 +38,7 @@ vi.mock("../api/assets", () => ({
     verificationAddress: "rVerify",
     reserveXrp: "0",
     reserveTokens: [],
+    reserveNfts: ["00090000AABBCC"],
     xrpl: {
       status: "ok",
       balanceXrp: "10",
@@ -47,6 +48,13 @@ vi.mock("../api/assets", () => ({
           currency: "USD",
           issuer: "rIssuer",
           balance: "5"
+        }
+      ],
+      nfts: [
+        {
+          tokenId: "00090000AABBCC",
+          issuer: "rIssuer",
+          uri: "https://example.com/nft/1"
         }
       ],
       syncedAt: "2024-01-03T00:00:00.000Z"
@@ -100,6 +108,7 @@ const render = async (props?: Record<string, unknown>) => {
           verificationAddress: "rVerify",
           reserveXrp: "0",
           reserveTokens: [],
+          reserveNfts: ["00090000AABBCC"],
           xrpl: {
             status: "ok",
             balanceXrp: "10",
@@ -109,6 +118,13 @@ const render = async (props?: Record<string, unknown>) => {
                 currency: "USD",
                 issuer: "rIssuer",
                 balance: "5"
+              }
+            ],
+            nfts: [
+              {
+                tokenId: "00090000AABBCC",
+                issuer: "rIssuer",
+                uri: "https://example.com/nft/1"
               }
             ],
             syncedAt: "2024-01-03T00:00:00.000Z"
@@ -140,6 +156,11 @@ describe("AssetDetailPage", () => {
   it("shows combined inheritance and reserve section", async () => {
     const html = await render();
     expect(html).toContain("相続予定数・留保設定");
+  });
+
+  it("shows nft reserve section", async () => {
+    const html = await render();
+    expect(html).toContain("NFT");
   });
 
   it("renders history tab", async () => {

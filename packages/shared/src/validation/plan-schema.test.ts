@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planCreateSchema, planAllocationSchema } from "./plan-schema";
+import { planCreateSchema, planAllocationSchema, planNftAllocationSchema } from "./plan-schema";
 
 describe("plan schemas", () => {
   it("rejects empty title", () => {
@@ -35,5 +35,16 @@ describe("plan schemas", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("validation.plan.allocation.percentMax");
+  });
+
+  it("rejects duplicate nft allocations", () => {
+    const result = planNftAllocationSchema.safeParse({
+      allocations: [
+        { tokenId: "nft-1", heirUid: "heir-1" },
+        { tokenId: "nft-1", heirUid: "heir-2" }
+      ]
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.plan.nft.duplicate");
   });
 });

@@ -35,6 +35,17 @@ export type PlanToken = {
   isNative: boolean;
 };
 
+export type PlanNft = {
+  tokenId: string;
+  issuer: string | null;
+  uri: string | null;
+};
+
+export type PlanNftAllocation = {
+  tokenId: string;
+  heirUid: string | null;
+};
+
 export type PlanAsset = {
   planAssetId: string;
   assetId: string;
@@ -44,6 +55,8 @@ export type PlanAsset = {
   token: PlanToken | null;
   unitType: "PERCENT" | "AMOUNT";
   allocations: PlanAllocation[];
+  nftAllocations?: PlanNftAllocation[];
+  nfts?: PlanNft[];
 };
 
 export type PlanHistoryEntry = {
@@ -133,6 +146,18 @@ export const updatePlanAllocations = async (
   input: { unitType: "PERCENT" | "AMOUNT"; allocations: PlanAllocation[] }
 ) => {
   await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets/${planAssetId}/allocations`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+};
+
+export const updatePlanNftAllocations = async (
+  caseId: string,
+  planId: string,
+  planAssetId: string,
+  input: { allocations: PlanNftAllocation[] }
+) => {
+  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/assets/${planAssetId}/nfts`, {
     method: "POST",
     body: JSON.stringify(input)
   });

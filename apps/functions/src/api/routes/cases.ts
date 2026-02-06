@@ -5,11 +5,13 @@ import { getStorage } from "firebase-admin/storage";
 import {
   assetCreateSchema,
   assetReserveSchema,
+  createNftSellOffer,
   createLocalXrplWallet,
   displayNameSchema,
   getWalletAddressFromSeed,
   inviteCreateSchema,
   planAllocationSchema,
+  planNftAllocationSchema,
   planCreateSchema,
   sendSignerListSet,
   sendTokenPayment,
@@ -28,6 +30,7 @@ import {
   decodeHex,
   fetchXrplAccountInfo,
   fetchXrplAccountLines,
+  fetchXrplAccountNfts,
   fetchXrplReserve,
   fetchXrplTx,
   fetchXrplValidatedLedgerIndex
@@ -1343,6 +1346,35 @@ export const casesRoutes = () => {
     });
   });
 
+  app.get(":caseId/distribution/items", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid !== auth.uid && !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const itemsSnap = await caseRef
+      .collection("distribution")
+      .doc("state")
+      .collection("items")
+      .get();
+    const items = itemsSnap.docs.map((doc) => ({
+      itemId: doc.id,
+      ...(doc.data() ?? {})
+    }));
+
+    return jsonOk(c, items);
+  });
+
   app.post(":caseId/distribution/execute", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
@@ -1431,7 +1463,7 @@ export const casesRoutes = () => {
         const adjustedAmounts = new Map<string, string>();
         if (itemsToAttempt.length > 0) {
           const totalXrpDrops = itemsToAttempt.reduce((total, { item }) => {
-            if (item.token) return total;
+            if (item.token || item.type === "NFT") return total;
             const amountDrops = BigInt(item.amount ?? "0");
             return total + amountDrops;
           }, 0n);
@@ -1465,7 +1497,7 @@ export const casesRoutes = () => {
             }
             if (totalXrpDrops > availableDrops) {
               for (const { doc, item } of itemsToAttempt) {
-                if (item.token) continue;
+                if (item.token || item.type === "NFT") continue;
                 const amountDrops = BigInt(item.amount ?? "0");
                 const adjustedDrops =
                   (amountDrops * availableDrops) / totalXrpDrops;
@@ -1510,7 +1542,24 @@ export const casesRoutes = () => {
           }
 
           try {
-            if (item.token) {
+            if (item.type === "NFT") {
+              const result = await createNftSellOffer({
+                sellerSeed: lockSeed,
+                sellerAddress: lockWalletAddress,
+                tokenId: String(item.tokenId ?? ""),
+                destinationAddress: String(item.heirAddress ?? ""),
+                amountDrops: "0"
+              });
+              await doc.ref.set(
+                {
+                  status: "VERIFIED",
+                  offerId: result.offerId ?? null,
+                  txHash: result.txHash ?? null,
+                  updatedAt: now
+                },
+                { merge: true }
+              );
+            } else if (item.token) {
               const amount = String(item.amount ?? "0");
               const result = await sendTokenPayment({
                 fromSeed: lockSeed,
@@ -1611,6 +1660,7 @@ export const casesRoutes = () => {
       tokens: Map<string, { amount: number; token: { currency: string; issuer: string | null; isNative: boolean } }>;
     };
     const assetTotals = new Map<string, AssetTotals>();
+    const assetCache = new Map<string, Record<string, any>>();
 
     assetLockItemsSnap.docs.forEach((doc) => {
       const item = doc.data() ?? {};
@@ -1647,9 +1697,18 @@ export const casesRoutes = () => {
     const distributionItems: Array<Record<string, any>> = [];
     const now = c.get("deps").now();
     const percentScale = 1_000_000n;
+    type AssetNftInfo = { tokenId: string; issuer: string | null; uri: string | null };
     const formatTokenAmount = (value: number) => {
       const fixed = value.toFixed(6);
       return fixed.replace(/\.?0+$/, "") || "0";
+    };
+    const getAssetData = async (assetId: string) => {
+      const cached = assetCache.get(assetId);
+      if (cached) return cached;
+      const snap = await caseRef.collection("assets").doc(assetId).get();
+      const data = snap.data() ?? {};
+      assetCache.set(assetId, data);
+      return data;
     };
 
     for (const planDoc of eligiblePlans) {
@@ -1665,6 +1724,7 @@ export const casesRoutes = () => {
         if (!totals) continue;
         const unitType = asset.unitType === "AMOUNT" ? "AMOUNT" : "PERCENT";
         const allocations = Array.isArray(asset.allocations) ? asset.allocations : [];
+        const nftAllocations = Array.isArray(asset.nftAllocations) ? asset.nftAllocations : [];
         const xrpTotal = totals.xrpDrops;
         const xrpTotalNumber = Number(xrpTotal) / 1_000_000;
 
@@ -1728,6 +1788,7 @@ export const casesRoutes = () => {
             if (tokenAmount > 0) {
               distributionItems.push({
                 status: "QUEUED",
+                type: "TOKEN",
                 planId,
                 planTitle,
                 assetId,
@@ -1743,6 +1804,54 @@ export const casesRoutes = () => {
                 updatedAt: now
               });
             }
+          }
+        }
+
+        if (nftAllocations.length > 0) {
+          const assetData = await getAssetData(assetId);
+          const reserveNfts = Array.isArray(assetData.reserveNfts) ? assetData.reserveNfts : [];
+          const reserveSet = new Set(reserveNfts.map((id: any) => String(id)));
+          const assetNfts: AssetNftInfo[] = Array.isArray(assetData.xrplSummary?.nfts)
+            ? assetData.xrplSummary.nfts
+                .map((nft: any): AssetNftInfo => ({
+                  tokenId: String(nft.tokenId ?? ""),
+                  issuer: typeof nft.issuer === "string" ? nft.issuer : null,
+                  uri: typeof nft.uri === "string" ? nft.uri : null
+                }))
+                .filter((nft: AssetNftInfo) => nft.tokenId && !reserveSet.has(nft.tokenId))
+            : [];
+          const nftMap = new Map<string, AssetNftInfo>(
+            assetNfts.map((nft) => [nft.tokenId, nft])
+          );
+          for (const allocation of nftAllocations) {
+            const tokenId = String(allocation?.tokenId ?? "");
+            if (!tokenId) continue;
+            if (reserveSet.has(tokenId)) continue;
+            const nft = nftMap.get(tokenId);
+            if (!nft) continue;
+            const heirUid = String(allocation?.heirUid ?? "");
+            const heirAddress = heirWalletMap.get(heirUid) ?? "";
+            if (!heirAddress) continue;
+            distributionItems.push({
+              status: "QUEUED",
+              type: "NFT",
+              planId,
+              planTitle,
+              assetId,
+              assetLabel: totals.assetLabel,
+              heirUid,
+              heirAddress,
+              tokenId,
+              issuer: nft.issuer ?? null,
+              nftUri: nft.uri ?? null,
+              offerId: null,
+              amount: "0",
+              attempts: 0,
+              txHash: null,
+              error: null,
+              createdAt: now,
+              updatedAt: now
+            });
           }
         }
       }
@@ -1778,14 +1887,14 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
     }
     const totalXrpDrops = distributionItems.reduce((total, item) => {
-      if (item.token) return total;
+      if (item.token || item.type === "NFT") return total;
       const amountDrops = BigInt(item.amount ?? "0");
       return total + amountDrops;
     }, 0n);
     if (totalXrpDrops > availableDrops && totalXrpDrops > 0n) {
       const scaledItems: Array<Record<string, any>> = [];
       for (const item of distributionItems) {
-        if (item.token) {
+        if (item.token || item.type === "NFT") {
           scaledItems.push(item);
           continue;
         }
@@ -1826,7 +1935,25 @@ export const casesRoutes = () => {
       const itemRef = itemsRef.doc();
       const token = item.token ?? null;
       try {
-        if (token) {
+        if (item.type === "NFT") {
+          const result = await createNftSellOffer({
+            sellerSeed: lockSeed,
+            sellerAddress: lockWalletAddress,
+            tokenId: String(item.tokenId ?? ""),
+            destinationAddress: String(item.heirAddress ?? ""),
+            amountDrops: "0"
+          });
+          await itemRef.set(
+            {
+              ...item,
+              status: "VERIFIED",
+              offerId: result.offerId ?? null,
+              txHash: result.txHash ?? null,
+              updatedAt: now
+            },
+            { merge: true }
+          );
+        } else if (token) {
           const result = await sendTokenPayment({
             fromSeed: lockSeed,
             fromAddress: lockWalletAddress,
@@ -2016,6 +2143,7 @@ export const casesRoutes = () => {
       verificationStatus: "UNVERIFIED",
       reserveXrp: "0",
       reserveTokens: [],
+      reserveNfts: [],
       createdAt: now,
       updatedAt: now
     });
@@ -2092,11 +2220,19 @@ export const casesRoutes = () => {
               balance: String(token.balance ?? "0")
             }))
           : [];
+        const nfts = Array.isArray(summary.nfts)
+          ? summary.nfts.map((nft: any) => ({
+              tokenId: String(nft.tokenId ?? ""),
+              issuer: typeof nft.issuer === "string" ? nft.issuer : null,
+              uri: typeof nft.uri === "string" ? nft.uri : null
+            }))
+          : [];
         return {
           status: "ok",
           balanceXrp: typeof summary.balanceXrp === "string" ? summary.balanceXrp : "0",
           ledgerIndex: summary.ledgerIndex ?? null,
           tokens,
+          nfts,
           syncedAt: formatDate(summary.syncedAt)
         };
       }
@@ -2120,7 +2256,12 @@ export const casesRoutes = () => {
       if (xrpl.status === "ok") {
         const lines = await fetchXrplAccountLines(address);
         if (lines.status === "ok") {
-          xrpl = { ...xrpl, tokens: lines.tokens };
+          const nfts = await fetchXrplAccountNfts(address);
+          if (nfts.status === "ok") {
+            xrpl = { ...xrpl, tokens: lines.tokens, nfts: nfts.nfts };
+          } else {
+            xrpl = { status: "error", message: nfts.message };
+          }
         } else {
           xrpl = { status: "error", message: lines.message };
         }
@@ -2133,6 +2274,7 @@ export const casesRoutes = () => {
               balanceXrp: xrpl.balanceXrp,
               ledgerIndex: xrpl.ledgerIndex ?? null,
               tokens: xrpl.tokens ?? [],
+              nfts: xrpl.nfts ?? [],
               syncedAt
             }
           : { status: "error", message: xrpl.message, syncedAt };
@@ -2186,6 +2328,7 @@ export const casesRoutes = () => {
       verificationAddress: XRPL_VERIFY_ADDRESS,
       reserveXrp: typeof assetData.reserveXrp === "string" ? assetData.reserveXrp : "0",
       reserveTokens: Array.isArray(assetData.reserveTokens) ? assetData.reserveTokens : [],
+      reserveNfts: Array.isArray(assetData.reserveNfts) ? assetData.reserveNfts : [],
       xrpl: xrpl ?? null,
       syncLogs
     });
@@ -2281,7 +2424,8 @@ export const casesRoutes = () => {
     const body = await c.req.json().catch(() => ({}));
     const parsed = assetReserveSchema.safeParse({
       reserveXrp: body?.reserveXrp,
-      reserveTokens: body?.reserveTokens ?? []
+      reserveTokens: body?.reserveTokens ?? [],
+      reserveNfts: body?.reserveNfts ?? []
     });
     if (!parsed.success) {
       return jsonError(
@@ -2312,6 +2456,7 @@ export const casesRoutes = () => {
       {
         reserveXrp: parsed.data.reserveXrp,
         reserveTokens: parsed.data.reserveTokens,
+        reserveNfts: parsed.data.reserveNfts,
         updatedAt: deps.now()
       },
       { merge: true }
@@ -2877,13 +3022,17 @@ export const casesRoutes = () => {
 
     const itemsSnap = await caseRef.collection("assetLockItems").get();
     const items = itemsSnap.docs.map((doc) => doc.data() ?? {});
-    const assetIds = Array.from(
+    let assetIds = Array.from(
       new Set(
         items
           .map((item) => String(item.assetId ?? ""))
           .filter((assetId) => assetId.length > 0)
       )
     );
+    if (assetIds.length === 0) {
+      const assetsSnap = await caseRef.collection("assets").get();
+      assetIds = assetsSnap.docs.map((doc) => doc.id);
+    }
     if (assetIds.length === 0) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
     }
@@ -3168,13 +3317,17 @@ export const casesRoutes = () => {
     }
 
     const itemsSnap = await caseRef.collection("assetLockItems").get();
-    const assetIds = Array.from(
+    let assetIds = Array.from(
       new Set(
         itemsSnap.docs
           .map((doc) => doc.data()?.assetId)
           .filter((assetId) => typeof assetId === "string" && assetId.length > 0)
       )
     );
+    if (assetIds.length === 0) {
+      const assetsSnap = await caseRef.collection("assets").get();
+      assetIds = assetsSnap.docs.map((doc) => doc.id);
+    }
     if (assetIds.length === 0) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
     }
@@ -3326,6 +3479,48 @@ export const casesRoutes = () => {
       ref: doc.ref,
       data: doc.data() ?? {}
     }));
+    const finalizeExecution = async () => {
+      await caseRef
+        .collection("assetLock")
+        .doc("state")
+        .set({ methodStep: "TRANSFER_DONE", updatedAt: c.get("deps").now() }, { merge: true });
+      await caseRef
+        .collection("assetLock")
+        .doc("state")
+        .set(
+          { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
+          { merge: true }
+        );
+      await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
+
+      const finalLockSnap = await caseRef.collection("assetLock").doc("state").get();
+      const finalLockData = finalLockSnap.data() ?? {};
+      const finalItemsSnap = await caseRef.collection("assetLockItems").get();
+      const items = finalItemsSnap.docs.map((doc) => {
+        const item = doc.data() ?? {};
+        return {
+          itemId: item.itemId ?? doc.id,
+          assetId: item.assetId ?? "",
+          assetLabel: item.assetLabel ?? "",
+          token: item.token ?? null,
+          plannedAmount: item.plannedAmount ?? "0",
+          status: item.status ?? "PENDING",
+          txHash: item.txHash ?? null,
+          error: item.error ?? null
+        };
+      });
+      return jsonOk(c, {
+        status: finalLockData.status ?? "READY",
+        method: finalLockData.method ?? null,
+        uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
+        methodStep: finalLockData.methodStep ?? null,
+        wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
+        items,
+        regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
+          ? finalLockData.regularKeyStatuses
+          : []
+      });
+    };
     const assetIds = Array.from(
       new Set(
         itemEntries
@@ -3334,7 +3529,7 @@ export const casesRoutes = () => {
       )
     );
     if (assetIds.length === 0) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
+      return await finalizeExecution();
     }
     const assetSnaps = await Promise.all(
       assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
@@ -3461,46 +3656,7 @@ export const casesRoutes = () => {
       }
     }
 
-    await caseRef
-      .collection("assetLock")
-      .doc("state")
-      .set({ methodStep: "TRANSFER_DONE", updatedAt: c.get("deps").now() }, { merge: true });
-    await caseRef
-      .collection("assetLock")
-      .doc("state")
-      .set(
-        { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
-        { merge: true }
-      );
-    await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
-
-    const finalLockSnap = await caseRef.collection("assetLock").doc("state").get();
-    const finalLockData = finalLockSnap.data() ?? {};
-    const finalItemsSnap = await caseRef.collection("assetLockItems").get();
-    const items = finalItemsSnap.docs.map((doc) => {
-      const item = doc.data() ?? {};
-      return {
-        itemId: item.itemId ?? doc.id,
-        assetId: item.assetId ?? "",
-        assetLabel: item.assetLabel ?? "",
-        token: item.token ?? null,
-        plannedAmount: item.plannedAmount ?? "0",
-        status: item.status ?? "PENDING",
-        txHash: item.txHash ?? null,
-        error: item.error ?? null
-      };
-    });
-    return jsonOk(c, {
-      status: finalLockData.status ?? "READY",
-      method: finalLockData.method ?? null,
-      uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
-      methodStep: finalLockData.methodStep ?? null,
-      wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
-      items,
-      regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
-        ? finalLockData.regularKeyStatuses
-        : []
-    });
+    return await finalizeExecution();
   });
 
   app.post(":caseId/plans", async (c) => {
@@ -3972,6 +4128,23 @@ export const casesRoutes = () => {
     const data = planAssets.map((planAsset) => {
       const assetId = String(planAsset.assetId ?? "");
       const asset = assetMap.get(assetId) ?? {};
+      const reserveNfts = Array.isArray(asset.reserveNfts) ? asset.reserveNfts : [];
+      const reserveSet = new Set(reserveNfts.map((id: any) => String(id)));
+      const nfts = Array.isArray(asset.xrplSummary?.nfts)
+        ? asset.xrplSummary.nfts.map((nft: any) => ({
+            tokenId: String(nft.tokenId ?? ""),
+            issuer: typeof nft.issuer === "string" ? nft.issuer : null,
+            uri: typeof nft.uri === "string" ? nft.uri : null
+          }))
+            .filter((nft: any) => nft.tokenId && !reserveSet.has(nft.tokenId))
+        : [];
+      const nftAllocations = Array.isArray(planAsset.nftAllocations)
+        ? planAsset.nftAllocations.filter((item: any) => {
+            const tokenId = item?.tokenId;
+            if (!tokenId) return true;
+            return !reserveSet.has(String(tokenId));
+          })
+        : [];
       return {
         planAssetId: planAsset.planAssetId,
         assetId,
@@ -3980,7 +4153,9 @@ export const casesRoutes = () => {
         assetAddress: asset.address ?? null,
         token: null,
         unitType: planAsset.unitType ?? "PERCENT",
-        allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : []
+        allocations: Array.isArray(planAsset.allocations) ? planAsset.allocations : [],
+        nftAllocations,
+        nfts
       };
     });
 
@@ -4133,6 +4308,60 @@ export const casesRoutes = () => {
             : assignedTotal
       }
     });
+    return jsonOk(c);
+  });
+
+  app.post(":caseId/plans/:planId/assets/:planAssetId/nfts", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const planId = c.req.param("planId");
+    const planAssetId = c.req.param("planAssetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = planNftAllocationSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        parsed.error.issues[0]?.message ?? "入力が不正です"
+      );
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
+    }
+    if ((planSnap.data()?.status ?? "DRAFT") === "INACTIVE") {
+      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
+    }
+
+    const planAssetRef = db.collection(`cases/${caseId}/plans/${planId}/assets`).doc(planAssetId);
+    await planAssetRef.set(
+      {
+        nftAllocations: parsed.data.allocations,
+        updatedAt: c.get("deps").now()
+      },
+      { merge: true }
+    );
+    await planRef.set({ updatedAt: c.get("deps").now() }, { merge: true });
+    await appendPlanHistory(planRef, {
+      type: "PLAN_NFT_ALLOCATIONS_UPDATED",
+      title: "NFT割当を更新しました",
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
+
     return jsonOk(c);
   });
 

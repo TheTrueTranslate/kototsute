@@ -271,9 +271,40 @@
           "executeFailed": "分配の実行に失敗しました"
         }
       },
+      "nftReceive": {
+        "title": "NFT受取",
+        "hint": "相続用ウォレットのNFTを一括で受け取ります。",
+        "seed": {
+          "label": "シークレット",
+          "note": "シークレットはこの端末内だけで使われます。"
+        },
+        "actions": {
+          "execute": "NFTを受け取る",
+          "executing": "受取中..."
+        },
+        "summary": "成功 {{success}} / {{total}} 件",
+        "failedCount": "失敗 {{count}} 件",
+        "labels": {
+          "tokenId": "Token ID",
+          "status": "状態"
+        },
+        "status": {
+          "pending": "未実行",
+          "success": "成功",
+          "failed": "失敗"
+        },
+        "empty": "受取対象のNFTはありません。",
+        "error": {
+          "loadFailed": "NFT受取対象の取得に失敗しました",
+          "seedRequired": "シークレットを入力してください",
+          "walletRequired": "受取用ウォレットの登録が必要です",
+          "acceptFailed": "NFTの受取に失敗しました"
+        }
+      },
       "signer": {
         "status": {
           "label": "署名状況",
+          "count": "{{signed}} / {{required}} 名が署名済み",
           "notReady": "準備中",
           "set": "署名受付中",
           "failed": "準備失敗"
@@ -323,6 +354,7 @@
         "error": {
           "statusLoadFailed": "署名状況の取得に失敗しました",
           "loadFailed": "署名対象の取得に失敗しました",
+          "accountNotFound": "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。",
           "txMissing": "署名対象トランザクションが取得できません",
           "signFailed": "署名の生成に失敗しました",
           "signedBlobRequired": "署名済みデータを入力してください",
@@ -489,6 +521,13 @@
           "pending": "未確認",
           "verified": "確認済み"
         }
+      },
+      "distributionWallet": {
+        "title": "分配用ウォレットアドレス",
+        "addressLabel": "分配用ウォレットアドレス",
+        "empty": "未設定",
+        "copyLabel": "分配用ウォレットアドレス",
+        "copyAriaLabel": "分配用ウォレットアドレスをコピー"
       },
       "wallet": {
         "title": "受取用ウォレット",
@@ -692,6 +731,10 @@
         "xrpLabel": "XRP 留保数量 (XRP)",
         "tokenLabel": "トークン留保",
         "tokenHint": "XRPL同期後に一覧から選択できます。",
+        "nftLabel": "NFT",
+        "nftMeta": "残高 {{balance}} / 留保 {{reserve}}",
+        "nftSettingsTitle": "NFT留保",
+        "nftHint": "XRPL同期後にNFTが表示されます。",
         "save": "留保設定を保存",
         "saving": "保存中...",
         "success": "留保設定を保存しました",
@@ -787,6 +830,9 @@
       "rulesEmpty": "分配ルールが未設定です",
       "allocationsEmpty": "配分が未設定です",
       "rulesLoading": "分配ルールを読み込み中...",
+      "tokenTitle": "トークン割当",
+      "tokenMeta": "{{currency}} / {{issuer}}",
+      "nftTitle": "NFT割当",
       "unit": {
         "percent": "割合",
         "amount": "数量"
@@ -959,9 +1005,9 @@
         "backToDetail": "指図詳細へ戻る"
       },
       "flow": {
-        "title": "編集の流れ",
-        "text": "基本情報 → 相続人 → 資産 → 配分"
-      },
+      "title": "編集の流れ",
+      "text": "基本情報 → 相続人 → 資産 → 配分 → NFT"
+    },
       "section": {
         "basic": "1. 基本情報",
         "heirs": "2. 相続人",
@@ -1009,7 +1055,7 @@
         },
         "unset": "未設定"
       },
-      "allocations": {
+    "allocations": {
         "emptyPlan": {
           "title": "指図が読み込めません",
           "body": "再読み込みしてからもう一度お試しください。"
@@ -1030,19 +1076,27 @@
         "saving": "保存中...",
         "unallocated": "未分配",
         "totalPercent": "合計: {{total}}% / 未分配: {{unallocated}}%",
-        "totalAmount": "合計: {{total}}"
-      },
-      "error": {
-        "planIdMissing": "指図IDが取得できません",
-        "loadFailed": "指図の取得に失敗しました",
-        "titleUpdateFailed": "指図タイトルの更新に失敗しました",
-        "addAssetFailed": "資産の追加に失敗しました",
-        "removeAssetFailed": "資産の削除に失敗しました",
-        "addHeirFailed": "相続人の追加に失敗しました",
-        "removeHeirFailed": "相続人の削除に失敗しました",
-        "allocationUpdateFailed": "配分の更新に失敗しました"
-      }
+      "totalAmount": "合計: {{total}}"
     },
+    "nft": {
+      "title": "5. NFT割当",
+      "empty": "割当できるNFTがありません",
+      "unassigned": "未割当",
+      "save": "NFT割当を保存",
+      "saving": "保存中..."
+    },
+    "error": {
+      "planIdMissing": "指図IDが取得できません",
+      "loadFailed": "指図の取得に失敗しました",
+      "titleUpdateFailed": "指図タイトルの更新に失敗しました",
+      "addAssetFailed": "資産の追加に失敗しました",
+        "removeAssetFailed": "資産の削除に失敗しました",
+      "addHeirFailed": "相続人の追加に失敗しました",
+      "removeHeirFailed": "相続人の削除に失敗しました",
+      "allocationUpdateFailed": "配分の更新に失敗しました",
+      "nftAllocationFailed": "NFT割当の更新に失敗しました"
+    }
+  },
     "detail": {
       "title": "指図詳細",
       "breadcrumb": "指図",

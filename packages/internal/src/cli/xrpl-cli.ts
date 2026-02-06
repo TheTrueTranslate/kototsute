@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import prompts, { type PromptObject } from "prompts";
 import { runNftMintSend, runTokenIssueSend, runXrpTransfer } from "./xrpl-actions.js";
 
@@ -29,7 +30,7 @@ export const runXrplCli = async (
       {
         type: "password",
         name: "fromSeed",
-        message: "送信元のシード"
+        message: "送信元の秘密鍵（シード）"
       },
       {
         type: "text",
@@ -63,7 +64,7 @@ export const runXrplCli = async (
       {
         type: "password",
         name: "minterSeed",
-        message: "Minterのシード"
+        message: "Minterの秘密鍵（シード）"
       },
       {
         type: "text",
@@ -73,34 +74,29 @@ export const runXrplCli = async (
       {
         type: "password",
         name: "recipientSeed",
-        message: "受取側のシード"
+        message: "受取側の秘密鍵（シード）"
       },
       {
         type: "text",
         name: "recipientAddress",
         message: "受取側アドレス"
-      },
-      {
-        type: "text",
-        name: "uri",
-        message: "NFT URI"
       }
     ]);
     if (
       !res?.minterSeed ||
       !res?.minterAddress ||
       !res?.recipientSeed ||
-      !res?.recipientAddress ||
-      !res?.uri
+      !res?.recipientAddress
     ) {
       return { skipped: true } as const;
     }
+    const uri = `urn:uuid:${randomUUID()}`;
     return await runNftMintSend({
       minterSeed: res.minterSeed,
       minterAddress: res.minterAddress,
       recipientSeed: res.recipientSeed,
       recipientAddress: res.recipientAddress,
-      uri: res.uri
+      uri
     });
   }
 
@@ -108,7 +104,7 @@ export const runXrplCli = async (
     {
       type: "password",
       name: "issuerSeed",
-      message: "発行者のシード"
+      message: "発行者の秘密鍵（シード）"
     },
     {
       type: "text",
@@ -118,7 +114,7 @@ export const runXrplCli = async (
     {
       type: "password",
       name: "holderSeed",
-      message: "受取側のシード"
+      message: "受取側の秘密鍵（シード）"
     },
     {
       type: "text",
