@@ -94,26 +94,6 @@
   @apply text-body-sm text-muted-foreground;
 }
 
-.fileList {
-  @apply mt-4 grid gap-3;
-}
-
-.fileRow {
-  @apply flex items-center justify-between rounded-xl border border-border/60 px-4 py-3;
-}
-
-.fileName {
-  @apply text-body font-medium text-foreground;
-}
-
-.fileMeta {
-  @apply text-body-sm text-muted-foreground;
-}
-
-.fileActions {
-  @apply flex items-center gap-2;
-}
-
 .form {
   @apply mt-4 grid gap-4;
 }

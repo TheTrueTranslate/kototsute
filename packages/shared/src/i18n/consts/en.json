@@ -370,30 +370,9 @@
           "signedBlobRequired": "Please enter signed data",
           "submitFailed": "Failed to submit signature"
         },
-        "fromLabel": "From: Owner's inheritance wallet",
-        "fromValue": "Owner's inheritance wallet",
-        "toLabel": "To: System wallet",
-        "toValue": "System wallet",
-        "labels": {
-          "from": "From",
-          "to": "To",
-          "signers": "Signers",
-          "system": "System signer",
-          "mine": "Your receiving wallet",
-          "heir": "Heir receiving wallet"
-        },
-        "multiSign": {
-          "title": "MultiSign overview (addresses)",
-          "empty": "Shown once preparation is complete."
-        },
-        "multiSignNote": {
-          "withCount": "Valid when {{count}}+ heir approvals and system signature are collected.",
-          "default": "Valid when a majority of heir approvals and system signature are collected."
-        },
-        "txSummary": "From: {{from}} / To: {{to}} / Amount: {{amount}}",
         "tx": {
           "title": "Signing details",
-          "hint": "Confirm the transfer details and Memo.",
+          "hint": "Please review the memo before signing.",
           "sentLabel": "Submitted Tx",
           "afterLabel": "Status after submit",
           "afterTitle": "Status after submit",
@@ -411,25 +390,12 @@
             "title": "Review signing details"
           },
           "memoLabel": "Memo",
-          "amount": {
-            "dropsLabel": "Amount (drops)",
-            "xrpLabel": "Amount (XRP)"
-          },
-          "copy": {
-            "sentTx": "Copy submitted Tx",
-            "from": "Copy from",
-            "to": "Copy to",
-            "memo": "Copy memo",
-            "amountDrops": "Copy Amount (drops)",
-            "amountXrp": "Copy Amount (XRP)"
-          },
           "empty": "Signable payload not generated."
         },
         "guide": {
           "title": "Signing flow",
           "steps": {
             "tx": "The signable payload is an XRPL transaction that distributes from the inheritance wallet (created at asset lock) to heirs.",
-            "multisign": "MultiSign with registered heir wallets.",
             "secret": "Enter your secret to auto-create the signature (not sent to server).",
             "submit": "Submit the signature to record consent.",
             "autoExecute": "Once required signatures are collected, submission is automated."
@@ -475,6 +441,22 @@
           "signerCompleted": {
             "title": "Consent complete (awaiting execution)",
             "description": "Consent is complete. Waiting for execution."
+          }
+        },
+        "flow": {
+          "title": "Inheritance flow",
+          "progress": "STEP {{current}}/{{total}}",
+          "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "steps": {
+            "wallet": "Register receiving wallet",
+            "deathClaim": "Death certificate",
+            "signature": "Sign",
+            "receive": "Receive"
+          },
+          "walletGate": {
+            "title": "Register a receiving wallet first",
+            "body": "Once your receiving wallet is registered, you can proceed with inheritance execution.",
+            "action": "Open receiving wallet"
           }
         }
       },
@@ -1337,7 +1319,7 @@
       "label": "Add files",
       "action": "Upload",
       "actioning": "Uploading...",
-      "disabled": "You cannot add files after admin approval."
+      "disabled": "You can add files only when rejected. File uploads are disabled during admin review."
     },
     "modal": {
       "confirm": {

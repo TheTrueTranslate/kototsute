@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ref as storageRef, uploadBytes } from "firebase/storage";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
+import { FileList } from "../../features/shared/components/file-list";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
@@ -233,81 +234,11 @@ export function DeathClaimsPanel({
   };
 
   const hasClaim = Boolean(claim?.claim);
-  const canUploadFiles =
-    claim?.claim?.status === "SUBMITTED" || claim?.claim?.status === "ADMIN_REJECTED";
+  const canUploadFiles = claim?.claim?.status === "ADMIN_REJECTED";
   const canConfirm = claim?.claim?.status === "ADMIN_APPROVED" && !claim?.confirmedByMe;
   const isRejected = claim?.claim?.status === "ADMIN_REJECTED";
   const isConfirmed = claim?.claim?.status === "CONFIRMED";
 
-  const currentAction = (() => {
-    if (!hasClaim) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.submit.description"),
-        actionLabel: submitting
-          ? t("deathClaims.currentAction.submit.actioning")
-          : t("deathClaims.currentAction.submit.action"),
-        onAction: handleSubmit,
-        disabled: submitting
-      };
-    }
-    if (isRejected) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.resubmit.description"),
-        actionLabel: resubmitting
-          ? t("deathClaims.currentAction.resubmit.actioning")
-          : t("deathClaims.currentAction.resubmit.action"),
-        onAction: openResubmitDialog,
-        disabled: resubmitting
-      };
-    }
-    if (canConfirm) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.confirm.description"),
-        actionLabel: confirming
-          ? t("deathClaims.currentAction.confirm.actioning")
-          : t("deathClaims.currentAction.confirm.action"),
-        onAction: openConfirmDialog,
-        disabled: confirming
-      };
-    }
-    if (isConfirmed) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.confirmed.description"),
-        actionLabel: null,
-        onAction: null,
-        disabled: false
-      };
-    }
-    if (claim?.confirmedByMe) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.confirmedByMe.description"),
-        actionLabel: null,
-        onAction: null,
-        disabled: false
-      };
-    }
-    if (canUploadFiles) {
-      return {
-        title: t("deathClaims.currentAction.title"),
-        description: t("deathClaims.currentAction.uploading.description"),
-        actionLabel: null,
-        onAction: null,
-        disabled: false
-      };
-    }
-    return {
-      title: t("deathClaims.currentAction.title"),
-      description: t("deathClaims.currentAction.waiting.description"),
-      actionLabel: null,
-      onAction: null,
-      disabled: false
-    };
-  })();
   const renderFileUploadForm = (testId: string) => (
     <div className={styles.form} data-testid={testId}>
       <FormField label={t("deathClaims.upload.label")}>
@@ -350,24 +281,51 @@ export function DeathClaimsPanel({
     <>
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
-      <div className={styles.panel}>
-        <div className={styles.actionSummary}>
-          <div className={styles.actionTitle}>{currentAction.title}</div>
-          <div className={styles.actionBody}>{currentAction.description}</div>
-          {currentAction.actionLabel && currentAction.onAction ? (
-            <div className={styles.actionButtons}>
-              <Button
-                type="button"
-                onClick={currentAction.onAction}
-                disabled={currentAction.disabled}
-              >
-                {currentAction.actionLabel}
-              </Button>
-            </div>
-          ) : null}
-          {canUploadFiles ? renderFileUploadForm("death-claims-action-upload") : null}
+      {hasClaim ? (
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>{t("deathClaims.panel.files")}</h2>
+            <span className={styles.note}>{t("deathClaims.files.note")}</span>
+          </div>
+          <FileList
+            items={(claim?.files ?? []).map((file, index) => ({
+              id: file.fileId ?? `${file.fileName}-${index}`,
+              name: file.fileName,
+              meta: `${file.contentType} / ${formatBytes(file.size)}`,
+              action: file.fileId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenFile(file.fileId)}
+                  disabled={openingFileId === file.fileId}
+                  data-testid={`death-claims-file-open-${file.fileId}`}
+                  aria-label={
+                    openingFileId === file.fileId
+                      ? t("deathClaims.files.openingAria")
+                      : t("deathClaims.files.openAria")
+                  }
+                >
+                  <FileOpenIcon />
+                  {openingFileId === file.fileId
+                    ? t("deathClaims.files.opening")
+                    : t("deathClaims.files.open")}
+                </Button>
+              ) : null
+            }))}
+            emptyMessage={t("deathClaims.empty.noFiles")}
+          />
+
+          {canUploadFiles ? (
+            renderFileUploadForm("death-claims-files-upload")
+          ) : (
+            <div className={styles.muted}>{t("deathClaims.upload.disabled")}</div>
+          )}
         </div>
-        <div className={`${styles.panelHeader} ${styles.panelHeaderSpaced}`}>
+      ) : null}
+
+      <div className={styles.panel}>
+        <div className={styles.panelHeader}>
           <h2 className={styles.panelTitle}>{t("deathClaims.panel.status")}</h2>
           {hasClaim ? (
             <span className={styles.statusBadge}>
@@ -443,59 +401,6 @@ export function DeathClaimsPanel({
           </div>
         )}
       </div>
-
-      {hasClaim ? (
-        <div className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>{t("deathClaims.panel.files")}</h2>
-            <span className={styles.note}>{t("deathClaims.files.note")}</span>
-          </div>
-          {claim?.files?.length ? (
-            <div className={styles.fileList}>
-              {claim.files.map((file) => (
-                <div key={file.fileId} className={styles.fileRow}>
-                  <div>
-                    <div className={styles.fileName}>{file.fileName}</div>
-                    <div className={styles.fileMeta}>
-                      {file.contentType} / {formatBytes(file.size)}
-                    </div>
-                  </div>
-                  {file.fileId ? (
-                    <div className={styles.fileActions}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenFile(file.fileId)}
-                        disabled={openingFileId === file.fileId}
-                        data-testid={`death-claims-file-open-${file.fileId}`}
-                        aria-label={
-                          openingFileId === file.fileId
-                            ? t("deathClaims.files.openingAria")
-                            : t("deathClaims.files.openAria")
-                        }
-                      >
-                        <FileOpenIcon />
-                        {openingFileId === file.fileId
-                          ? t("deathClaims.files.opening")
-                          : t("deathClaims.files.open")}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className={styles.muted}>{t("deathClaims.empty.noFiles")}</div>
-          )}
-
-          {canUploadFiles ? (
-            renderFileUploadForm("death-claims-files-upload")
-          ) : (
-            <div className={styles.muted}>{t("deathClaims.upload.disabled")}</div>
-          )}
-        </div>
-      ) : null}
       {confirmDialogOpen ? (
         <div
           className={styles.modalOverlay}

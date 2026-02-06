@@ -1388,8 +1388,44 @@ export const casesRoutes = () => {
 
     const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
     const approval = approvalSnap.data() ?? {};
-    if (approval.status !== "SUBMITTED" || !approval.submittedTxHash) {
+    const submittedTxHash =
+      typeof approval.submittedTxHash === "string" ? approval.submittedTxHash : null;
+    if (approval.status !== "SUBMITTED" || !submittedTxHash) {
       return jsonError(c, 400, "NOT_READY", "相続実行の同意が完了していません");
+    }
+    const approvalTxResult = await fetchXrplTx(submittedTxHash);
+    if (!approvalTxResult.ok) {
+      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションを確認できません");
+    }
+    const approvalTx = approvalTxResult.tx as any;
+    const approvalValidated = Boolean(approvalTx?.validated);
+    const approvalResult =
+      typeof approvalTx?.meta?.TransactionResult === "string"
+        ? approvalTx.meta.TransactionResult
+        : null;
+    if (!approvalValidated) {
+      const lastLedgerRaw = approvalTx?.LastLedgerSequence;
+      const lastLedger =
+        typeof lastLedgerRaw === "number"
+          ? lastLedgerRaw
+          : typeof lastLedgerRaw === "string"
+            ? Number(lastLedgerRaw)
+            : NaN;
+      if (Number.isFinite(lastLedger)) {
+        const ledgerResult = await fetchXrplValidatedLedgerIndex();
+        if (ledgerResult.ok && ledgerResult.ledgerIndex >= lastLedger) {
+          return jsonError(
+            c,
+            400,
+            "NOT_READY",
+            "相続実行の同意トランザクションの期限が切れています"
+          );
+        }
+      }
+      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションが未検証です");
+    }
+    if (approvalResult && approvalResult !== "tesSUCCESS") {
+      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションが失敗しています");
     }
 
     const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);

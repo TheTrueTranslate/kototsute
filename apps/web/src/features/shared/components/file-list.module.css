@@ -1,0 +1,23 @@
+.fileList {
+  @apply mt-4 grid gap-3;
+}
+
+.fileRow {
+  @apply flex items-center justify-between rounded-xl border border-border/60 px-4 py-3;
+}
+
+.fileMain {
+  @apply min-w-0;
+}
+
+.fileName {
+  @apply truncate text-body font-medium text-foreground;
+}
+
+.fileMeta {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.fileActions {
+  @apply ml-3 flex items-center gap-2;
+}

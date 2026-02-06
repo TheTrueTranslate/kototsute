@@ -70,6 +70,57 @@
   @apply text-body-sm text-muted-foreground;
 }
 
+.heirStepperHeader {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.heirStepperCount {
+  @apply rounded-full border border-border bg-background px-3 py-1 text-meta font-medium text-foreground;
+}
+
+.heirStepperTrack {
+  @apply h-2 w-full overflow-hidden rounded-full bg-background;
+}
+
+.heirStepperFill {
+  @apply h-full rounded-full bg-foreground transition-all duration-300;
+}
+
+.heirStepperList {
+  @apply grid gap-2 sm:grid-cols-2;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.heirStepperItem {
+  @apply flex items-center gap-2 rounded-xl border border-border/70 bg-background/70 px-3 py-2;
+}
+
+.heirStepperItemDone {
+  @apply border-border bg-background;
+}
+
+.heirStepperItemActive {
+  @apply border-foreground bg-background;
+}
+
+.heirStepperNumber {
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted text-meta font-medium text-muted-foreground;
+}
+
+.heirStepperNumberActive {
+  @apply border-foreground bg-foreground text-background;
+}
+
+.heirStepperLabel {
+  @apply text-body-sm text-muted-foreground;
+}
+
+.heirStepperLabelActive {
+  @apply text-foreground;
+}
+
 .list {
   @apply flex flex-col gap-4;
 }
@@ -228,14 +279,6 @@
 
 .copyButton {
   @apply text-muted-foreground hover:text-foreground;
-}
-
-.amountGrid {
-  @apply grid gap-4 sm:grid-cols-2;
-}
-
-.amountField {
-  @apply flex items-end gap-2;
 }
 
 .walletVerifyGrid {
@@ -463,52 +506,12 @@
   @apply grid gap-4 md:grid-cols-2;
 }
 
+.signerActionPanel {
+  @apply grid gap-3 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
 .signerNote {
   @apply text-body-sm text-muted-foreground;
-}
-
-.signerMultiSign {
-  @apply grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
-}
-
-.signerMultiSignTitle {
-  @apply text-body-sm font-medium text-foreground;
-}
-
-.signerMultiSignBody {
-  @apply grid gap-2;
-}
-
-.signerMultiSignRow {
-  @apply grid gap-1;
-}
-
-.signerMultiSignLabel {
-  @apply text-meta text-muted-foreground;
-}
-
-.signerMultiSignValue {
-  @apply break-all text-body text-foreground;
-}
-
-.signerMultiSignList {
-  @apply grid gap-2;
-}
-
-.signerMultiSignItem {
-  @apply grid gap-0.5;
-}
-
-.signerMultiSignItemLabel {
-  @apply text-meta text-muted-foreground;
-}
-
-.signerMultiSignItemValue {
-  @apply break-all text-body text-foreground;
-}
-
-.signerMultiSignNote {
-  @apply text-meta text-muted-foreground;
 }
 
 .signerGuide {
@@ -570,18 +573,6 @@
 
 .signerTxValue {
   @apply break-all text-body text-foreground;
-}
-
-.signerTxJson {
-  @apply grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-3;
-}
-
-.signerTxJsonHeader {
-  @apply flex items-center justify-between gap-2;
-}
-
-.signerTxJsonBody {
-  @apply max-h-60 overflow-auto rounded-md bg-background p-2 text-[11px] text-foreground;
 }
 
 .signerActionBlock {

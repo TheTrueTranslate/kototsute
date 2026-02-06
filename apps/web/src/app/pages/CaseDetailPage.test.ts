@@ -452,11 +452,48 @@ describe("CaseDetailPage", () => {
     );
   });
 
-  it("renders next action banner in inheritance tab", async () => {
+  it("resolves heir flow step index in order", async () => {
+    const { resolveHeirFlowStepIndex } = await import("./CaseDetailPage");
+    expect(
+      resolveHeirFlowStepIndex({
+        hasHeirWallet: false,
+        hasDeathClaim: false,
+        hasSignature: false,
+        hasReceive: false
+      })
+    ).toBe(0);
+    expect(
+      resolveHeirFlowStepIndex({
+        hasHeirWallet: true,
+        hasDeathClaim: false,
+        hasSignature: false,
+        hasReceive: false
+      })
+    ).toBe(1);
+    expect(
+      resolveHeirFlowStepIndex({
+        hasHeirWallet: true,
+        hasDeathClaim: true,
+        hasSignature: false,
+        hasReceive: false
+      })
+    ).toBe(2);
+    expect(
+      resolveHeirFlowStepIndex({
+        hasHeirWallet: true,
+        hasDeathClaim: true,
+        hasSignature: true,
+        hasReceive: false
+      })
+    ).toBe(3);
+  });
+
+  it("hides legacy next action banner for heir flow", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
     const html = await render({
       initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -474,8 +511,83 @@ describe("CaseDetailPage", () => {
         files: []
       }
     });
-    expect(html).toContain("次のアクション");
-    expect(html).toContain("運営承認済み");
+    expect(html).not.toContain("次のアクション");
+    expect(html).toContain("STEP 2/4");
+    expect(html).not.toContain("相続実行の同意");
+  });
+
+  it("blocks inheritance flow until heir wallet is registered", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "WAITING",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("受取用ウォレットを登録");
+    expect(html).toContain("受取用ウォレットを開く");
+    expect(html).toContain("STEP 1/4");
+    expect(html).toContain("受取用ウォレットの登録が完了すると、相続実行に進めます。");
+    expect(html).not.toContain("相続実行の同意");
+  });
+
+  it("shows inheritance flow content after heir wallet is registered", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "WAITING",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("STEP 2/4");
+    expect(html).toContain("死亡診断書");
+    expect(html).not.toContain("相続実行の同意");
+    expect(html).not.toContain("受取用ウォレットを開く");
+  });
+
+  it("shows current death claim status text in death certificate block for heir", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "SUBMITTED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "WAITING",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).toContain("運営の確認を待っています。");
+    expect(html).not.toContain("提出状況の確認・再提出");
   });
 
   it("shows prepare guidance when some heirs are unverified", async () => {
@@ -496,6 +608,14 @@ describe("CaseDetailPage", () => {
     const html = await render({
       initialIsOwner: false,
       initialHeirs: caseHeirsData,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -528,6 +648,14 @@ describe("CaseDetailPage", () => {
     const html = await render({
       initialIsOwner: false,
       initialHeirs: caseHeirsData,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -547,6 +675,14 @@ describe("CaseDetailPage", () => {
 
     const html = await render({
       initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -558,8 +694,7 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("相続実行の同意");
-    expect(html).toContain("署名の流れ");
-    expect(html).toContain("MultiSignのしくみ（アドレス）");
+    expect(html).not.toContain("MultiSignのしくみ（アドレス）");
   });
 
   it("shows distribution section in inheritance tab", async () => {
@@ -568,6 +703,41 @@ describe("CaseDetailPage", () => {
 
     const html = await render({
       initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
+      initialDistribution: {
+        status: "PENDING",
+        totalCount: 1,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -581,12 +751,235 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("分配を実行");
   });
 
-  it("shows nft receive block", async () => {
+  it("shows distribution section and hides nft receive when receivable items are empty", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
 
     const html = await render({
       initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
+      initialDistribution: {
+        status: "PENDING",
+        totalCount: 0,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        escalationCount: 0
+      },
+      initialDistributionItems: [],
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("分配を実行");
+    expect(html).not.toContain("NFT受取");
+  });
+
+  it("keeps signature step when approval is submitted but not validated", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 2,
+        signaturesCount: 0,
+        requiredCount: 2,
+        signedByMe: false
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "PENDING",
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("分配を実行");
+  });
+
+  it("keeps signature step even when signer quorum is met but approval tx is not validated", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "PENDING",
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("分配を実行");
+  });
+
+  it("hides nft receive block when receivable items are empty", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).not.toContain("NFT受取");
+  });
+
+  it("shows nft receive block when receivable nft items exist", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
+      initialDistributionItems: [
+        {
+          itemId: "dist-1",
+          type: "NFT",
+          offerId: "offer-1",
+          heirUid: "heir",
+          status: "PENDING",
+          tokenId: "000ABC"
+        }
+      ],
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -600,12 +993,20 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("NFT受取");
   });
 
-  it("hides manual sign button in consent section", async () => {
+  it("shows only prepare action before approval tx is generated", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
 
     const html = await render({
       initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
@@ -617,13 +1018,111 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).not.toContain("署名を生成");
-    expect(html).toContain("署名を送信");
+    expect(html).toContain("相続同意の準備を始める");
+    expect(html).not.toContain('placeholder="s..."');
   });
 
-  it("formats signer from label as legacy wallet", async () => {
-    const { resolveSignerFromLabel } = await import("./CaseDetailPage");
-    expect(resolveSignerFromLabel()).toBe("cases.detail.signer.fromLabel");
-    expect(resolveSignerFromLabel()).toBe("cases.detail.signer.fromLabel");
+  it("renders a single signer action panel in prepared state", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "VERIFIED" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 0,
+        requiredCount: 1,
+        signedByMe: false
+      },
+      initialApprovalTx: {
+        status: "PREPARED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: null,
+        networkStatus: null,
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html.split('data-testid="signer-action-panel"').length - 1).toBe(1);
+    expect(html).toContain("署名を送信");
+    expect(html).not.toContain("相続同意の準備を始める");
+  });
+
+  it("hides account and amount fields plus signer copy actions in signer details", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 0,
+        requiredCount: 1,
+        signedByMe: false
+      },
+      initialApprovalTx: {
+        status: "PREPARED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: null,
+        networkStatus: null,
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).not.toContain('data-testid="signer-multisign-help-button"');
+    expect(html).not.toContain("送金元：被相続人の相続用ウォレット");
+    expect(html).not.toContain("送金先：システムのウォレット");
+    expect(html).not.toContain("Amount (drops)");
+    expect(html).not.toContain("Amount (XRP)");
+    expect(html).not.toContain("送信Txをコピー");
+    expect(html).not.toContain("送金元をコピー");
+    expect(html).not.toContain("送金先をコピー");
+    expect(html).not.toContain("Memoをコピー");
   });
 
   it("decides whether to poll approval status", async () => {
@@ -727,22 +1226,6 @@ describe("CaseDetailPage", () => {
     expect(reason).toEqual({ key: "cases.detail.distribution.disabled.completed" });
   });
 
-  it("builds signer entry display list with roles", async () => {
-    const { buildSignerEntryDisplayList } = await import("./CaseDetailPage");
-    const result = buildSignerEntryDisplayList({
-      entries: [
-        { account: "rSystem", weight: 2 },
-        { account: "rOther", weight: 1 },
-        { account: "rMe", weight: 1 }
-      ],
-      systemSignerAddress: "rSystem",
-      heirWalletAddress: "rMe"
-    });
-    expect(result[0].label).toBe("cases.detail.signer.labels.system");
-    expect(result[1].label).toBe("cases.detail.signer.labels.mine");
-    expect(result[2].label).toBe("cases.detail.signer.labels.heir");
-  });
-
   it("shows wallet status badge in heirs tab", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=heirs");
@@ -779,6 +1262,7 @@ describe("CaseDetailPage", () => {
     searchParams = new URLSearchParams("tab=wallet");
 
     const html = await render({ initialIsOwner: false });
+    expect(html).not.toContain("残高確認");
     expect(html).toContain("登録/変更");
     expect(html).toContain("所有確認");
   });
@@ -809,6 +1293,7 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
     expect(html).toContain("ウォレットアドレス");
     expect(html).toContain("rHeir");
+    expect(html).toContain("https://testnet.xrpl.org/accounts/rHeir");
   });
 
   it("shows wallet status label in wallet tab", async () => {
