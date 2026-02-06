@@ -11,6 +11,12 @@ export const assetCreateSchema = z.object({
     .refine((value) => isXrpAddress(value), "validation.asset.address.invalid")
 });
 
+export const assetLabelUpdateSchema = z.object({
+  label: z
+    .string({ required_error: "validation.asset.label.required" })
+    .min(1, "validation.asset.label.required")
+});
+
 const numericStringSchema = z
   .string({ required_error: "validation.asset.numeric" })
   .regex(/^\d+(\.\d+)?$/, "validation.asset.numeric");

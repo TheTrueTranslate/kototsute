@@ -702,6 +702,11 @@
       },
       "overview": {
         "title": "Overview",
+        "label": "Asset name",
+        "labelUpdate": "Update asset name",
+        "labelUpdating": "Updating...",
+        "labelUpdateSuccess": "Asset name updated",
+        "labelUpdateError": "Failed to update asset name",
         "createdAt": "Registered",
         "updatedAt": "Updated",
         "status": "Status"
@@ -724,6 +729,7 @@
         "inheritanceTitle": "Planned inheritance",
         "balanceMeta": "Balance {{balance}} XRP / Reserve {{reserve}} XRP",
         "tokensLabel": "Tokens",
+        "none": "None",
         "tokenMeta": "Balance {{balance}} / Reserve {{reserve}}",
         "plannedLabel": "Planned",
         "syncHint": "Sync wallet info to see this section.",
@@ -760,6 +766,7 @@
         "actor": "Actor: {{name}}",
         "types": {
           "created": "Registered",
+          "updated": "Asset name updated",
           "deleted": "Deleted",
           "reserve": "Reserve",
           "verifyRequested": "Verification started",

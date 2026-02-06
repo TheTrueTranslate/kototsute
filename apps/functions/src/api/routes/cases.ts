@@ -4,6 +4,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
 import {
   assetCreateSchema,
+  assetLabelUpdateSchema,
   assetReserveSchema,
   createNftSellOffer,
   createLocalXrplWallet,
@@ -2406,6 +2407,57 @@ export const casesRoutes = () => {
       .map((entry) => ({ ...entry, createdAt: formatDate(entry.createdAt) }));
 
     return jsonOk(c, merged);
+  });
+
+  app.patch(":caseId/assets/:assetId", async (c) => {
+    const deps = c.get("deps");
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const assetId = c.req.param("assetId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = assetLabelUpdateSchema.safeParse({
+      label: body?.label
+    });
+    if (!parsed.success) {
+      return jsonError(
+        c,
+        400,
+        "VALIDATION_ERROR",
+        parsed.error.issues[0]?.message ?? "入力が不正です"
+      );
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const assetRef = db.collection(`cases/${caseId}/assets`).doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Asset not found");
+    }
+
+    await assetRef.set(
+      {
+        label: parsed.data.label,
+        updatedAt: deps.now()
+      },
+      { merge: true }
+    );
+    await appendAssetHistory(assetRef, {
+      type: "ASSET_UPDATED",
+      title: "資産名を更新しました",
+      detail: parsed.data.label,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null
+    });
+    return jsonOk(c, { assetId, label: parsed.data.label });
   });
 
   app.patch(":caseId/assets/:assetId/reserve", async (c) => {

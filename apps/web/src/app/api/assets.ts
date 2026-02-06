@@ -82,6 +82,18 @@ export const createAsset = async (caseId: string, input: { label: string; addres
   return result.data as AssetCreateResponse;
 };
 
+export const updateAssetLabel = async (
+  caseId: string,
+  assetId: string,
+  input: { label: string }
+) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/assets/${assetId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+  return result.data as { assetId: string; label: string };
+};
+
 export const listAssets = async (caseId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/assets`, { method: "GET" });
   return result.data as AssetListItem[];

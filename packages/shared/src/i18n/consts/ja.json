@@ -702,6 +702,11 @@
       },
       "overview": {
         "title": "基本情報",
+        "label": "資産名",
+        "labelUpdate": "資産名を更新",
+        "labelUpdating": "更新中...",
+        "labelUpdateSuccess": "資産名を更新しました",
+        "labelUpdateError": "資産名の更新に失敗しました",
         "createdAt": "登録日",
         "updatedAt": "更新日",
         "status": "ステータス"
@@ -724,6 +729,7 @@
         "inheritanceTitle": "相続予定数",
         "balanceMeta": "残高 {{balance}} XRP / 留保 {{reserve}} XRP",
         "tokensLabel": "トークン",
+        "none": "なし",
         "tokenMeta": "残高 {{balance}} / 留保 {{reserve}}",
         "plannedLabel": "相続予定",
         "syncHint": "ウォレット情報を同期すると表示されます。",
@@ -760,6 +766,7 @@
         "actor": "担当者: {{name}}",
         "types": {
           "created": "登録",
+          "updated": "資産名更新",
           "deleted": "削除",
           "reserve": "留保",
           "verifyRequested": "検証開始",

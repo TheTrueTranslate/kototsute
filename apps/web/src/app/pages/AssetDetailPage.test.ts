@@ -90,6 +90,41 @@ vi.mock("../../features/shared/components/ui/dialog", () => ({
     React.createElement("div", null, children)
 }));
 
+const defaultInitialAsset = {
+  assetId: "asset-1",
+  label: "XRP Wallet",
+  address: "rXXXX",
+  createdAt: "2024-01-01",
+  updatedAt: "2024-01-02",
+  verificationStatus: "UNVERIFIED",
+  verificationChallenge: null,
+  verificationAddress: "rVerify",
+  reserveXrp: "0",
+  reserveTokens: [],
+  reserveNfts: ["00090000AABBCC"],
+  xrpl: {
+    status: "ok",
+    balanceXrp: "10",
+    ledgerIndex: 100,
+    tokens: [
+      {
+        currency: "USD",
+        issuer: "rIssuer",
+        balance: "5"
+      }
+    ],
+    nfts: [
+      {
+        tokenId: "00090000AABBCC",
+        issuer: "rIssuer",
+        uri: "https://example.com/nft/1"
+      }
+    ],
+    syncedAt: "2024-01-03T00:00:00.000Z"
+  },
+  syncLogs: []
+};
+
 const render = async (props?: Record<string, unknown>) => {
   const { default: AssetDetailPage } = await import("./AssetDetailPage");
   return renderToString(
@@ -97,40 +132,7 @@ const render = async (props?: Record<string, unknown>) => {
       MemoryRouter,
       null,
       React.createElement(AssetDetailPage as any, {
-        initialAsset: {
-          assetId: "asset-1",
-          label: "XRP Wallet",
-          address: "rXXXX",
-          createdAt: "2024-01-01",
-          updatedAt: "2024-01-02",
-          verificationStatus: "UNVERIFIED",
-          verificationChallenge: null,
-          verificationAddress: "rVerify",
-          reserveXrp: "0",
-          reserveTokens: [],
-          reserveNfts: ["00090000AABBCC"],
-          xrpl: {
-            status: "ok",
-            balanceXrp: "10",
-            ledgerIndex: 100,
-            tokens: [
-              {
-                currency: "USD",
-                issuer: "rIssuer",
-                balance: "5"
-              }
-            ],
-            nfts: [
-              {
-                tokenId: "00090000AABBCC",
-                issuer: "rIssuer",
-                uri: "https://example.com/nft/1"
-              }
-            ],
-            syncedAt: "2024-01-03T00:00:00.000Z"
-          },
-          syncLogs: []
-        },
+        initialAsset: defaultInitialAsset,
         ...(props ?? {})
       })
     )
@@ -138,6 +140,14 @@ const render = async (props?: Record<string, unknown>) => {
 };
 
 describe("AssetDetailPage", () => {
+  it("highlights verify action only when unverified and unlocked", async () => {
+    const { shouldHighlightVerifyOwnership } = await import("./AssetDetailPage");
+    expect(shouldHighlightVerifyOwnership("UNVERIFIED", false)).toBe(true);
+    expect(shouldHighlightVerifyOwnership("PENDING", false)).toBe(true);
+    expect(shouldHighlightVerifyOwnership("VERIFIED", false)).toBe(false);
+    expect(shouldHighlightVerifyOwnership("UNVERIFIED", true)).toBe(false);
+  });
+
   it("hides edit actions when locked", async () => {
     caseData = { ...caseData, stage: "WAITING", assetLockStatus: "LOCKED" };
     const html = await render({
@@ -151,6 +161,12 @@ describe("AssetDetailPage", () => {
     const html = await render();
     expect(html).toContain("XRP Wallet");
     expect(html).toContain("rXXXX");
+  });
+
+  it("renders asset name edit controls", async () => {
+    const html = await render();
+    expect(html).toContain("資産名");
+    expect(html).toContain("資産名を更新");
   });
 
   it("shows combined inheritance and reserve section", async () => {
@@ -172,6 +188,42 @@ describe("AssetDetailPage", () => {
     const html = await render();
     expect(html).toContain("ウォレット情報");
     expect(html).toContain("相続予定数");
+  });
+
+  it("shows none in inheritance section when token and nft are empty", async () => {
+    const html = await render({
+      initialAsset: {
+        ...defaultInitialAsset,
+        reserveNfts: [],
+        xrpl: {
+          ...defaultInitialAsset.xrpl,
+          tokens: [],
+          nfts: []
+        }
+      }
+    });
+    const inheritanceIndex = html.indexOf("相続予定数");
+    expect(inheritanceIndex).toBeGreaterThan(-1);
+
+    const inheritanceHtml = html.slice(inheritanceIndex);
+    expect(inheritanceHtml).toContain("トークン");
+    expect(inheritanceHtml).toContain("NFT");
+    expect(inheritanceHtml).not.toContain("残高 0 / 留保 0");
+    expect((inheritanceHtml.match(/なし/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("moves sync action and wallet address into wallet section", async () => {
+    const html = await render();
+    const headerMatch = html.match(/<header class="[^"]*">([\s\S]*?)<\/header>/);
+    const headerHtml = headerMatch?.[1] ?? "";
+    expect(headerHtml).not.toContain("最新の情報を同期");
+    expect(headerHtml).not.toContain("rXXXX");
+
+    const walletIndex = html.indexOf("ウォレット情報");
+    expect(walletIndex).toBeGreaterThan(-1);
+    const htmlAfterWallet = html.slice(walletIndex);
+    expect(htmlAfterWallet).toContain("最新の情報を同期");
+    expect(htmlAfterWallet).toContain("rXXXX");
   });
 
   it("shows actor in history items", async () => {

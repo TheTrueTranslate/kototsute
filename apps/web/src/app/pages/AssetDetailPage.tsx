@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
@@ -24,6 +24,7 @@ import {
   getAsset,
   getAssetHistory,
   requestVerifyChallenge,
+  updateAssetLabel,
   updateAssetReserve,
   type AssetDetail,
   type AssetHistoryItem,
@@ -63,6 +64,11 @@ type AssetDetailPageProps = {
   initialTab?: TabKey;
   initialCaseData?: CaseSummary | null;
 };
+
+export const shouldHighlightVerifyOwnership = (
+  verificationStatus: AssetDetail["verificationStatus"],
+  isLocked: boolean
+) => verificationStatus !== "VERIFIED" && !isLocked;
 
 export default function AssetDetailPage({
   initialAsset,
@@ -108,6 +114,10 @@ export default function AssetDetailPage({
   const [reserveSaving, setReserveSaving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [reserveSuccess, setReserveSuccess] = useState<string | null>(null);
+  const [labelInput, setLabelInput] = useState(initialAsset?.label ?? "");
+  const [labelSaving, setLabelSaving] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const [labelSuccess, setLabelSuccess] = useState<string | null>(null);
 
   const verificationLabels: Record<AssetDetail["verificationStatus"], string> = {
     UNVERIFIED: t("assets.detail.status.unverified"),
@@ -131,6 +141,7 @@ export default function AssetDetailPage({
 
   const historyTypeLabels: Record<string, string> = {
     ASSET_CREATED: t("assets.detail.history.types.created"),
+    ASSET_UPDATED: t("assets.detail.history.types.updated"),
     ASSET_DELETED: t("assets.detail.history.types.deleted"),
     ASSET_RESERVE_UPDATED: t("assets.detail.history.types.reserve"),
     ASSET_VERIFY_REQUESTED: t("assets.detail.history.types.verifyRequested"),
@@ -141,6 +152,9 @@ export default function AssetDetailPage({
 
   const title = useMemo(() => asset?.label ?? t("assets.detail.title"), [asset?.label, t]);
   const isLocked = caseData?.assetLockStatus === "LOCKED";
+  const highlightVerifyOwnership = asset
+    ? shouldHighlightVerifyOwnership(asset.verificationStatus, isLocked)
+    : false;
   const memoValue = asset?.verificationChallenge ?? challenge?.challenge ?? "";
   const memoDisplay =
     memoValue ||
@@ -198,9 +212,11 @@ export default function AssetDetailPage({
     if (availableNfts.length === 0) return 0;
     return availableNfts.filter((nft) => !reserveNftSet.has(nft.tokenId)).length;
   }, [availableNfts, reserveNftSet]);
+  const hasNftAssets = availableNfts.length > 0 || reserveNfts.length > 0;
 
   useEffect(() => {
     if (!asset) return;
+    setLabelInput(asset.label ?? "");
     setReserveXrpInput(asset.reserveXrp ?? "0");
     setReserveTokens(Array.isArray(asset.reserveTokens) ? asset.reserveTokens : []);
     setReserveNfts(Array.isArray(asset.reserveNfts) ? asset.reserveNfts : []);
@@ -385,6 +401,32 @@ export default function AssetDetailPage({
     }
   };
 
+  const handleSaveLabel = async () => {
+    if (!caseId || !assetId) return;
+    const nextLabel = labelInput.trim();
+    if (!nextLabel) {
+      setLabelError("validation.asset.label.required");
+      setLabelSuccess(null);
+      return;
+    }
+    setLabelSaving(true);
+    setLabelError(null);
+    setLabelSuccess(null);
+    try {
+      const data = await updateAssetLabel(caseId, assetId, { label: nextLabel });
+      setAsset((prev) => (prev ? { ...prev, label: data.label } : prev));
+      setLabelInput(data.label);
+      setLabelSuccess("assets.detail.overview.labelUpdateSuccess");
+      if (tab === "history") {
+        await loadHistory();
+      }
+    } catch (err: any) {
+      setLabelError(err?.message ?? "assets.detail.overview.labelUpdateError");
+    } finally {
+      setLabelSaving(false);
+    }
+  };
+
   const resolveVerifyChallenge = () => {
     if (challenge) return challenge;
     if (asset?.verificationChallenge) {
@@ -467,13 +509,6 @@ export default function AssetDetailPage({
         <div className={styles.headerRow}>
           <div className={styles.headerMain}>
             <h1 className="text-title">{title}</h1>
-            {asset ? <div className={styles.address}>{asset.address}</div> : null}
-          </div>
-          <div className={styles.headerActions}>
-            <Button size="sm" variant="ghost" onClick={handleSync} disabled={syncing || isLocked}>
-              <RefreshCw />
-              {syncing ? t("assets.detail.actions.syncing") : t("assets.detail.actions.sync")}
-            </Button>
           </div>
         </div>
       </header>
@@ -495,6 +530,26 @@ export default function AssetDetailPage({
                 <div className={styles.cardHeader}>
                   <h2 className={styles.cardTitle}>{t("assets.detail.overview.title")}</h2>
                 </div>
+                {labelError ? <FormAlert variant="error">{t(labelError)}</FormAlert> : null}
+                {labelSuccess ? <FormAlert variant="success">{t(labelSuccess)}</FormAlert> : null}
+                <div className={styles.labelEditRow}>
+                  <FormField label={t("assets.detail.overview.label")} className={styles.labelField}>
+                    <Input
+                      value={labelInput}
+                      onChange={(event) => setLabelInput(event.target.value)}
+                      disabled={isLocked || labelSaving}
+                    />
+                  </FormField>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveLabel}
+                    disabled={isLocked || labelSaving || labelInput.trim().length === 0}
+                  >
+                    {labelSaving
+                      ? t("assets.detail.overview.labelUpdating")
+                      : t("assets.detail.overview.labelUpdate")}
+                  </Button>
+                </div>
                 <div className={styles.metaGrid}>
                   <div>
                     <div className={styles.metaLabel}>{t("assets.detail.overview.createdAt")}</div>
@@ -513,11 +568,13 @@ export default function AssetDetailPage({
                         </span>
                         {asset.verificationStatus !== "VERIFIED" ? (
                           <Button
-                            size="sm"
-                            variant="secondary"
+                            size={highlightVerifyOwnership ? "default" : "sm"}
+                            variant={highlightVerifyOwnership ? "default" : "secondary"}
+                            className={highlightVerifyOwnership ? styles.verifyOwnershipButton : undefined}
                             onClick={() => setVerifyOpen(true)}
                             disabled={isLocked}
                           >
+                            {highlightVerifyOwnership ? <ShieldCheck /> : null}
                             {t("assets.detail.actions.verifyOwnership")}
                           </Button>
                         ) : null}
@@ -529,13 +586,25 @@ export default function AssetDetailPage({
 
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <h2 className={styles.cardTitle}>{t("assets.detail.wallet.title")}</h2>
-                  <span className={styles.metaHint}>
-                    {t("assets.detail.wallet.lastSynced", {
-                      date: formatDate(asset.xrpl?.syncedAt)
-                    })}
-                  </span>
+                  <div className={styles.walletHeaderMain}>
+                    <h2 className={styles.cardTitle}>{t("assets.detail.wallet.title")}</h2>
+                    <span className={styles.metaHint}>
+                      {t("assets.detail.wallet.lastSynced", {
+                        date: formatDate(asset.xrpl?.syncedAt)
+                      })}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleSync}
+                    disabled={syncing || isLocked}
+                  >
+                    <RefreshCw />
+                    {syncing ? t("assets.detail.actions.syncing") : t("assets.detail.actions.sync")}
+                  </Button>
                 </div>
+                <div className={styles.address}>{asset.address}</div>
                 {asset.xrpl ? (
                   asset.xrpl.status === "ok" ? (
                     <div className={styles.xrplGrid}>
@@ -618,7 +687,7 @@ export default function AssetDetailPage({
                             </div>
                             {inheritanceTokens.length === 0 ? (
                               <div className={styles.emptyText}>
-                                {t("assets.detail.wallet.emptyTokens")}
+                                {t("assets.detail.reserve.none")}
                               </div>
                             ) : (
                               <div className={styles.tokenList}>
@@ -654,15 +723,23 @@ export default function AssetDetailPage({
                             <div className={styles.metaLabel}>
                               {t("assets.detail.reserve.nftLabel")}
                             </div>
-                            <div className={styles.inheritanceValue}>
-                              {inheritanceNftCount}
-                            </div>
-                            <div className={styles.inheritanceMeta}>
-                              {t("assets.detail.reserve.nftMeta", {
-                                balance: availableNfts.length,
-                                reserve: reserveNfts.length
-                              })}
-                            </div>
+                            {hasNftAssets ? (
+                              <>
+                                <div className={styles.inheritanceValue}>
+                                  {inheritanceNftCount}
+                                </div>
+                                <div className={styles.inheritanceMeta}>
+                                  {t("assets.detail.reserve.nftMeta", {
+                                    balance: availableNfts.length,
+                                    reserve: reserveNfts.length
+                                  })}
+                                </div>
+                              </>
+                            ) : (
+                              <div className={styles.emptyText}>
+                                {t("assets.detail.reserve.none")}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
