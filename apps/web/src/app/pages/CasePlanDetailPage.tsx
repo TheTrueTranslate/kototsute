@@ -108,12 +108,6 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const statusLabels: Record<string, string> = {
-    DRAFT: t("plans.status.draft"),
-    SHARED: t("plans.status.shared"),
-    INACTIVE: t("plans.status.inactive")
-  };
-
   const formatDate = (value: string | null | undefined) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -240,9 +234,6 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
             <h1 className="text-title">{title}</h1>
             {plan ? (
               <div className={styles.headerMeta}>
-                <span className={styles.statusBadge}>
-                  {statusLabels[plan.status] ?? plan.status}
-                </span>
                 <span className={styles.metaText}>
                   {t("plans.detail.updatedAt", { date: formatDate(plan.updatedAt) })}
                 </span>

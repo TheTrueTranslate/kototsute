@@ -218,7 +218,8 @@
             "body": "最初の指図を作成できます。"
           }
         },
-        "updatedAt": "更新: {{date}}"
+        "assetCount": "資産: {{count}}件",
+        "heirCount": "相続人: {{count}}人"
       },
       "deathClaims": {
         "title": "相続実行",
@@ -800,7 +801,7 @@
       "prepare": "準備・注意",
       "method": "方式選択",
       "transfer": "送金実行/入力",
-      "verify": "送金検証"
+      "verify": "送金完了"
     },
     "completed": "資産ロックが完了しました。{{seconds}}秒でケース詳細に戻ります。",
     "validation": {
@@ -831,8 +832,6 @@
     "planPreview": {
       "title": "指図プレビュー",
       "empty": "指図がありません",
-      "statusInactive": "停止中",
-      "statusActive": "作成中",
       "rulesTitle": "分配ルール",
       "rulesEmpty": "分配ルールが未設定です",
       "allocationsEmpty": "配分が未設定です",
@@ -918,8 +917,7 @@
       }
     },
     "transfer": {
-      "hint": "方式Aは手動送金/検証、方式Bは自動送金（RegularKey確認後）です。",
-      "autoTransferNote": "自動送金を実行すると戻れません",
+      "hint": "方式Bは自動送金（RegularKey確認後）です。",
       "emptyTargets": "送金対象がありません",
       "type": {
         "token": "トークン送金",
@@ -941,14 +939,14 @@
       }
     },
     "verify": {
-      "title": "送金検証の結果",
+      "title": "送金完了の結果",
       "balanceTitle": "ウォレット残高 (XRP)",
       "reload": "再取得",
       "note": "反映に時間がかかる場合があります。必要に応じて再取得してください。",
       "loadingBalances": "残高を取得中...",
       "destination": "送金先",
       "source": "送金元",
-      "empty": "送金検証の結果がありません"
+      "empty": "送金完了の結果がありません"
     },
     "transferDialog": {
       "title": "アプリで送金",
@@ -974,7 +972,7 @@
     },
     "autoTransferDialog": {
       "title": "自動送金を実行します",
-      "description": "自動送金を実行すると戻れません。内容を確認のうえ実行してください。",
+      "description": "内容を確認のうえ実行してください。",
       "confirm": "実行する"
     },
     "heir": {
@@ -983,11 +981,6 @@
     }
   },
   "plans": {
-    "status": {
-      "draft": "作成中",
-      "shared": "有効",
-      "inactive": "無効"
-    },
     "new": {
       "title": "指図作成",
       "form": {

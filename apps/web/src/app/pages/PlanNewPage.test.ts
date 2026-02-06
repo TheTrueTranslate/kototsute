@@ -36,7 +36,6 @@ describe("PlanNewPage", () => {
         {
           planId: "plan-1",
           title: "指図A",
-          status: "DRAFT",
           sharedAt: null,
           updatedAt: "2024-01-01T00:00:00.000Z"
         }
@@ -54,14 +53,12 @@ describe("PlanNewPage", () => {
         {
           planId: "plan-old",
           title: "指図A",
-          status: "DRAFT",
           sharedAt: null,
           updatedAt: "2024-01-01T00:00:00.000Z"
         },
         {
           planId: "plan-new",
           title: "指図A",
-          status: "DRAFT",
           sharedAt: null,
           updatedAt: "2024-02-01T00:00:00.000Z"
         }
@@ -79,14 +76,12 @@ describe("PlanNewPage", () => {
         {
           planId: "plan-old",
           title: "指図A",
-          status: "DRAFT",
           sharedAt: null,
           updatedAt: "2024-01-01T00:00:00.000Z"
         },
         {
           planId: "plan-new",
           title: "指図B",
-          status: "DRAFT",
           sharedAt: null,
           updatedAt: "2024-02-01T00:00:00.000Z"
         }

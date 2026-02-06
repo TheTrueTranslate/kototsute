@@ -39,6 +39,6 @@ describe("shouldStartAssetLock", () => {
 
   it("forces transfer step index when uiStep is earlier", () => {
     const lockAtMethod: AssetLockState = { ...baseLock, uiStep: 2 };
-    expect(resolveStartStepIndex(lockAtMethod, 2)).toBe(2);
+    expect(resolveStartStepIndex(lockAtMethod, 1)).toBe(1);
   });
 });

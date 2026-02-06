@@ -43,7 +43,7 @@ it("does not show navigation buttons on the first step", async () => {
   expect(html).not.toContain("次へ");
 });
 
-it("shows back button with outline style on later steps", async () => {
+it("does not show back button on later steps", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const html = renderToString(
     React.createElement(
@@ -52,12 +52,11 @@ it("shows back button with outline style on later steps", async () => {
       React.createElement(AssetLockPage, { initialStep: 1 })
     )
   );
-  expect(html).toContain("戻る");
-  expect(html).toContain("border-input");
-  expect(html).toContain('data-variant="back"');
+  expect(html).not.toContain("戻る");
+  expect(html).not.toContain('data-variant="back"');
 });
 
-it("shows plan previews and confirm button for owner", async () => {
+it("shows plan previews and start button for owner", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const heirs: PlanHeir[] = [
     { uid: "heir-1", email: "a@example.com", relationLabel: "長男", relationOther: null },
@@ -88,14 +87,12 @@ it("shows plan previews and confirm button for owner", async () => {
           {
             planId: "plan-1",
             title: "分配プランA",
-            status: "DRAFT",
             sharedAt: null,
             updatedAt: "2024-01-01"
           },
           {
             planId: "plan-2",
             title: "分配プランB",
-            status: "DRAFT",
             sharedAt: null,
             updatedAt: "2024-01-02"
           }
@@ -117,7 +114,7 @@ it("shows plan previews and confirm button for owner", async () => {
   expect(html).toContain("分配ルール");
   expect(html).toContain("長男");
   expect(html).toContain("60%");
-  expect(html).toContain("確認しました");
+  expect(html).toContain("ロックを開始");
 });
 
 it("shows token and nft allocations in plan preview", async () => {
@@ -156,7 +153,6 @@ it("shows token and nft allocations in plan preview", async () => {
           {
             planId: "plan-1",
             title: "分配プランA",
-            status: "DRAFT",
             sharedAt: null,
             updatedAt: "2024-01-01"
           }
@@ -175,7 +171,7 @@ it("shows token and nft allocations in plan preview", async () => {
   expect(html).toContain("未割当");
 });
 
-it("disables confirm when no active plans", async () => {
+it("disables start when no active plans", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const html = renderToString(
     React.createElement(
@@ -189,7 +185,7 @@ it("disables confirm when no active plans", async () => {
   );
   expect(html).toContain("相続対象の指図がありません");
   expect(html.indexOf("相続対象の指図がありません")).toBeLessThan(html.indexOf("準備・注意"));
-  expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>確認しました/);
+  expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>ロックを開始/);
 });
 
 it("disables start when a plan has no heirs", async () => {
@@ -200,12 +196,11 @@ it("disables start when a plan has no heirs", async () => {
       null,
       React.createElement(AssetLockPage, {
         initialIsOwner: true,
-        initialStep: 1,
+        initialStep: 0,
         initialPlans: [
           {
             planId: "plan-1",
             title: "指図A",
-            status: "DRAFT",
             sharedAt: null,
             updatedAt: "2024-01-01"
           }
@@ -215,17 +210,17 @@ it("disables start when a plan has no heirs", async () => {
     )
   );
   expect(html).toContain("相続人が未設定の指図があります");
-  expect(html.indexOf("相続人が未設定の指図があります")).toBeLessThan(html.indexOf("方式選択"));
+  expect(html.indexOf("相続人が未設定の指図があります")).toBeLessThan(html.indexOf("準備・注意"));
   expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>ロックを開始/);
 });
 
-it("shows tx input per asset item", async () => {
+it("shows method progress instead of tx input on transfer step", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
-    method: "A",
+    method: "B",
     uiStep: 3,
-    methodStep: null,
+    methodStep: "REGULAR_KEY_SET",
     wallet: { address: "rDest" },
     items: [
       {
@@ -247,11 +242,12 @@ it("shows tx input per asset item", async () => {
       React.createElement(AssetLockPage, {
         initialLock: lock,
         initialStep: 2,
-        initialMethod: "A"
+        initialMethod: "B"
       })
     )
   );
-  expect(html).toContain("TX Hash");
+  expect(html).toContain("RegularKeyを設定");
+  expect(html).not.toContain("TX Hash");
 });
 
 it("shows balances on verify step", async () => {
@@ -330,13 +326,13 @@ it("shows pending message when account is not found", async () => {
   expect(html).toContain("反映待ち");
 });
 
-it("shows transfer type labels for XRP and token", async () => {
+it("does not render manual transfer labels in method B flow", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
-    method: "A",
+    method: "B",
     uiStep: 3,
-    methodStep: null,
+    methodStep: "REGULAR_KEY_SET",
     wallet: { address: "rDest" },
     items: [
       {
@@ -368,15 +364,15 @@ it("shows transfer type labels for XRP and token", async () => {
       React.createElement(AssetLockPage, {
         initialLock: lock,
         initialStep: 2,
-        initialMethod: "A"
+        initialMethod: "B"
       })
     )
   );
-  expect(html).toContain("XRP送金");
-  expect(html).toContain("トークン送金");
+  expect(html).not.toContain("XRP送金");
+  expect(html).not.toContain("トークン送金");
 });
 
-it("shows manual and automatic transfer hint", async () => {
+it("shows method B transfer hint", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
@@ -397,8 +393,8 @@ it("shows manual and automatic transfer hint", async () => {
       })
     )
   );
-  expect(html).toContain("方式Aは手動送金");
   expect(html).toContain("方式Bは自動送金");
+  expect(html).not.toContain("方式Aは手動送金");
 });
 
 it("shows auto transfer warning dialog when opened", async () => {
@@ -423,7 +419,7 @@ it("shows auto transfer warning dialog when opened", async () => {
       })
     )
   );
-  expect(html).toContain("自動送金を実行すると戻れません");
+  expect(html).not.toContain("自動送金を実行すると戻れません");
 });
 
 it("shows regular key verification statuses", async () => {
@@ -485,13 +481,13 @@ it("hides back button after auto transfer completes", async () => {
   expect(html).not.toContain("戻る");
 });
 
-it("shows empty state when no transfer items", async () => {
+it("shows method progress when no transfer items", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
-    method: "A",
+    method: "B",
     uiStep: 3,
-    methodStep: null,
+    methodStep: "REGULAR_KEY_SET",
     wallet: { address: "rDest" },
     items: []
   };
@@ -502,11 +498,12 @@ it("shows empty state when no transfer items", async () => {
       React.createElement(AssetLockPage, {
         initialLock: lock,
         initialStep: 2,
-        initialMethod: "A"
+        initialMethod: "B"
       })
     )
   );
-  expect(html).toContain("送金対象がありません");
+  expect(html).toContain("RegularKeyを設定");
+  expect(html).not.toContain("送金対象がありません");
 });
 
 it("shows method B progress steps", async () => {
@@ -534,7 +531,7 @@ it("shows method B progress steps", async () => {
   expect(html).toContain("自動送金");
 });
 
-it("shows return action when method step is AUTO_TRANSFER", async () => {
+it("does not show return action when method step is AUTO_TRANSFER", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
@@ -555,7 +552,8 @@ it("shows return action when method step is AUTO_TRANSFER", async () => {
       })
     )
   );
-  expect(html).toContain("RegularKeyに戻る");
+  expect(html).not.toContain("RegularKeyに戻る");
+  expect(html).toContain("自動送金を実行");
 });
 
 it("shows verification results on the final step", async () => {
@@ -590,9 +588,13 @@ it("shows verification results on the final step", async () => {
       })
     )
   );
-  expect(html).toContain("送金検証の結果");
+  expect(html).toContain("送金完了");
+  expect(html).not.toContain("送金完了の結果");
   expect(html).toContain("Test Wallet");
   expect(html).toContain("確認済み");
+  expect(html).toContain('href="https://testnet.xrpl.org/transactions/ABC"');
+  expect(html).toContain(">ABC</a>");
+  expect(html).not.toContain(">https://testnet.xrpl.org/transactions/ABC</a>");
   expect(html).toContain("資産ロックが完了しました");
 });
 
@@ -719,25 +721,35 @@ it("shows regular key status as unverified before verification", async () => {
   expect(html).toContain("確認する");
 });
 
-it("shows method details with recommendation and ordered options", async () => {
+it("does not show method selection step after merging STEP1 and STEP2", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const html = renderToString(
     React.createElement(
       MemoryRouter,
       null,
-      React.createElement(AssetLockPage, { initialStep: 1, initialMethod: "A" })
+      React.createElement(AssetLockPage, { initialStep: 0, initialMethod: "B" })
     )
   );
-  const methodAIndex = html.indexOf("方式A");
-  const methodBIndex = html.indexOf("方式B");
-  expect(methodAIndex).toBeGreaterThan(-1);
-  expect(methodBIndex).toBeGreaterThan(-1);
-  expect(methodAIndex).toBeLessThan(methodBIndex);
-  expect(html).toContain("おすすめ");
-  expect(html).toContain("送金後にTX Hashを入力して検証します");
+  expect(html).toContain("準備・注意");
+  expect(html).toContain("被相続人の確認待ちです。");
+  expect(html).not.toContain("方式選択");
 });
 
-it("prefers lock state method when provided", async () => {
+it("does not render method cards after STEP merge", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, { initialStep: 0, initialMethod: "B" })
+    )
+  );
+  expect(html).not.toContain("方式A");
+  expect(html).not.toContain("方式B");
+  expect(html).not.toContain("おすすめ");
+});
+
+it("does not render method radio inputs even when lock state method is A", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
     status: "READY",
@@ -751,17 +763,12 @@ it("prefers lock state method when provided", async () => {
       null,
       React.createElement(AssetLockPage, {
         initialLock: lock,
-        initialStep: 1,
+        initialStep: 0,
         initialMethod: "B"
       })
     )
   );
-  const checkedIndex = html.indexOf("checked");
-  const methodAIndex = html.indexOf("方式A");
-  const methodBIndex = html.indexOf("方式B");
-  expect(checkedIndex).toBeGreaterThan(-1);
-  expect(methodAIndex).toBeGreaterThan(-1);
-  expect(methodBIndex).toBeGreaterThan(-1);
-  expect(checkedIndex).toBeLessThan(methodAIndex);
-  expect(checkedIndex).toBeLessThan(methodBIndex);
+  expect(html).toContain("準備・注意");
+  expect(html).not.toContain("方式A");
+  expect(html).not.toContain('name="asset-lock-method"');
 });

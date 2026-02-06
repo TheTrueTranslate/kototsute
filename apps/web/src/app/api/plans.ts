@@ -1,13 +1,12 @@
 import { apiFetch } from "../../features/shared/lib/api";
 
-export type PlanStatus = "DRAFT" | "INACTIVE";
-
 export type PlanListItem = {
   planId: string;
   title: string;
-  status: PlanStatus;
   sharedAt: string | null;
   updatedAt: string;
+  assetCount?: number;
+  heirCount?: number;
 };
 
 export type PlanHeir = {
@@ -75,7 +74,7 @@ export const createPlan = async (caseId: string, input: { title: string }) => {
     method: "POST",
     body: JSON.stringify(input)
   });
-  return result.data as { planId: string; title: string; status: PlanStatus };
+  return result.data as { planId: string; title: string };
 };
 
 export const listPlans = async (caseId: string) => {
@@ -98,13 +97,6 @@ export const updatePlanTitle = async (caseId: string, planId: string, title: str
 export const listPlanHistory = async (caseId: string, planId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/plans/${planId}/history`, { method: "GET" });
   return result.data as PlanHistoryEntry[];
-};
-
-export const updatePlanStatus = async (caseId: string, planId: string, status: PlanStatus) => {
-  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/status`, {
-    method: "POST",
-    body: JSON.stringify({ status })
-  });
 };
 
 export const listPlanAssets = async (caseId: string, planId: string) => {
@@ -161,10 +153,6 @@ export const updatePlanNftAllocations = async (
     method: "POST",
     body: JSON.stringify(input)
   });
-};
-
-export const inactivatePlan = async (caseId: string, planId: string) => {
-  await apiFetch(`/v1/cases/${caseId}/plans/${planId}/inactivate`, { method: "POST" });
 };
 
 export const deletePlan = async (caseId: string, planId: string) => {

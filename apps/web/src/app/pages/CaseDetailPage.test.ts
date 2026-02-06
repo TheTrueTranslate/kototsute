@@ -11,6 +11,7 @@ let heirWalletData: { address: string | null; verificationStatus: string | null 
 };
 let ownerInvitesData: Array<any> = [];
 let caseHeirsData: Array<any> = [];
+let plansData: Array<any> = [];
 let distributionStateData = {
   status: "PENDING",
   totalCount: 0,
@@ -65,7 +66,7 @@ vi.mock("../api/assets", () => ({
 }));
 
 vi.mock("../api/plans", () => ({
-  listPlans: async () => []
+  listPlans: async () => plansData
 }));
 
 vi.mock("../../features/shared/components/ui/dialog", () => ({
@@ -131,6 +132,7 @@ describe("CaseDetailPage", () => {
     heirWalletData = { address: null, verificationStatus: null };
     ownerInvitesData = [];
     caseHeirsData = [];
+    plansData = [];
     distributionStateData = {
       status: "PENDING",
       totalCount: 0,
@@ -326,6 +328,28 @@ describe("CaseDetailPage", () => {
 
     const html = await render({ initialIsOwner: false });
     expect(html).toContain("相続実行");
+  });
+
+  it("shows asset and heir counts in plans tab", async () => {
+    const html = await render({
+      initialTab: "plans",
+      initialIsOwner: true,
+      initialCaseData: caseData,
+      initialPlans: [
+        {
+          planId: "plan-1",
+          title: "分配プランA",
+          sharedAt: null,
+          updatedAt: "2099-12-31",
+          assetCount: 2,
+          heirCount: 3
+        }
+      ]
+    });
+
+    expect(html).toContain("資産: 2件");
+    expect(html).toContain("相続人: 3人");
+    expect(html).not.toContain("2099");
   });
 
   it("does not fetch approval tx before inheritance starts", async () => {

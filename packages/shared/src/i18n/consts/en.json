@@ -218,7 +218,8 @@
             "body": "You can create your first plan."
           }
         },
-        "updatedAt": "Updated: {{date}}"
+        "assetCount": "Assets: {{count}}",
+        "heirCount": "Heirs: {{count}}"
       },
       "deathClaims": {
         "title": "Inheritance",
@@ -800,7 +801,7 @@
       "prepare": "Preparation",
       "method": "Select method",
       "transfer": "Send / input",
-      "verify": "Verify transfer"
+      "verify": "Transfer complete"
     },
     "completed": "Asset lock completed. Returning to case details in {{seconds}} seconds.",
     "validation": {
@@ -831,8 +832,6 @@
     "planPreview": {
       "title": "Plan preview",
       "empty": "No plans",
-      "statusInactive": "Inactive",
-      "statusActive": "In progress",
       "rulesTitle": "Allocation rules",
       "rulesEmpty": "Allocation rules are not set",
       "allocationsEmpty": "No allocations set",
@@ -918,8 +917,7 @@
       }
     },
     "transfer": {
-      "hint": "Method A uses manual transfer/verification; Method B uses automatic transfer (after RegularKey confirmation).",
-      "autoTransferNote": "You can't go back after executing auto transfer.",
+      "hint": "Method B uses automatic transfer (after RegularKey confirmation).",
       "emptyTargets": "No transfer targets.",
       "type": {
         "token": "Token transfer",
@@ -941,14 +939,14 @@
       }
     },
     "verify": {
-      "title": "Transfer verification results",
+      "title": "Transfer completion results",
       "balanceTitle": "Wallet balance (XRP)",
       "reload": "Refresh",
       "note": "It may take time to reflect. Refresh if needed.",
       "loadingBalances": "Loading balances...",
       "destination": "Destination",
       "source": "Source",
-      "empty": "No verification results."
+      "empty": "No transfer completion results."
     },
     "transferDialog": {
       "title": "Send in app",
@@ -974,7 +972,7 @@
     },
     "autoTransferDialog": {
       "title": "Execute auto transfer",
-      "description": "You can't go back after executing auto transfer. Please confirm before proceeding.",
+      "description": "Please confirm before proceeding.",
       "confirm": "Execute"
     },
     "heir": {
@@ -983,11 +981,6 @@
     }
   },
   "plans": {
-    "status": {
-      "draft": "Draft",
-      "shared": "Active",
-      "inactive": "Inactive"
-    },
     "new": {
       "title": "Create plan",
       "form": {

@@ -29,7 +29,6 @@ export const plansRoutes = () => {
       ownerUid: auth.uid,
       ownerEmail: auth.email ?? null,
       title: parsed.data.title,
-      status: "DRAFT",
       sharedAt: null,
       heirUids: [],
       heirs: [],
@@ -45,12 +44,11 @@ export const plansRoutes = () => {
       actorEmail: auth.email ?? null,
       createdAt: now,
       meta: {
-        title: data.title,
-        status: data.status
+        title: data.title
       }
     });
 
-    return jsonOk(c, { planId: doc.id, title: data.title, status: data.status });
+    return jsonOk(c, { planId: doc.id, title: data.title });
   });
 
   app.get("/", async (c) => {
@@ -59,10 +57,11 @@ export const plansRoutes = () => {
     const snapshot = await db.collection("plans").where("ownerUid", "==", auth.uid).get();
     const data = snapshot.docs.map((doc) => {
       const plan = doc.data() ?? {};
+      const { status: _status, ...rest } = plan as Record<string, unknown>;
       return {
+        ...(rest as Record<string, unknown>),
         planId: plan.planId ?? doc.id,
         title: plan.title ?? "",
-        status: plan.status ?? "DRAFT",
         sharedAt: formatDate(plan.sharedAt),
         updatedAt: formatDate(plan.updatedAt)
       };
@@ -85,10 +84,11 @@ export const plansRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
+    const { status: _status, ...rest } = plan as Record<string, unknown>;
     return jsonOk(c, {
+      ...(rest as Record<string, unknown>),
       planId,
       title: plan.title ?? "",
-      status: plan.status ?? "DRAFT",
       sharedAt: formatDate(plan.sharedAt),
       updatedAt: formatDate(plan.updatedAt),
       heirUids: plan.heirUids ?? [],
@@ -159,56 +159,6 @@ export const plansRoutes = () => {
     return jsonOk(c, data);
   });
 
-  app.post(":planId/status", async (c) => {
-    const planId = c.req.param("planId");
-    const auth = c.get("auth");
-    const body = await c.req.json().catch(() => ({}));
-    const nextStatus = body?.status;
-    if (nextStatus !== "DRAFT" && nextStatus !== "INACTIVE") {
-      return jsonError(c, 400, "VALIDATION_ERROR", "statusが不正です");
-    }
-
-    const db = getFirestore();
-    const planRef = db.collection("plans").doc(planId);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-    const plan = planSnap.data() ?? {};
-    if (plan.ownerUid !== auth.uid) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-    const currentStatus = plan.status ?? "DRAFT";
-
-    const now = c.get("deps").now();
-    const updates: Record<string, unknown> = {
-      status: nextStatus,
-      updatedAt: now
-    };
-    if (nextStatus === "DRAFT") {
-      updates.sharedAt = null;
-    }
-    await planRef.set(updates, { merge: true });
-
-    const historyType = nextStatus === "INACTIVE" ? "PLAN_INACTIVATED" : "PLAN_STATUS_CHANGED";
-    const historyTitle =
-      nextStatus === "INACTIVE" ? "指図を無効にしました" : "指図のステータスを変更しました";
-    await appendPlanHistory(planRef, {
-      type: historyType,
-      title: historyTitle,
-      detail: plan.title ? `タイトル: ${plan.title}` : null,
-      actorUid: auth.uid,
-      actorEmail: auth.email ?? null,
-      createdAt: now,
-      meta: {
-        prevStatus: currentStatus,
-        nextStatus
-      }
-    });
-
-    return jsonOk(c);
-  });
-
   app.post(":planId/heirs", async (c) => {
     const planId = c.req.param("planId");
     const auth = c.get("auth");
@@ -228,10 +178,6 @@ export const plansRoutes = () => {
     if (plan.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
-
     const inviteSnap = await db
       .collection("invites")
       .where("ownerUid", "==", auth.uid)
@@ -304,10 +250,6 @@ export const plansRoutes = () => {
     if (plan.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
-
     const currentHeirUids = Array.isArray(plan.heirUids) ? plan.heirUids : [];
     const currentHeirs = Array.isArray(plan.heirs) ? plan.heirs : [];
     const removedHeir = currentHeirs.find((heir: any) => heir.uid === heirUid);
@@ -396,10 +338,6 @@ export const plansRoutes = () => {
     if (plan.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
-
     const asset = await deps.repo.findById(AssetId.create(assetId));
     if (!asset) {
       return jsonError(c, 404, "NOT_FOUND", "Asset not found");
@@ -461,10 +399,6 @@ export const plansRoutes = () => {
     if (plan.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
-
     const { unitType, allocations } = parsed.data;
     const cleaned = allocations.map((allocation) => ({
       heirUid: allocation.heirUid,
@@ -522,43 +456,6 @@ export const plansRoutes = () => {
     return jsonOk(c);
   });
 
-  app.post(":planId/inactivate", async (c) => {
-    const planId = c.req.param("planId");
-    const auth = c.get("auth");
-    const db = getFirestore();
-    const planRef = db.collection("plans").doc(planId);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) {
-      return jsonError(c, 404, "NOT_FOUND", "Plan not found");
-    }
-    const plan = planSnap.data() ?? {};
-    if (plan.ownerUid !== auth.uid) {
-      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
-    }
-
-    const now = c.get("deps").now();
-    await planRef.set(
-      {
-        status: "INACTIVE",
-        updatedAt: now
-      },
-      { merge: true }
-    );
-    await appendPlanHistory(planRef, {
-      type: "PLAN_INACTIVATED",
-      title: "指図を無効にしました",
-      detail: plan.title ? `タイトル: ${plan.title}` : null,
-      actorUid: auth.uid,
-      actorEmail: auth.email ?? null,
-      createdAt: now,
-      meta: {
-        prevStatus: plan.status ?? "DRAFT",
-        nextStatus: "INACTIVE"
-      }
-    });
-    return jsonOk(c);
-  });
-
   app.delete(":planId/assets/:planAssetId", async (c) => {
     const planId = c.req.param("planId");
     const planAssetId = c.req.param("planAssetId");
@@ -573,10 +470,6 @@ export const plansRoutes = () => {
     if (plan.ownerUid !== auth.uid) {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
-    if ((plan.status ?? "DRAFT") === "INACTIVE") {
-      return jsonError(c, 400, "INACTIVE", "無効の指図は編集できません");
-    }
-
     const planAssetRef = planRef.collection("assets").doc(planAssetId);
     const planAssetSnap = await planAssetRef.get();
     if (!planAssetSnap.exists) {
