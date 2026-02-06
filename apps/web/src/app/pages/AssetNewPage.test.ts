@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { buildAssetDetailPath } from "./AssetNewPage";
 
 const render = async () => {
   const { default: AssetNewPage } = await import("./AssetNewPage");
@@ -22,6 +23,10 @@ const render = async () => {
 };
 
 describe("AssetNewPage", () => {
+  it("builds asset detail path after create", () => {
+    expect(buildAssetDetailPath("case-1", "asset-1")).toBe("/cases/case-1/assets/asset-1");
+  });
+
   it("renders asset form", async () => {
     const html = await render();
     expect(html).toContain("資産登録");

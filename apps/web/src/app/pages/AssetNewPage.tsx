@@ -22,6 +22,9 @@ type AssetTypeOption = {
   available: boolean;
 };
 
+export const buildAssetDetailPath = (caseId: string, assetId: string) =>
+  `/cases/${caseId}/assets/${assetId}`;
+
 export default function AssetNewPage() {
   const { caseId } = useParams();
   const { t } = useTranslation();
@@ -42,9 +45,9 @@ export default function AssetNewPage() {
         setError(t("assets.new.error.caseIdMissing"));
         return;
       }
-      await createAsset(caseId, values);
+      const created = await createAsset(caseId, values);
       reset();
-      navigate(`/cases/${caseId}`);
+      navigate(buildAssetDetailPath(caseId, created.assetId));
     } catch (err: any) {
       setError(err?.message ?? t("assets.new.error.createFailed"));
     }
