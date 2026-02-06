@@ -499,7 +499,20 @@
           "submit": "招待を送る",
           "submitting": "送信中..."
         },
+        "actions": {
+          "add": "相続人を追加",
+          "edit": "編集",
+          "save": "更新する",
+          "saving": "更新中..."
+        },
+        "dialog": {
+          "addTitle": "相続人を追加",
+          "addDescription": "相続人のメールアドレス・関係・メモを入力して招待します。",
+          "editTitle": "相続人情報を編集",
+          "editDescription": "相続人の関係とメモを更新します。"
+        },
         "relationLabel": "関係",
+        "memoLabel": "メモ",
         "locked": {
           "title": "資産ロック後は閲覧のみです",
           "body": "相続人の追加や編集はできません。"
@@ -515,7 +528,8 @@
             "declined": "辞退"
           },
           "error": {
-            "sendFailed": "招待の送信に失敗しました"
+            "sendFailed": "招待の送信に失敗しました",
+            "updateFailed": "相続人情報の更新に失敗しました"
           }
         },
         "empty": {

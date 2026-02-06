@@ -94,6 +94,10 @@
   @apply text-body-sm text-muted-foreground;
 }
 
+.rowMetaStack {
+  @apply grid gap-1;
+}
+
 .allocations {
   @apply mt-3 grid gap-2;
 }
@@ -112,6 +116,10 @@
 
 .rowSide {
   @apply text-body-sm text-muted-foreground;
+}
+
+.rowSideActions {
+  @apply flex flex-col items-end gap-2 text-body-sm text-muted-foreground;
 }
 
 .rowBadgeStack {

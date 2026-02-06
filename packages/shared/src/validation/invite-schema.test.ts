@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inviteCreateSchema } from "./invite-schema";
+import { inviteCreateSchema, inviteUpdateSchema } from "./invite-schema";
 
 describe("inviteCreateSchema", () => {
   it("accepts valid input", () => {
@@ -36,5 +36,23 @@ describe("inviteCreateSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("validation.memo.max");
+  });
+});
+
+describe("inviteUpdateSchema", () => {
+  it("accepts valid update input", () => {
+    const result = inviteUpdateSchema.safeParse({
+      relationLabel: "長女",
+      memo: "更新メモ"
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires relationOther when relationLabel is その他", () => {
+    const result = inviteUpdateSchema.safeParse({
+      relationLabel: "その他"
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.relationOther.required");
   });
 });

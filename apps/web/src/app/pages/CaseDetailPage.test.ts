@@ -9,6 +9,7 @@ let heirWalletData: { address: string | null; verificationStatus: string | null 
   address: null,
   verificationStatus: null
 };
+let ownerInvitesData: Array<any> = [];
 let caseHeirsData: Array<any> = [];
 let distributionStateData = {
   status: "PENDING",
@@ -96,9 +97,10 @@ vi.mock("../api/heir-wallets", () => ({
 }));
 
 vi.mock("../api/invites", () => ({
-  listInvitesByOwner: async () => [],
+  listInvitesByOwner: async () => ownerInvitesData,
   listCaseHeirs: async () => caseHeirsData,
-  createInvite: async () => ({ inviteId: "invite-1" })
+  createInvite: async () => ({ inviteId: "invite-1" }),
+  updateInvite: async () => {}
 }));
 
 vi.mock("../api/distribution", () => ({
@@ -127,6 +129,7 @@ describe("CaseDetailPage", () => {
     authUser = { uid: "owner" };
     searchParams = new URLSearchParams();
     heirWalletData = { address: null, verificationStatus: null };
+    ownerInvitesData = [];
     caseHeirsData = [];
     distributionStateData = {
       status: "PENDING",
@@ -193,6 +196,51 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("資産をロックする");
     expect(html).not.toContain("指図を作成");
     expect(html).not.toContain("招待を送る");
+  });
+
+  it("shows add-heir button instead of inline invite form in heirs tab", async () => {
+    const html = await render({
+      initialTab: "heirs",
+      initialIsOwner: true,
+      initialCaseData: {
+        ...caseData,
+        stage: "DRAFT",
+        assetLockStatus: "UNLOCKED"
+      }
+    });
+    expect(html).toContain("相続人を追加");
+    expect(html).not.toContain('placeholder="example@example.com"');
+  });
+
+  it("shows edit action for each invite in heirs tab", async () => {
+    const html = await render({
+      initialTab: "heirs",
+      initialIsOwner: true,
+      initialCaseData: {
+        ...caseData,
+        stage: "DRAFT",
+        assetLockStatus: "UNLOCKED"
+      },
+      initialOwnerInvites: [
+        {
+          inviteId: "invite-1",
+          caseId: "case-1",
+          ownerUid: "owner",
+          email: "heir@example.com",
+          status: "accepted",
+          relationLabel: "長男",
+          relationOther: null,
+          memo: "初回メモ",
+          acceptedByUid: "heir_1",
+          createdAt: "2024-01-01",
+          updatedAt: "2024-01-01",
+          acceptedAt: "2024-01-02",
+          declinedAt: null
+        }
+      ]
+    });
+    expect(html).toContain("編集");
+    expect(html).toContain("初回メモ");
   });
 
   it("links to asset detail page", async () => {

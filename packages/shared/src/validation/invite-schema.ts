@@ -75,21 +75,21 @@ export const getRelationOptionKey = (value?: string | null) => {
   return (relationOptionKeys as Record<string, string>)[value] ?? null;
 };
 
-const base = z.object({
-  email: z
-    .string({ required_error: "validation.email.invalid" })
-    .email("validation.email.invalid"),
-  relationLabel: z
-    .string({ required_error: "validation.relation.required" })
-    .min(1, "validation.relation.required"),
-  relationOther: z.string().optional(),
-  memo: z
-    .string({ required_error: "validation.memo.max" })
-    .max(400, "validation.memo.max")
-    .optional()
-});
+const relationLabelSchema = z
+  .string({ required_error: "validation.relation.required" })
+  .min(1, "validation.relation.required");
 
-export const inviteCreateSchema = base.superRefine((values, ctx) => {
+const relationOtherSchema = z.string().optional();
+
+const memoSchema = z
+  .string({ required_error: "validation.memo.max" })
+  .max(400, "validation.memo.max")
+  .optional();
+
+const validateRelationOther = (
+  values: { relationLabel: string; relationOther?: string },
+  ctx: z.RefinementCtx
+) => {
   if (values.relationLabel === relationOtherValue && !values.relationOther?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -97,4 +97,23 @@ export const inviteCreateSchema = base.superRefine((values, ctx) => {
       message: "validation.relationOther.required"
     });
   }
-});
+};
+
+export const inviteCreateSchema = z
+  .object({
+    email: z
+      .string({ required_error: "validation.email.invalid" })
+      .email("validation.email.invalid"),
+    relationLabel: relationLabelSchema,
+    relationOther: relationOtherSchema,
+    memo: memoSchema
+  })
+  .superRefine(validateRelationOther);
+
+export const inviteUpdateSchema = z
+  .object({
+    relationLabel: relationLabelSchema,
+    relationOther: relationOtherSchema,
+    memo: memoSchema
+  })
+  .superRefine(validateRelationOther);

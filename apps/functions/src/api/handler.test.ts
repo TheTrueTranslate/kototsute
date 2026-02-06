@@ -1093,6 +1093,63 @@ describe("createApiHandler", () => {
     expect(caseSnap.data()?.memberUids ?? []).toContain("heir_1");
   });
 
+  it("updates invite relation and memo", async () => {
+    const caseRepo = new FirestoreCaseRepository();
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      caseRes as any
+    );
+    const caseId = caseRes.body?.data?.caseId;
+
+    const inviteRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/invites`,
+        body: { email: "heir@example.com", relationLabel: "長男", memo: "初回メモ" }
+      }) as any,
+      inviteRes as any
+    );
+    const inviteId = inviteRes.body?.data?.inviteId;
+
+    const updateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "PATCH",
+        path: `/v1/cases/${caseId}/invites/${inviteId}`,
+        body: {
+          relationLabel: "その他",
+          relationOther: "甥の配偶者",
+          memo: "更新後メモ"
+        }
+      }) as any,
+      updateRes as any
+    );
+
+    expect(updateRes.statusCode).toBe(200);
+
+    const inviteSnap = await getFirestore()
+      .collection(`cases/${caseId}/invites`)
+      .doc(inviteId)
+      .get();
+    expect(inviteSnap.data()?.relationLabel).toBe("その他");
+    expect(inviteSnap.data()?.relationOther).toBe("甥の配偶者");
+    expect(inviteSnap.data()?.memo).toBe("更新後メモ");
+  });
+
   it("rejects case invite when heir limit exceeded", async () => {
     const caseRepo = new FirestoreCaseRepository();
     const handler = createApiHandler({
