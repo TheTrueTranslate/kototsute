@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
+import LocaleSwitcher from "../../features/shared/components/locale-switcher";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import { auth } from "../../features/shared/lib/firebase";
@@ -79,6 +80,14 @@ export default function ResetPage({ className }: PageProps) {
             {...register("email")}
           />
         </FormField>
+        <div className={styles.languageSection}>
+          <LocaleSwitcher
+            label={t("auth.common.languageLabel")}
+            jaLabel={t("auth.common.language.ja")}
+            enLabel={t("auth.common.language.en")}
+          />
+          <p className={styles.languageHint}>{t("auth.common.languageHintMyPage")}</p>
+        </div>
         <Button className={styles.submit} type="submit" disabled={isSubmitting}>
           {isSubmitting ? t("auth.reset.submitting") : t("auth.reset.submit")}
         </Button>

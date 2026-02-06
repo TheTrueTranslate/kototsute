@@ -5,6 +5,7 @@ import { displayNameSchema } from "@kototsute/shared";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../features/auth/auth-provider";
 import FormAlert from "../../features/shared/components/form-alert";
+import LocaleSwitcher from "../../features/shared/components/locale-switcher";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import { auth, db } from "../../features/shared/lib/firebase";
@@ -20,7 +21,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from "../../features/shared/components/ui/dialog";
-import { useLocale } from "../../features/shared/providers/LocaleProvider";
 
 type FormStatus = {
   type: "success" | "error";
@@ -29,7 +29,6 @@ type FormStatus = {
 
 export default function MyPage() {
   const { user } = useAuth();
-  const { locale, updateLocale } = useLocale();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
@@ -143,24 +142,11 @@ export default function MyPage() {
           </form>
           <div className={styles.row}>
             <span className={styles.label}>{t("myPage.language.label")}</span>
-            <div className={styles.actionsInline}>
-              <Button
-                type="button"
-                size="sm"
-                variant={locale === "ja" ? "default" : "outline"}
-                onClick={() => updateLocale("ja")}
-              >
-                {t("myPage.language.ja")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={locale === "en" ? "default" : "outline"}
-                onClick={() => updateLocale("en")}
-              >
-                {t("myPage.language.en")}
-              </Button>
-            </div>
+            <LocaleSwitcher
+              ariaLabel={t("myPage.language.label")}
+              jaLabel={t("myPage.language.ja")}
+              enLabel={t("myPage.language.en")}
+            />
           </div>
           <div className={styles.row}>
             <span className={styles.label}>{t("myPage.labels.uid")}</span>

@@ -110,9 +110,15 @@
   "auth": {
     "common": {
       "email": "メールアドレス",
-      "emailPlaceholder": "example@kototsute.jp",
+      "emailPlaceholder": "example@kototsute.com",
       "password": "パスワード",
-      "passwordPlaceholder": "8文字以上"
+      "passwordPlaceholder": "8文字以上",
+      "languageLabel": "表示言語",
+      "languageHintMyPage": "マイページでも表示言語を切り替えられます。",
+      "language": {
+        "ja": "日本語",
+        "en": "English"
+      }
     },
     "login": {
       "title": "ログイン",
@@ -127,7 +133,7 @@
     },
     "register": {
       "title": "新規登録",
-      "lead": "メールアドレスとパスワードだけで登録できます。",
+      "lead": "表示名・メールアドレス・パスワードを入力して登録してください。",
       "footer": {
         "login": "ログインへ",
         "reset": "パスワード再設定"

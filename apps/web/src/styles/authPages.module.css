@@ -28,6 +28,15 @@
   @apply mt-1;
 }
 
+.languageSection {
+  @apply grid gap-2;
+}
+
+.languageHint {
+  @apply text-xs leading-relaxed text-muted-foreground;
+  margin: 0;
+}
+
 .footerActions {
   @apply flex flex-wrap gap-2;
 }

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import AuthLayout from "../../features/shared/components/auth-layout";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
+import LocaleSwitcher from "../../features/shared/components/locale-switcher";
 import { Button } from "../../features/shared/components/ui/button";
 import { Input } from "../../features/shared/components/ui/input";
 import { auth, db } from "../../features/shared/lib/firebase";
@@ -64,7 +65,6 @@ export default function RegisterPage({ className }: PageProps) {
   return (
     <AuthLayout
       title={t("auth.register.title")}
-      lead={t("auth.register.lead")}
       className={className}
       footer={
         <div className={styles.footerActions}>
@@ -129,6 +129,14 @@ export default function RegisterPage({ className }: PageProps) {
             {...register("confirmPassword")}
           />
         </FormField>
+        <div className={styles.languageSection}>
+          <LocaleSwitcher
+            label={t("auth.common.languageLabel")}
+            jaLabel={t("auth.common.language.ja")}
+            enLabel={t("auth.common.language.en")}
+          />
+          <p className={styles.languageHint}>{t("auth.common.languageHintMyPage")}</p>
+        </div>
         <Button className={styles.submit} type="submit" disabled={isSubmitting}>
           {isSubmitting ? t("auth.register.submitting") : t("auth.register.submit")}
         </Button>
