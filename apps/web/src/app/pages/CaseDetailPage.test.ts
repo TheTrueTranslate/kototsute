@@ -731,7 +731,55 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("分配を実行");
   });
 
-  it("shows nft receive block", async () => {
+  it("keeps signature step when approval is submitted but not validated", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 2,
+        signaturesCount: 0,
+        requiredCount: 2,
+        signedByMe: false
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "PENDING",
+        networkResult: null
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("分配を実行");
+  });
+
+  it("hides nft receive block when receivable items are empty", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
 
@@ -752,6 +800,49 @@ describe("CaseDetailPage", () => {
         requiredCount: 1,
         signedByMe: true
       },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+    expect(html).not.toContain("NFT受取");
+  });
+
+  it("shows nft receive block when receivable nft items exist", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialDistributionItems: [
+        {
+          itemId: "dist-1",
+          type: "NFT",
+          offerId: "offer-1",
+          heirUid: "heir",
+          status: "PENDING",
+          tokenId: "000ABC"
+        }
+      ],
       initialCaseData: {
         caseId: "case-1",
         ownerUid: "owner",
