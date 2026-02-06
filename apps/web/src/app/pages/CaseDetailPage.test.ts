@@ -67,13 +67,6 @@ vi.mock("../api/plans", () => ({
   listPlans: async () => []
 }));
 
-vi.mock("../api/tasks", () => ({
-  getTaskProgress: async () => ({
-    userCompletedTaskIds: []
-  }),
-  updateMyTaskProgress: async () => {}
-}));
-
 vi.mock("../../features/shared/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
     React.createElement("div", null, open ? children : null),
@@ -173,7 +166,6 @@ describe("CaseDetailPage", () => {
     const html = await render();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
-    expect(html).toContain("タスク");
   });
 
   it("shows distribution wallet for owner when inheritance is in progress", async () => {
@@ -270,39 +262,6 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("検証成功");
     expect(html).toContain("検証失敗");
     expect(html).toContain("未検証");
-  });
-
-  it("does not show shared tasks section", async () => {
-    const html = await render();
-    expect(html).not.toContain("共有タスク");
-  });
-
-  it("shows wallet registration required for heir without wallet", async () => {
-    authUser = { uid: "heir" };
-    searchParams = new URLSearchParams("tab=tasks");
-    heirWalletData = { address: null, verificationStatus: null };
-
-    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
-    expect(html).toContain("ウォレット登録が必要です");
-  });
-
-  it("shows wallet verification required for heir with unverified wallet", async () => {
-    authUser = { uid: "heir" };
-    searchParams = new URLSearchParams("tab=tasks");
-    heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
-
-    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
-    expect(html).toContain("所有確認が必要です");
-  });
-
-  it("does not show wallet notice when heir wallet is verified", async () => {
-    authUser = { uid: "heir" };
-    searchParams = new URLSearchParams("tab=tasks");
-    heirWalletData = { address: "rHeir", verificationStatus: "VERIFIED" };
-
-    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
-    expect(html).not.toContain("ウォレット登録が必要です");
-    expect(html).not.toContain("所有確認が必要です");
   });
 
   it("shows wallet tab for heir", async () => {
@@ -649,11 +608,6 @@ describe("CaseDetailPage", () => {
         networkResult: "tecFAILED"
       })
     ).toBe(false);
-  });
-
-  it("allows task updates after asset lock", async () => {
-    const { canUpdateTaskProgress } = await import("./CaseDetailPage");
-    expect(canUpdateTaskProgress({ isLocked: true })).toBe(true);
   });
 
   it("formats distribution progress with success count", async () => {
