@@ -61,7 +61,6 @@ import {
   signSingle,
   submitSignedBlob
 } from "../../features/xrpl/xrpl-client";
-import { dropsToXrpInput } from "../../features/shared/lib/xrp-amount";
 import { shouldAutoRequestChallenge } from "../../features/shared/lib/auto-challenge";
 import { shouldCloseWalletDialogOnVerify } from "../../features/shared/lib/wallet-dialog";
 import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
@@ -213,6 +212,38 @@ export const resolveInheritanceNextAction = (input: {
   return null;
 };
 
+export const resolveHeirFlowStepIndex = (input: {
+  hasHeirWallet: boolean;
+  hasDeathClaim: boolean;
+  hasSignature: boolean;
+  hasReceive: boolean;
+}) => {
+  if (!input.hasHeirWallet) return 0;
+  if (!input.hasDeathClaim) return 1;
+  if (!input.hasSignature) return 2;
+  if (!input.hasReceive) return 3;
+  return 3;
+};
+
+export const resolveDeathClaimDocumentsHintKey = (input: {
+  isHeir: boolean;
+  hasClaim: boolean;
+  claimStatus?: string | null;
+  confirmedByMe: boolean;
+}) => {
+  if (!input.isHeir) return "cases.detail.deathClaims.documents.hint";
+  if (!input.hasClaim) return "deathClaims.currentAction.submit.description";
+  if (input.claimStatus === "ADMIN_REJECTED") {
+    return "deathClaims.currentAction.resubmit.description";
+  }
+  if (input.claimStatus === "ADMIN_APPROVED" && !input.confirmedByMe) {
+    return "deathClaims.currentAction.confirm.description";
+  }
+  if (input.claimStatus === "CONFIRMED") return "deathClaims.currentAction.confirmed.description";
+  if (input.confirmedByMe) return "deathClaims.currentAction.confirmedByMe.description";
+  return "deathClaims.currentAction.waiting.description";
+};
+
 export const resolvePrepareDisabledReason = (input: {
   caseData: CaseSummary | null;
   signerStatusKey: string;
@@ -257,50 +288,6 @@ export const resolveSignerListErrorMessage = (
     return { key: "cases.detail.signer.error.accountNotFound" };
   }
   return message;
-};
-
-export const resolveSignerFromLabel = () => "cases.detail.signer.fromLabel";
-
-export const buildSignerEntryDisplayList = (input: {
-  entries?: Array<{ account: string; weight: number }> | null;
-  systemSignerAddress?: string | null;
-  heirWalletAddress?: string | null;
-}) => {
-  const entries = Array.isArray(input.entries) ? input.entries : [];
-  const systemSigner = input.systemSignerAddress?.trim() ?? "";
-  const heirWallet = input.heirWalletAddress?.trim() ?? "";
-  const items = entries
-    .map((entry) => {
-      const account = typeof entry.account === "string" ? entry.account : "";
-      if (!account) return null;
-      const isSystem = Boolean(systemSigner && account === systemSigner);
-      const isMine = Boolean(heirWallet && account === heirWallet);
-      const label = isSystem
-        ? "cases.detail.signer.labels.system"
-        : isMine
-          ? "cases.detail.signer.labels.mine"
-          : "cases.detail.signer.labels.heir";
-      return { account, label, isSystem, isMine };
-    })
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const priority = (item: { isSystem: boolean; isMine: boolean }) =>
-    item.isSystem ? 0 : item.isMine ? 1 : 2;
-  return items.sort(
-    (a, b) => priority(a) - priority(b) || a.account.localeCompare(b.account)
-  );
-};
-
-const formatTxAmount = (amount: any) => {
-  if (typeof amount === "string") {
-    return `${amount} drops`;
-  }
-  if (amount && typeof amount === "object") {
-    const value = String(amount.value ?? "");
-    const currency = String(amount.currency ?? "");
-    const issuer = String(amount.issuer ?? "");
-    return [value, currency, issuer].filter(Boolean).join(" ");
-  }
-  return "-";
 };
 
 type AssetRowProps = {
@@ -363,6 +350,9 @@ type CaseDetailPageProps = {
   initialWalletDialogOpen?: boolean;
   initialWalletDialogMode?: "register" | "verify";
   initialDeathClaim?: DeathClaimSummary | null;
+  initialSignerList?: SignerListSummary | null;
+  initialApprovalTx?: ApprovalTxSummary | null;
+  initialDistribution?: DistributionState | null;
 };
 
 const allTabKeys: TabKey[] = ["assets", "plans", "heirs", "wallet", "death-claims"];
@@ -381,7 +371,10 @@ export default function CaseDetailPage({
   initialOwnerInvites = [],
   initialWalletDialogOpen = false,
   initialWalletDialogMode = "register",
-  initialDeathClaim = null
+  initialDeathClaim = null,
+  initialSignerList = null,
+  initialApprovalTx = null,
+  initialDistribution = null
 }: CaseDetailPageProps) {
   const { caseId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -441,13 +434,13 @@ export default function CaseDetailPage({
   const [walletDialogOpen, setWalletDialogOpen] = useState(initialWalletDialogOpen);
   const [walletDialogMode, setWalletDialogMode] =
     useState<"register" | "verify">(initialWalletDialogMode);
-  const [signerList, setSignerList] = useState<SignerListSummary | null>(null);
+  const [signerList, setSignerList] = useState<SignerListSummary | null>(initialSignerList);
   const [signerLoading, setSignerLoading] = useState(false);
   const [signerError, setSignerError] = useState<string | null>(null);
-  const [approvalTx, setApprovalTx] = useState<ApprovalTxSummary | null>(null);
+  const [approvalTx, setApprovalTx] = useState<ApprovalTxSummary | null>(initialApprovalTx);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
-  const [distribution, setDistribution] = useState<DistributionState | null>(null);
+  const [distribution, setDistribution] = useState<DistributionState | null>(initialDistribution);
   const [distributionLoading, setDistributionLoading] = useState(false);
   const [distributionError, setDistributionError] = useState<string | null>(null);
   const [distributionExecuting, setDistributionExecuting] = useState(false);
@@ -548,10 +541,10 @@ export default function CaseDetailPage({
     ];
     if (isOwner === false) {
       return [
+        { key: "wallet" as const, label: t("cases.detail.tabs.wallet") },
+        { key: "death-claims" as const, label: t("cases.detail.tabs.deathClaims") },
         baseTabItems[0],
         baseTabItems[1],
-        { key: "death-claims" as const, label: t("cases.detail.tabs.deathClaims") },
-        { key: "wallet" as const, label: t("cases.detail.tabs.wallet") },
         baseTabItems[2]
       ];
     }
@@ -621,37 +614,6 @@ export default function CaseDetailPage({
   const canReprepareApproval = approvalNetworkStatus === "EXPIRED";
   const approvalTxJson = approvalTx?.txJson ?? null;
   const approvalTxJsonText = approvalTxJson ? JSON.stringify(approvalTxJson, null, 2) : "";
-  const approvalAmountDrops =
-    typeof approvalTxJson?.Amount === "string" ? approvalTxJson.Amount : "";
-  const approvalAmountXrp = approvalAmountDrops
-    ? dropsToXrpInput(approvalAmountDrops)
-    : "";
-  const signerFromLabel = t(resolveSignerFromLabel());
-  const signerToLabel = t("cases.detail.signer.toLabel");
-  const approvalSummaryAmount = approvalAmountDrops
-    ? `${approvalAmountDrops} drops (${approvalAmountXrp} XRP)`
-    : formatTxAmount(approvalTxJson?.Amount);
-  const signerTxSummary = approvalTxJson
-    ? t("cases.detail.signer.txSummary", {
-        from: t("cases.detail.signer.fromValue"),
-        to: t("cases.detail.signer.toValue"),
-        amount: approvalSummaryAmount
-      })
-    : "";
-  const signerEntryDisplayList = useMemo(
-    () =>
-      buildSignerEntryDisplayList({
-        entries: signerList?.entries,
-        systemSignerAddress: signerList?.systemSignerAddress ?? null,
-        heirWalletAddress: heirWallet?.address ?? null
-      }),
-    [signerList?.entries, signerList?.systemSignerAddress, heirWallet?.address]
-  );
-  const multiSignNote = signerList?.requiredCount
-    ? t("cases.detail.signer.multiSignNote.withCount", {
-        count: signerList.requiredCount
-      })
-    : t("cases.detail.signer.multiSignNote.default");
   const showSignerDetails = shouldShowSignerDetails(approvalTx?.status ?? null);
   const approvalSubmitted = Boolean(
     approvalTx?.status === "SUBMITTED" || approvalSubmittedTxHash
@@ -678,6 +640,41 @@ export default function CaseDetailPage({
     ],
     [t]
   );
+  const hasDeathClaim = Boolean(deathClaim?.claim?.claimId);
+  const deathClaimStepCompleted =
+    hasDeathClaim && (caseData?.stage === "IN_PROGRESS" || caseData?.stage === "COMPLETED");
+  const signatureStepCompleted = Boolean(
+    signerList?.signedByMe || signerCompleted || approvalCompleted || approvalSubmitted
+  );
+  const receiveStepCompleted = distribution?.status === "COMPLETED";
+  const heirFlowSteps = useMemo(
+    () => [
+      t("cases.detail.inheritance.flow.steps.wallet"),
+      t("cases.detail.inheritance.flow.steps.deathClaim"),
+      t("cases.detail.inheritance.flow.steps.signature"),
+      t("cases.detail.inheritance.flow.steps.receive")
+    ],
+    [t]
+  );
+  const heirFlowStepIndex = resolveHeirFlowStepIndex({
+    hasHeirWallet,
+    hasDeathClaim: deathClaimStepCompleted,
+    hasSignature: signatureStepCompleted,
+    hasReceive: receiveStepCompleted
+  });
+  const heirFlowCurrent = heirFlowStepIndex + 1;
+  const heirFlowTotal = heirFlowSteps.length;
+  const heirFlowProgressPercent = (heirFlowCurrent / heirFlowTotal) * 100;
+  const shouldLockInheritanceFlowByWallet = isHeir && !hasHeirWallet;
+  const deathClaimDocumentsHintKey = resolveDeathClaimDocumentsHintKey({
+    isHeir,
+    hasClaim: Boolean(deathClaim?.claim?.claimId),
+    claimStatus: deathClaim?.claim?.status ?? null,
+    confirmedByMe: Boolean(deathClaim?.confirmedByMe)
+  });
+  const shouldShowDeathClaimDocuments = !isHeir || heirFlowStepIndex === 1;
+  const shouldShowApprovalSection = !isHeir || heirFlowStepIndex === 2;
+  const shouldShowDistributionSection = !isHeir || heirFlowStepIndex >= 3;
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
   const prepareDisabledReason = useMemo(
@@ -1680,7 +1677,7 @@ export default function CaseDetailPage({
             <div className={styles.panelHeader}>
               <h2 className={styles.panelTitle}>{t("cases.detail.deathClaims.title")}</h2>
             </div>
-            {nextAction ? (
+            {nextAction && !isHeir ? (
               <div className={styles.nextAction}>
                 <div className={styles.nextActionTitle}>
                   {t("cases.detail.deathClaims.nextAction.title")}
@@ -1702,64 +1699,118 @@ export default function CaseDetailPage({
                 </div>
               </div>
             ) : null}
-            <details className={styles.collapsible}>
-              <summary className={styles.collapsibleSummary}>
-                <div className={styles.collapsibleText}>
-                  <div className={styles.collapsibleTitle}>
-                    {t("cases.detail.deathClaims.documents.title")}
+            {isHeir ? (
+              <div className={styles.nextAction}>
+                <div className={styles.heirStepperHeader}>
+                  <div className={styles.nextActionTitle}>
+                    {t("cases.detail.inheritance.flow.title")}
                   </div>
-                  <div className={styles.collapsibleHint}>
-                    {t("cases.detail.deathClaims.documents.hint")}
+                  <div className={styles.heirStepperCount}>
+                    {t("cases.detail.inheritance.flow.progress", {
+                      current: heirFlowCurrent,
+                      total: heirFlowTotal
+                    })}
                   </div>
                 </div>
-                <span className={styles.collapsibleChevron} aria-hidden="true" />
-              </summary>
-              <div className={styles.collapsibleBody}>
-                <DeathClaimsPanel
-                  initialClaim={initialDeathClaim ?? null}
-                  onClaimChange={setDeathClaim}
-                />
+                <div className={styles.heirStepperTrack} aria-hidden="true">
+                  <div
+                    className={styles.heirStepperFill}
+                    style={{ width: `${heirFlowProgressPercent}%` }}
+                  />
+                </div>
+                <ol className={styles.heirStepperList}>
+                  {heirFlowSteps.map((label, index) => (
+                    <li
+                      key={label}
+                      className={`${styles.heirStepperItem} ${
+                        index < heirFlowStepIndex ? styles.heirStepperItemDone : ""
+                      } ${index === heirFlowStepIndex ? styles.heirStepperItemActive : ""}`}
+                    >
+                      <span
+                        className={`${styles.heirStepperNumber} ${
+                          index <= heirFlowStepIndex ? styles.heirStepperNumberActive : ""
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      <span
+                        className={`${styles.heirStepperLabel} ${
+                          index === heirFlowStepIndex ? styles.heirStepperLabelActive : ""
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <div className={styles.nextActionBody}>
+                  {t("cases.detail.inheritance.flow.stepLabel", {
+                    current: heirFlowCurrent,
+                    total: heirFlowTotal,
+                    step: heirFlowSteps[heirFlowStepIndex] ?? "-"
+                  })}
+                </div>
+                <div className={styles.nextActionSteps}>
+                  {heirFlowSteps.map((label, index) => (
+                    <span
+                      key={`${label}-chip`}
+                      className={`${styles.nextActionStep} ${
+                        index === heirFlowStepIndex ? styles.nextActionStepActive : ""
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </details>
-            <details className={styles.collapsible} open>
-              <summary className={styles.collapsibleSummary}>
-                <div className={styles.collapsibleText}>
-                  <div className={styles.collapsibleTitle}>
-                    {t("cases.detail.deathClaims.approval.title")}
-                  </div>
-                  <div className={styles.collapsibleHint}>
-                    {t("cases.detail.deathClaims.approval.hint")}
-                  </div>
+            ) : null}
+            {shouldLockInheritanceFlowByWallet ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyTitle}>
+                  {t("cases.detail.inheritance.flow.walletGate.title")}
                 </div>
-                <span className={styles.collapsibleMeta}>
-                  <span className={styles.signerBadge}>{signerStatusLabel}</span>
-                  <span className={styles.collapsibleChevron} aria-hidden="true" />
-                </span>
-              </summary>
-              <div className={styles.collapsibleBody}>
-                <div className={styles.signerSection}>
-              <div className={styles.signerPrepare}>
-                <div className={styles.signerPrepareTitle}>
-                  {t("cases.detail.signer.prepare.title")}
+                <div className={styles.emptyBody}>
+                  {t("cases.detail.inheritance.flow.walletGate.body")}
                 </div>
-                <div className={styles.signerPrepareHint}>
-                  {t("cases.detail.signer.prepare.hint")}
-                </div>
-                <div className={styles.signerPrepareActions}>
-                  <Button
-                    type="button"
-                    onClick={handlePrepareApproval}
-                    disabled={!canPrepareApproval || prepareLoading}
-                  >
-                    {prepareLoading
-                      ? t("cases.detail.signer.prepare.loading")
-                      : t("cases.detail.signer.prepare.action")}
+                <div className={styles.panelActions}>
+                  <Button type="button" onClick={() => handleTabChange("wallet")}>
+                    {t("cases.detail.inheritance.flow.walletGate.action")}
                   </Button>
                 </div>
-                {prepareDisabledText ? (
-                  <div className={styles.signerPrepareNote}>{prepareDisabledText}</div>
-                ) : null}
               </div>
+            ) : (
+              <>
+                {shouldShowDeathClaimDocuments ? (
+                  <div className={styles.collapsible}>
+                    <div className={styles.collapsibleBody}>
+                      <div className={styles.collapsibleText}>
+                        <div className={styles.collapsibleTitle}>
+                          {t("cases.detail.deathClaims.documents.title")}
+                        </div>
+                        <div className={styles.collapsibleHint}>
+                          {t(deathClaimDocumentsHintKey)}
+                        </div>
+                      </div>
+                      <DeathClaimsPanel
+                        initialClaim={initialDeathClaim ?? null}
+                        onClaimChange={setDeathClaim}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {shouldShowApprovalSection ? (
+                  <div className={styles.signerSection}>
+                    <div className={styles.signerHeader}>
+                      <div className={styles.signerHeaderMain}>
+                        <div className={styles.signerTitle}>
+                          {t("cases.detail.deathClaims.approval.title")}
+                        </div>
+                        <div className={styles.signerHint}>
+                          {t("cases.detail.deathClaims.approval.hint")}
+                        </div>
+                      </div>
+                      <span className={styles.signerBadge}>{signerStatusLabel}</span>
+                    </div>
               {signerError ? <FormAlert variant="error">{t(signerError)}</FormAlert> : null}
               {approvalError ? (
                 <FormAlert variant="error">{t(approvalError)}</FormAlert>
@@ -1769,7 +1820,6 @@ export default function CaseDetailPage({
                 <FormAlert variant="success">{t(prepareSuccess)}</FormAlert>
               ) : null}
               {signerListErrorText ? <FormAlert variant="error">{signerListErrorText}</FormAlert> : null}
-              {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>
                   <div className={styles.signerLabel}>
@@ -1807,55 +1857,14 @@ export default function CaseDetailPage({
                   </div>
                 ) : null}
               </div>
-              <div className={styles.signerMultiSign}>
-                <div className={styles.signerMultiSignTitle}>
-                  {t("cases.detail.signer.multiSign.title")}
-                </div>
-                <div className={styles.signerMultiSignBody}>
-                  <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>
-                      {t("cases.detail.signer.labels.from")}
-                    </div>
-                    <div className={styles.signerMultiSignValue}>
-                      {approvalTxJson?.Account ?? "-"}
-                    </div>
-                  </div>
-                  <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>
-                      {t("cases.detail.signer.labels.signers")}
-                    </div>
-                    {signerEntryDisplayList.length ? (
-                      <ul className={styles.signerMultiSignList}>
-                        {signerEntryDisplayList.map((entry) => (
-                          <li
-                            key={`${entry.account}-${entry.label}`}
-                            className={styles.signerMultiSignItem}
-                          >
-                            <div className={styles.signerMultiSignItemLabel}>
-                              {t(entry.label)}
-                            </div>
-                            <div className={styles.signerMultiSignItemValue}>
-                              {entry.account}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className={styles.muted}>
-                        {t("cases.detail.signer.multiSign.empty")}
-                      </div>
-                    )}
-                  </div>
-                  <div className={styles.signerMultiSignRow}>
-                    <div className={styles.signerMultiSignLabel}>
-                      {t("cases.detail.signer.labels.to")}
-                    </div>
-                    <div className={styles.signerMultiSignValue}>
-                      {approvalTxJson?.Destination ?? "-"}
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.signerMultiSignNote}>{multiSignNote}</div>
+              <div className={styles.signerGuide}>
+                <div className={styles.signerGuideTitle}>{t("cases.detail.signer.guide.title")}</div>
+                <ol className={styles.signerGuideList}>
+                  <li>{t("cases.detail.signer.guide.steps.tx")}</li>
+                  <li>{t("cases.detail.signer.guide.steps.secret")}</li>
+                  <li>{t("cases.detail.signer.guide.steps.submit")}</li>
+                  <li>{t("cases.detail.signer.guide.steps.autoExecute")}</li>
+                </ol>
               </div>
               {showSignerDetails ? (
                 <div className={styles.signerTxSection}>
@@ -1881,19 +1890,6 @@ export default function CaseDetailPage({
                             {approvalSubmittedTxHash || "-"}
                           </div>
                         </div>
-                        {approvalSubmittedTxHash ? (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={styles.copyButton}
-                            onClick={() =>
-                              handleCopy(t("cases.detail.signer.tx.sentLabel"), approvalSubmittedTxHash)
-                            }
-                            aria-label={t("cases.detail.signer.tx.copy.sentTx")}
-                          >
-                            <Copy />
-                          </Button>
-                        ) : null}
                       </div>
                       <div className={styles.signerTxRow}>
                         <div>
@@ -1936,62 +1932,14 @@ export default function CaseDetailPage({
                     <div className={styles.muted}>{t("cases.detail.signer.tx.loading")}</div>
                   ) : null}
                   {approvalTxJson ? (
-                    <details className={styles.collapsible}>
-                      <summary className={styles.collapsibleSummary}>
+                    <div className={styles.collapsible}>
+                      <div className={styles.collapsibleBody}>
                         <div className={styles.collapsibleText}>
                           <div className={styles.collapsibleTitle}>
                             {t("cases.detail.signer.tx.details.title")}
                           </div>
-                          <div className={styles.collapsibleHint}>{signerTxSummary}</div>
                         </div>
-                        <span className={styles.collapsibleChevron} aria-hidden="true" />
-                      </summary>
-                      <div className={styles.collapsibleBody}>
                         <div className={styles.signerTxGrid}>
-                          <div className={styles.signerTxRow}>
-                            <div>
-                              <div className={styles.signerTxLabel}>{signerFromLabel}</div>
-                              <div className={styles.signerTxValue}>
-                                {approvalTxJson.Account ?? "-"}
-                              </div>
-                            </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={styles.copyButton}
-                              onClick={() =>
-                                handleCopy(
-                                  t("cases.detail.signer.labels.from"),
-                                  String(approvalTxJson.Account ?? "")
-                                )
-                              }
-                              aria-label={t("cases.detail.signer.tx.copy.from")}
-                            >
-                              <Copy />
-                            </Button>
-                          </div>
-                          <div className={styles.signerTxRow}>
-                            <div>
-                              <div className={styles.signerTxLabel}>{signerToLabel}</div>
-                              <div className={styles.signerTxValue}>
-                                {approvalTxJson.Destination ?? "-"}
-                              </div>
-                            </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={styles.copyButton}
-                              onClick={() =>
-                                handleCopy(
-                                  t("cases.detail.signer.labels.to"),
-                                  String(approvalTxJson.Destination ?? "")
-                                )
-                              }
-                              aria-label={t("cases.detail.signer.tx.copy.to")}
-                            >
-                              <Copy />
-                            </Button>
-                          </div>
                           <div className={styles.signerTxRow}>
                             <div>
                               <div className={styles.signerTxLabel}>
@@ -2001,69 +1949,10 @@ export default function CaseDetailPage({
                                 {approvalTx?.memo ?? "-"}
                               </div>
                             </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={styles.copyButton}
-                              onClick={() =>
-                                handleCopy(t("cases.detail.signer.tx.memoLabel"), approvalTx?.memo ?? "")
-                              }
-                              aria-label={t("cases.detail.signer.tx.copy.memo")}
-                            >
-                              <Copy />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className={styles.amountGrid}>
-                          <div className={styles.amountField}>
-                            <FormField label={t("cases.detail.signer.tx.amount.dropsLabel")}>
-                              <Input
-                                value={approvalAmountDrops}
-                                placeholder="-"
-                                readOnly
-                              />
-                            </FormField>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={styles.copyButton}
-                              onClick={() =>
-                                handleCopy(
-                                  t("cases.detail.signer.tx.amount.dropsLabel"),
-                                  approvalAmountDrops
-                                )
-                              }
-                              aria-label={t("cases.detail.signer.tx.copy.amountDrops")}
-                            >
-                              <Copy />
-                            </Button>
-                          </div>
-                          <div className={styles.amountField}>
-                            <FormField label={t("cases.detail.signer.tx.amount.xrpLabel")}>
-                              <Input
-                                value={approvalAmountXrp}
-                                placeholder="-"
-                                readOnly
-                              />
-                            </FormField>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={styles.copyButton}
-                              onClick={() =>
-                                handleCopy(
-                                  t("cases.detail.signer.tx.amount.xrpLabel"),
-                                  approvalAmountXrp
-                                )
-                              }
-                              aria-label={t("cases.detail.signer.tx.copy.amountXrp")}
-                            >
-                              <Copy />
-                            </Button>
                           </div>
                         </div>
                       </div>
-                    </details>
+                    </div>
                   ) : (
                     <div className={styles.muted}>{t("cases.detail.signer.tx.empty")}</div>
                   )}
@@ -2091,19 +1980,6 @@ export default function CaseDetailPage({
                           {approvalSubmittedTxHash || "-"}
                         </div>
                       </div>
-                      {approvalSubmittedTxHash ? (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={styles.copyButton}
-                          onClick={() =>
-                            handleCopy(t("cases.detail.signer.tx.sentLabel"), approvalSubmittedTxHash)
-                          }
-                          aria-label={t("cases.detail.signer.tx.copy.sentTx")}
-                        >
-                          <Copy />
-                        </Button>
-                      ) : null}
                     </div>
                     <div className={styles.signerTxRow}>
                       <div>
@@ -2143,69 +2019,77 @@ export default function CaseDetailPage({
                   </div>
                 </div>
               )}
-              {showSignerDetails ? (
-                <div className={styles.signerGuide}>
-                  <div className={styles.signerGuideTitle}>
-                    {t("cases.detail.signer.guide.title")}
-                  </div>
-                  <ol className={styles.signerGuideList}>
-                    <li>
-                      {t("cases.detail.signer.guide.steps.tx")}
-                    </li>
-                    <li>{t("cases.detail.signer.guide.steps.multisign")}</li>
-                    <li>
-                      {t("cases.detail.signer.guide.steps.secret")}
-                    </li>
-                    <li>{t("cases.detail.signer.guide.steps.submit")}</li>
-                    <li>{t("cases.detail.signer.guide.steps.autoExecute")}</li>
-                  </ol>
-                </div>
-              ) : null}
               {shouldShowSignerActions(approvalTx?.status ?? null) ? (
-                <div className={styles.signerActions}>
-                  <div className={styles.signerActionBlock}>
-                    <FormField label={t("cases.detail.signer.secret.label")}>
-                      <Input
-                        value={signerSeed}
-                        onChange={(event) => setSignerSeed(event.target.value)}
-                        placeholder="s..."
-                        type="password"
-                        disabled={!approvalTxJson || signerDisabledReason !== null}
-                      />
-                    </FormField>
-                    <div className={styles.signerAutoNote}>
-                      {signerSigning
-                        ? t("cases.detail.signer.autoNote.signing")
-                        : signerSignedBlob
-                          ? t("cases.detail.signer.autoNote.ready")
-                          : t("cases.detail.signer.autoNote.hint")}
-                    </div>
-                  </div>
-                  <div className={styles.signerActionBlock}>
-                    <div className={styles.signerActionRow}>
-                      <Button
-                        type="button"
-                        onClick={handleSubmitSignerSignature}
-                        disabled={!canSubmitSignature}
-                      >
-                        {signerSubmitting
-                          ? t("cases.detail.signer.actions.submitting")
-                          : t("cases.detail.signer.actions.submit")}
-                      </Button>
-                    </div>
-                    <div className={styles.signerSecretNote}>
-                      {t("cases.detail.signer.secret.note")}
-                    </div>
-                  </div>
+                <div className={styles.signerActionPanel} data-testid="signer-action-panel">
+                  {approvalTxJson ? (
+                    <>
+                      <FormField label={t("cases.detail.signer.secret.label")}>
+                        <Input
+                          value={signerSeed}
+                          onChange={(event) => setSignerSeed(event.target.value)}
+                          placeholder="s..."
+                          type="password"
+                          disabled={signerDisabledReason !== null}
+                        />
+                      </FormField>
+                      <div className={styles.signerAutoNote}>
+                        {signerSigning
+                          ? t("cases.detail.signer.autoNote.signing")
+                          : signerSignedBlob
+                            ? t("cases.detail.signer.autoNote.ready")
+                            : t("cases.detail.signer.autoNote.hint")}
+                      </div>
+                      <div className={styles.signerActionRow}>
+                        <Button
+                          type="button"
+                          onClick={handleSubmitSignerSignature}
+                          disabled={!canSubmitSignature}
+                        >
+                          {signerSubmitting
+                            ? t("cases.detail.signer.actions.submitting")
+                            : t("cases.detail.signer.actions.submit")}
+                        </Button>
+                      </div>
+                      <div className={styles.signerSecretNote}>
+                        {t("cases.detail.signer.secret.note")}
+                      </div>
+                      {signerDisabledText ? (
+                        <div className={styles.signerNote}>{signerDisabledText}</div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <div className={styles.signerPrepareTitle}>
+                        {t("cases.detail.signer.prepare.title")}
+                      </div>
+                      <div className={styles.signerPrepareHint}>
+                        {t("cases.detail.signer.prepare.hint")}
+                      </div>
+                      <div className={styles.signerPrepareActions}>
+                        <Button
+                          type="button"
+                          onClick={handlePrepareApproval}
+                          disabled={!canPrepareApproval || prepareLoading}
+                        >
+                          {prepareLoading
+                            ? t("cases.detail.signer.prepare.loading")
+                            : t("cases.detail.signer.prepare.action")}
+                        </Button>
+                      </div>
+                      {prepareDisabledText ? (
+                        <div className={styles.signerPrepareNote}>{prepareDisabledText}</div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               ) : null}
-              {signerDisabledText ? (
+              {!approvalTxJson && signerDisabledText ? (
                 <div className={styles.signerNote}>{signerDisabledText}</div>
               ) : null}
-                </div>
-              </div>
-            </details>
-            <div className={styles.distributionSection}>
+                  </div>
+                ) : null}
+                {shouldShowDistributionSection ? (
+                  <div className={styles.distributionSection}>
               <div className={styles.distributionHeader}>
                 <div className={styles.distributionHeaderMain}>
                   <div className={styles.distributionTitle}>
@@ -2372,7 +2256,10 @@ export default function CaseDetailPage({
                   </div>
                 </div>
               </div>
-            </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         ) : (
           <div className={styles.panel}>
