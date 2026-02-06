@@ -38,6 +38,10 @@
   @apply flex flex-wrap items-center justify-between gap-3;
 }
 
+.walletHeaderMain {
+  @apply grid gap-1;
+}
+
 .cardTitle {
   @apply text-section text-foreground;
 }
@@ -54,8 +58,21 @@
   @apply flex flex-wrap items-center gap-3;
 }
 
+.verifyOwnershipButton {
+  @apply font-semibold shadow-lg shadow-primary/30;
+  animation: verifyOwnershipPulse 2s ease-in-out infinite;
+}
+
 .metaGrid {
   @apply grid gap-4 sm:grid-cols-2;
+}
+
+.labelEditRow {
+  @apply grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end;
+}
+
+.labelField {
+  @apply min-w-0;
 }
 
 .metaLabel {
@@ -300,4 +317,21 @@
 
 .reserveActions {
   @apply flex justify-end;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verifyOwnershipButton {
+    animation: none;
+  }
+}
+
+@keyframes verifyOwnershipPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0);
+  }
 }
