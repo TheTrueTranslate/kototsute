@@ -29,4 +29,13 @@ describe("assets api", () => {
       method: "GET"
     });
   });
+
+  it("calls /v1/cases/:caseId/assets/:assetId to update label", async () => {
+    const { updateAssetLabel } = await import("./assets");
+    await updateAssetLabel("case-1", "asset-1", { label: "新しい資産名" });
+    expect(apiFetchMock).toHaveBeenCalledWith("/v1/cases/case-1/assets/asset-1", {
+      method: "PATCH",
+      body: JSON.stringify({ label: "新しい資産名" })
+    });
+  });
 });

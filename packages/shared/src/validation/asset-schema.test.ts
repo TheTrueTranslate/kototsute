@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { assetCreateSchema, assetReserveSchema } from "./asset-schema";
+import {
+  assetCreateSchema,
+  assetLabelUpdateSchema,
+  assetReserveSchema
+} from "./asset-schema";
 
 describe("assetCreateSchema", () => {
   it("accepts valid input", () => {
@@ -58,5 +62,18 @@ describe("assetReserveSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("validation.asset.nft.duplicate");
+  });
+});
+
+describe("assetLabelUpdateSchema", () => {
+  it("accepts non-empty label", () => {
+    const result = assetLabelUpdateSchema.safeParse({ label: "新しい資産名" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty label", () => {
+    const result = assetLabelUpdateSchema.safeParse({ label: "" });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("validation.asset.label.required");
   });
 });

@@ -230,6 +230,9 @@ vi.mock("@kototsute/shared", async () => {
   );
   return {
     ...actual,
+    assetLabelUpdateSchema:
+      (actual as any).assetLabelUpdateSchema ??
+      (actual as any).assetCreateSchema.pick({ label: true }),
     sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
     sendTokenPayment: async () => ({ txHash: "tx-token" }),
     sendSignerListSet: async () => ({ txHash: "tx-signer" }),
@@ -3586,6 +3589,59 @@ describe("createApiHandler", () => {
     );
     expect(detailRes.body?.data?.reserveXrp).toBe("1.5");
     expect(detailRes.body?.data?.reserveTokens?.length).toBe(1);
+  });
+
+  it("updates asset label", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const updateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "PATCH",
+        path: `/v1/cases/${caseId}/assets/${assetId}`,
+        body: { label: "新しい資産名" }
+      }) as any,
+      updateRes as any
+    );
+    expect(updateRes.statusCode).toBe(200);
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.label).toBe("新しい資産名");
   });
 
   it("rejects case asset deletion when related plan exists", async () => {
