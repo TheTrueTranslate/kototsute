@@ -304,6 +304,7 @@
       "signer": {
         "status": {
           "label": "署名状況",
+          "count": "{{signed}} / {{required}} 名が署名済み",
           "notReady": "準備中",
           "set": "署名受付中",
           "failed": "準備失敗"
@@ -353,6 +354,7 @@
         "error": {
           "statusLoadFailed": "署名状況の取得に失敗しました",
           "loadFailed": "署名対象の取得に失敗しました",
+          "accountNotFound": "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。",
           "txMissing": "署名対象トランザクションが取得できません",
           "signFailed": "署名の生成に失敗しました",
           "signedBlobRequired": "署名済みデータを入力してください",
@@ -519,6 +521,13 @@
           "pending": "未確認",
           "verified": "確認済み"
         }
+      },
+      "distributionWallet": {
+        "title": "分配用ウォレットアドレス",
+        "addressLabel": "分配用ウォレットアドレス",
+        "empty": "未設定",
+        "copyLabel": "分配用ウォレットアドレス",
+        "copyAriaLabel": "分配用ウォレットアドレスをコピー"
       },
       "wallet": {
         "title": "受取用ウォレット",

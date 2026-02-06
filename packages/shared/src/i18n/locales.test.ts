@@ -18,4 +18,9 @@ describe("locales", () => {
     const enKeys = flattenKeys(en).sort();
     expect(jaKeys).toEqual(enKeys);
   });
+
+  it("同意の署名数表示キーが存在する", () => {
+    expect((ja as any)?.cases?.detail?.signer?.status?.count).toBeTypeOf("string");
+    expect((en as any)?.cases?.detail?.signer?.status?.count).toBeTypeOf("string");
+  });
 });

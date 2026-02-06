@@ -304,6 +304,7 @@
       "signer": {
         "status": {
           "label": "Signing status",
+          "count": "{{signed}} / {{required}} signed",
           "notReady": "Preparing",
           "set": "Accepting signatures",
           "failed": "Preparation failed"
@@ -353,6 +354,7 @@
         "error": {
           "statusLoadFailed": "Failed to load signing status",
           "loadFailed": "Failed to load signable payload",
+          "accountNotFound": "The distribution wallet is not activated on XRPL. Fund the distribution wallet with XRP, then run consent preparation again.",
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",
@@ -519,6 +521,13 @@
           "pending": "Unverified",
           "verified": "Verified"
         }
+      },
+      "distributionWallet": {
+        "title": "Distribution wallet address",
+        "addressLabel": "Distribution wallet address",
+        "empty": "Not set",
+        "copyLabel": "Distribution wallet address",
+        "copyAriaLabel": "Copy distribution wallet address"
       },
       "wallet": {
         "title": "Receiving wallet",

@@ -3022,13 +3022,17 @@ export const casesRoutes = () => {
 
     const itemsSnap = await caseRef.collection("assetLockItems").get();
     const items = itemsSnap.docs.map((doc) => doc.data() ?? {});
-    const assetIds = Array.from(
+    let assetIds = Array.from(
       new Set(
         items
           .map((item) => String(item.assetId ?? ""))
           .filter((assetId) => assetId.length > 0)
       )
     );
+    if (assetIds.length === 0) {
+      const assetsSnap = await caseRef.collection("assets").get();
+      assetIds = assetsSnap.docs.map((doc) => doc.id);
+    }
     if (assetIds.length === 0) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
     }
@@ -3313,13 +3317,17 @@ export const casesRoutes = () => {
     }
 
     const itemsSnap = await caseRef.collection("assetLockItems").get();
-    const assetIds = Array.from(
+    let assetIds = Array.from(
       new Set(
         itemsSnap.docs
           .map((doc) => doc.data()?.assetId)
           .filter((assetId) => typeof assetId === "string" && assetId.length > 0)
       )
     );
+    if (assetIds.length === 0) {
+      const assetsSnap = await caseRef.collection("assets").get();
+      assetIds = assetsSnap.docs.map((doc) => doc.id);
+    }
     if (assetIds.length === 0) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
     }
@@ -3471,6 +3479,48 @@ export const casesRoutes = () => {
       ref: doc.ref,
       data: doc.data() ?? {}
     }));
+    const finalizeExecution = async () => {
+      await caseRef
+        .collection("assetLock")
+        .doc("state")
+        .set({ methodStep: "TRANSFER_DONE", updatedAt: c.get("deps").now() }, { merge: true });
+      await caseRef
+        .collection("assetLock")
+        .doc("state")
+        .set(
+          { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
+          { merge: true }
+        );
+      await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
+
+      const finalLockSnap = await caseRef.collection("assetLock").doc("state").get();
+      const finalLockData = finalLockSnap.data() ?? {};
+      const finalItemsSnap = await caseRef.collection("assetLockItems").get();
+      const items = finalItemsSnap.docs.map((doc) => {
+        const item = doc.data() ?? {};
+        return {
+          itemId: item.itemId ?? doc.id,
+          assetId: item.assetId ?? "",
+          assetLabel: item.assetLabel ?? "",
+          token: item.token ?? null,
+          plannedAmount: item.plannedAmount ?? "0",
+          status: item.status ?? "PENDING",
+          txHash: item.txHash ?? null,
+          error: item.error ?? null
+        };
+      });
+      return jsonOk(c, {
+        status: finalLockData.status ?? "READY",
+        method: finalLockData.method ?? null,
+        uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
+        methodStep: finalLockData.methodStep ?? null,
+        wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
+        items,
+        regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
+          ? finalLockData.regularKeyStatuses
+          : []
+      });
+    };
     const assetIds = Array.from(
       new Set(
         itemEntries
@@ -3479,7 +3529,7 @@ export const casesRoutes = () => {
       )
     );
     if (assetIds.length === 0) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "送金対象がありません");
+      return await finalizeExecution();
     }
     const assetSnaps = await Promise.all(
       assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
@@ -3606,46 +3656,7 @@ export const casesRoutes = () => {
       }
     }
 
-    await caseRef
-      .collection("assetLock")
-      .doc("state")
-      .set({ methodStep: "TRANSFER_DONE", updatedAt: c.get("deps").now() }, { merge: true });
-    await caseRef
-      .collection("assetLock")
-      .doc("state")
-      .set(
-        { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
-        { merge: true }
-      );
-    await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
-
-    const finalLockSnap = await caseRef.collection("assetLock").doc("state").get();
-    const finalLockData = finalLockSnap.data() ?? {};
-    const finalItemsSnap = await caseRef.collection("assetLockItems").get();
-    const items = finalItemsSnap.docs.map((doc) => {
-      const item = doc.data() ?? {};
-      return {
-        itemId: item.itemId ?? doc.id,
-        assetId: item.assetId ?? "",
-        assetLabel: item.assetLabel ?? "",
-        token: item.token ?? null,
-        plannedAmount: item.plannedAmount ?? "0",
-        status: item.status ?? "PENDING",
-        txHash: item.txHash ?? null,
-        error: item.error ?? null
-      };
-    });
-    return jsonOk(c, {
-      status: finalLockData.status ?? "READY",
-      method: finalLockData.method ?? null,
-      uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
-      methodStep: finalLockData.methodStep ?? null,
-      wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
-      items,
-      regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
-        ? finalLockData.regularKeyStatuses
-        : []
-    });
+    return await finalizeExecution();
   });
 
   app.post(":caseId/plans", async (c) => {

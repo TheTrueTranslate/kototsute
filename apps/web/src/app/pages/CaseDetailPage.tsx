@@ -45,6 +45,7 @@ import {
   saveHeirWallet,
   type HeirWallet
 } from "../api/heir-wallets";
+import { getAssetLock } from "../api/asset-lock";
 import {
   createInvite,
   listCaseHeirs,
@@ -229,9 +230,6 @@ export const resolvePrepareDisabledReason = (input: {
   if (input.caseData.stage !== "IN_PROGRESS") {
     return { key: "cases.detail.prepare.disabled.notInProgress" };
   }
-  if (input.signerStatusKey === "FAILED") {
-    return { key: "cases.detail.prepare.disabled.failed" };
-  }
   const approvalPrepared =
     input.approvalTx?.status === "PREPARED" ||
     input.approvalTx?.status === "SUBMITTED" ||
@@ -255,6 +253,16 @@ export const resolveApprovalTxErrorMessage = (error: any) => {
   const code = error?.data?.code;
   if (code === "NOT_FOUND") return null;
   return error?.message ?? "cases.detail.signer.error.loadFailed";
+};
+
+export const resolveSignerListErrorMessage = (
+  message: string | null | undefined
+): string | LocalizedMessage | null => {
+  if (!message) return null;
+  if (/^Account not found\.?$/i.test(message.trim())) {
+    return { key: "cases.detail.signer.error.accountNotFound" };
+  }
+  return message;
 };
 
 export const resolveSignerFromLabel = () => "cases.detail.signer.fromLabel";
@@ -353,6 +361,7 @@ type CaseDetailPageProps = {
   initialTab?: TabKey;
   initialIsOwner?: boolean | null;
   initialCaseData?: CaseSummary | null;
+  initialDistributionWalletAddress?: string | null;
   initialHeirWallet?: HeirWallet | null;
   initialTaskIds?: string[];
   initialHeirs?: CaseHeir[];
@@ -370,6 +379,7 @@ export default function CaseDetailPage({
   initialTab,
   initialIsOwner = null,
   initialCaseData = null,
+  initialDistributionWalletAddress = null,
   initialHeirWallet = null,
   initialTaskIds = [],
   initialHeirs = [],
@@ -410,6 +420,9 @@ export default function CaseDetailPage({
   const [heirWallet, setHeirWallet] = useState<HeirWallet | null>(initialHeirWallet);
   const [heirWalletLoading, setHeirWalletLoading] = useState(false);
   const [heirWalletError, setHeirWalletError] = useState<string | null>(null);
+  const [ownerDistributionWalletAddress, setOwnerDistributionWalletAddress] = useState<
+    string | null
+  >(initialDistributionWalletAddress);
   const [deathClaim, setDeathClaim] = useState<DeathClaimSummary | null>(initialDeathClaim);
   const [heirWalletSaving, setHeirWalletSaving] = useState(false);
   const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
@@ -561,6 +574,8 @@ export default function CaseDetailPage({
     () => caseData?.ownerDisplayName ?? t("cases.detail.title"),
     [caseData, t]
   );
+  const showOwnerDistributionWallet =
+    isOwner === true && caseData?.stage === "IN_PROGRESS";
   const personalTasks = useMemo(() => {
     if (isOwner === true) return todoMaster.owner;
     if (isOwner === false) return todoMaster.heir;
@@ -752,6 +767,9 @@ export default function CaseDetailPage({
   ]);
   const prepareDisabledText = resolveMessage(prepareDisabledReason);
   const distributionDisabledText = resolveMessage(distributionDisabledReason);
+  const signerListErrorText = resolveMessage(
+    resolveSignerListErrorMessage(signerList?.error ?? null)
+  );
   const nftReceiveItems = useMemo(() => {
     const baseItems = distributionItems.filter(
       (item) => item.type === "NFT" && Boolean(item.offerId)
@@ -866,6 +884,7 @@ export default function CaseDetailPage({
         const owner = detail.ownerUid === user?.uid;
         setIsOwner(owner);
         if (owner) {
+          setOwnerDistributionWalletAddress(null);
           const [assetItems, planItems, inviteItems] = await Promise.all([
             listAssets(caseId),
             listPlans(caseId),
@@ -877,6 +896,16 @@ export default function CaseDetailPage({
           setOwnerInvites(inviteItems);
           setHeirs([]);
           setHeirWallet(null);
+          try {
+            const lockState = await getAssetLock(caseId);
+            if (active) {
+              setOwnerDistributionWalletAddress(lockState.wallet?.address ?? null);
+            }
+          } catch {
+            if (active) {
+              setOwnerDistributionWalletAddress(null);
+            }
+          }
         } else {
           const [planItems, heirItems] = await Promise.all([
             listPlans(caseId),
@@ -887,6 +916,7 @@ export default function CaseDetailPage({
           setPlans(planItems);
           setOwnerInvites([]);
           setHeirs(heirItems);
+          setOwnerDistributionWalletAddress(null);
           setHeirWalletLoading(true);
           setHeirWalletError(null);
           try {
@@ -1508,6 +1538,38 @@ export default function CaseDetailPage({
 
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
+      {showOwnerDistributionWallet ? (
+        <div className={styles.walletSection}>
+          <div className={styles.walletRow}>
+            <span className={styles.walletLabel}>
+              {t("cases.detail.distributionWallet.title")}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className={styles.copyButton}
+              onClick={() =>
+                handleCopy(
+                  t("cases.detail.distributionWallet.copyLabel"),
+                  ownerDistributionWalletAddress ?? ""
+                )
+              }
+              aria-label={t("cases.detail.distributionWallet.copyAriaLabel")}
+              disabled={!ownerDistributionWalletAddress}
+            >
+              <Copy />
+            </Button>
+          </div>
+          <div className={styles.walletAddress}>
+            <div className={styles.walletAddressValue}>
+              {ownerDistributionWalletAddress ??
+                t("cases.detail.distributionWallet.empty")}
+            </div>
+          </div>
+          {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
+        </div>
+      ) : null}
+
       <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
       {tab === "assets" ? (
@@ -1729,9 +1791,7 @@ export default function CaseDetailPage({
               {prepareSuccess ? (
                 <FormAlert variant="success">{t(prepareSuccess)}</FormAlert>
               ) : null}
-              {signerList?.error ? (
-                <FormAlert variant="error">{signerList.error}</FormAlert>
-              ) : null}
+              {signerListErrorText ? <FormAlert variant="error">{signerListErrorText}</FormAlert> : null}
               {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
               <div className={styles.signerGrid}>
                 <div className={styles.signerRow}>

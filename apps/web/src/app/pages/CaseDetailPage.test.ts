@@ -19,6 +19,15 @@ let distributionStateData = {
   escalationCount: 0
 };
 let distributionItemsData: Array<any> = [];
+let assetLockStateData = {
+  status: "DRAFT",
+  method: null,
+  uiStep: null,
+  methodStep: null,
+  wallet: null,
+  items: [],
+  regularKeyStatuses: []
+};
 let caseData = {
   caseId: "case-1",
   ownerUid: "owner",
@@ -105,6 +114,10 @@ vi.mock("../api/distribution", () => ({
   listDistributionItems: async () => distributionItemsData
 }));
 
+vi.mock("../api/asset-lock", () => ({
+  getAssetLock: async () => assetLockStateData
+}));
+
 vi.mock("../../features/auth/auth-provider", () => ({
   useAuth: () => ({ user: authUser, loading: false })
 }));
@@ -131,6 +144,15 @@ describe("CaseDetailPage", () => {
       escalationCount: 0
     };
     distributionItemsData = [];
+    assetLockStateData = {
+      status: "DRAFT",
+      method: null,
+      uiStep: null,
+      methodStep: null,
+      wallet: null,
+      items: [],
+      regularKeyStatuses: []
+    };
     caseData = {
       caseId: "case-1",
       ownerUid: "owner",
@@ -152,6 +174,20 @@ describe("CaseDetailPage", () => {
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
     expect(html).toContain("タスク");
+  });
+
+  it("shows distribution wallet for owner when inheritance is in progress", async () => {
+    const html = await render({
+      initialIsOwner: true,
+      initialCaseData: {
+        ...caseData,
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED"
+      },
+      initialDistributionWalletAddress: "rDistributionWallet"
+    });
+    expect(html).toContain("分配用ウォレットアドレス</span>");
+    expect(html).toContain("rDistributionWallet");
   });
 
   it("hides edit actions when asset lock is locked", async () => {
@@ -329,6 +365,34 @@ describe("CaseDetailPage", () => {
       approvalTx: null
     });
     expect(reason).toBeNull();
+  });
+
+  it("allows prepare retry when signer list is failed", async () => {
+    const { resolvePrepareDisabledReason } = await import("./CaseDetailPage");
+    const reason = resolvePrepareDisabledReason({
+      caseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      signerStatusKey: "FAILED",
+      totalHeirCount: 1,
+      unverifiedHeirCount: 0,
+      approvalTx: null
+    });
+    expect(reason).toBeNull();
+  });
+
+  it("maps account-not-found signer error to localized key", async () => {
+    const { resolveSignerListErrorMessage } = await import("./CaseDetailPage");
+    expect(resolveSignerListErrorMessage("Account not found.")).toEqual({
+      key: "cases.detail.signer.error.accountNotFound"
+    });
+    expect(resolveSignerListErrorMessage("Unexpected")).toBe("Unexpected");
   });
 
   it("ignores approval tx not found error", async () => {
