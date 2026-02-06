@@ -49,6 +49,7 @@ import {
   createInvite,
   listCaseHeirs,
   listInvitesByOwner,
+  updateInvite,
   type CaseHeir,
   type InviteListItem
 } from "../api/invites";
@@ -357,6 +358,7 @@ type CaseDetailPageProps = {
   initialDistributionWalletAddress?: string | null;
   initialHeirWallet?: HeirWallet | null;
   initialHeirs?: CaseHeir[];
+  initialOwnerInvites?: InviteListItem[];
   initialWalletDialogOpen?: boolean;
   initialWalletDialogMode?: "register" | "verify";
   initialDeathClaim?: DeathClaimSummary | null;
@@ -374,6 +376,7 @@ export default function CaseDetailPage({
   initialDistributionWalletAddress = null,
   initialHeirWallet = null,
   initialHeirs = [],
+  initialOwnerInvites = [],
   initialWalletDialogOpen = false,
   initialWalletDialogMode = "register",
   initialDeathClaim = null
@@ -386,13 +389,19 @@ export default function CaseDetailPage({
   const [caseData, setCaseData] = useState<CaseSummary | null>(initialCaseData);
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [plans, setPlans] = useState<PlanListItem[]>([]);
-  const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>([]);
+  const [ownerInvites, setOwnerInvites] = useState<InviteListItem[]>(initialOwnerInvites);
   const [heirs, setHeirs] = useState<CaseHeir[]>(initialHeirs);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRelation, setInviteRelation] = useState<RelationOption>(relationOptions[0]);
   const [inviteRelationOther, setInviteRelationOther] = useState("");
   const [inviteMemo, setInviteMemo] = useState("");
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [editingInvite, setEditingInvite] = useState<InviteListItem | null>(null);
+  const [inviteEditRelation, setInviteEditRelation] = useState<RelationOption>(relationOptions[0]);
+  const [inviteEditRelationOther, setInviteEditRelationOther] = useState("");
+  const [inviteEditMemo, setInviteEditMemo] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [inviteUpdating, setInviteUpdating] = useState(false);
   const [tab, setTab] = useState<TabKey>(() =>
     initialTab ?? (isTabKey(queryTab) ? queryTab : "assets")
   );
@@ -587,6 +596,12 @@ export default function CaseDetailPage({
     }
     const relationKey = getRelationOptionKey(label);
     return relationKey ? t(relationKey) : label;
+  };
+  const toRelationOption = (label?: string | null): RelationOption => {
+    if (!label) return relationOptions[0];
+    return relationOptions.includes(label as RelationOption)
+      ? (label as RelationOption)
+      : relationOtherValue;
   };
   const signerStatusKey = signerList?.status ?? "NOT_READY";
   const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
@@ -1400,6 +1415,22 @@ export default function CaseDetailPage({
     setSearchParams(nextParams, { replace: true });
   };
 
+  const handleOpenInviteModal = () => {
+    setInviteModalOpen(true);
+  };
+
+  const handleOpenInviteEdit = (invite: InviteListItem) => {
+    const normalizedRelation = toRelationOption(invite.relationLabel);
+    setInviteEditRelation(normalizedRelation);
+    setInviteEditRelationOther(
+      normalizedRelation === relationOtherValue
+        ? (invite.relationOther?.trim() || invite.relationLabel || "")
+        : (invite.relationOther ?? "")
+    );
+    setInviteEditMemo(invite.memo ?? "");
+    setEditingInvite(invite);
+  };
+
   const handleInviteSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isLocked) return;
@@ -1422,10 +1453,41 @@ export default function CaseDetailPage({
       setInviteMemo("");
       const inviteItems = await listInvitesByOwner(caseId);
       setOwnerInvites(inviteItems);
+      setInviteModalOpen(false);
     } catch (err: any) {
       setError(err?.message ?? "cases.detail.heirs.invite.error.sendFailed");
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleInviteUpdateSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isLocked) return;
+    if (!caseId) {
+      setError("cases.detail.error.caseIdMissing");
+      return;
+    }
+    if (!editingInvite) return;
+    setError(null);
+    setInviteUpdating(true);
+    try {
+      await updateInvite(caseId, editingInvite.inviteId, {
+        relationLabel: inviteEditRelation,
+        relationOther:
+          inviteEditRelation === relationOtherValue ? inviteEditRelationOther : undefined,
+        memo: inviteEditMemo.trim() ? inviteEditMemo : undefined
+      });
+      const inviteItems = await listInvitesByOwner(caseId);
+      setOwnerInvites(inviteItems);
+      setEditingInvite(null);
+      setInviteEditRelation(relationOptions[0]);
+      setInviteEditRelationOther("");
+      setInviteEditMemo("");
+    } catch (err: any) {
+      setError(err?.message ?? "cases.detail.heirs.invites.error.updateFailed");
+    } finally {
+      setInviteUpdating(false);
     }
   };
 
@@ -2337,54 +2399,76 @@ export default function CaseDetailPage({
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>{t("cases.detail.heirs.title")}</h2>
+            {isOwner && !isLocked ? (
+              <Button type="button" size="sm" onClick={handleOpenInviteModal}>
+                {t("cases.detail.heirs.actions.add")}
+              </Button>
+            ) : null}
           </div>
           {isOwner && !isLocked ? (
-            <form className={styles.form} onSubmit={handleInviteSubmit}>
-              <FormField label={t("cases.detail.heirs.form.email")}>
-                <Input
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="example@example.com"
-                  type="email"
-                />
-              </FormField>
-              <FormField label={t("cases.detail.heirs.form.relation")}>
-                <select
-                  className={styles.select}
-                  value={inviteRelation}
-                  onChange={(event) => setInviteRelation(event.target.value as RelationOption)}
-                >
-                  {relationOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {renderRelationLabel(option)}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              {inviteRelation === relationOtherValue ? (
-                <FormField label={t("cases.detail.heirs.form.relationOther")}>
-                  <Input
-                    value={inviteRelationOther}
-                    onChange={(event) => setInviteRelationOther(event.target.value)}
-                    placeholder={t("cases.detail.heirs.form.relationOtherPlaceholder")}
-                  />
-                </FormField>
-              ) : null}
-              <FormField label={t("cases.detail.heirs.form.memo")}>
-                <Textarea
-                  value={inviteMemo}
-                  onChange={(event) => setInviteMemo(event.target.value)}
-                  placeholder={t("cases.detail.heirs.form.memoPlaceholder")}
-                />
-              </FormField>
-              <div className={styles.formActions}>
-                <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
-                  {inviting
-                    ? t("cases.detail.heirs.form.submitting")
-                    : t("cases.detail.heirs.form.submit")}
-                </Button>
-              </div>
-            </form>
+            <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("cases.detail.heirs.dialog.addTitle")}</DialogTitle>
+                  <DialogDescription>
+                    {t("cases.detail.heirs.dialog.addDescription")}
+                  </DialogDescription>
+                </DialogHeader>
+                <form className={styles.form} onSubmit={handleInviteSubmit}>
+                  <FormField label={t("cases.detail.heirs.form.email")}>
+                    <Input
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="example@example.com"
+                      type="email"
+                    />
+                  </FormField>
+                  <FormField label={t("cases.detail.heirs.form.relation")}>
+                    <select
+                      className={styles.select}
+                      value={inviteRelation}
+                      onChange={(event) => setInviteRelation(event.target.value as RelationOption)}
+                    >
+                      {relationOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {renderRelationLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  {inviteRelation === relationOtherValue ? (
+                    <FormField label={t("cases.detail.heirs.form.relationOther")}>
+                      <Input
+                        value={inviteRelationOther}
+                        onChange={(event) => setInviteRelationOther(event.target.value)}
+                        placeholder={t("cases.detail.heirs.form.relationOtherPlaceholder")}
+                      />
+                    </FormField>
+                  ) : null}
+                  <FormField label={t("cases.detail.heirs.form.memo")}>
+                    <Textarea
+                      value={inviteMemo}
+                      onChange={(event) => setInviteMemo(event.target.value)}
+                      placeholder={t("cases.detail.heirs.form.memoPlaceholder")}
+                    />
+                  </FormField>
+                  <div className={styles.formActions}>
+                    <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                      {inviting
+                        ? t("cases.detail.heirs.form.submitting")
+                        : t("cases.detail.heirs.form.submit")}
+                    </Button>
+                  </div>
+                </form>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button" variant="ghost">
+                      {t("common.close")}
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           ) : isOwner && isLocked ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyTitle}>
@@ -2411,12 +2495,18 @@ export default function CaseDetailPage({
                   <div key={invite.inviteId} className={styles.row}>
                     <div className={styles.rowMain}>
                       <div className={styles.rowTitle}>{invite.email}</div>
-                      <div className={styles.rowMeta}>
-                        {t("cases.detail.heirs.relationLabel")}:{" "}
-                        {renderRelationLabel(invite.relationLabel, invite.relationOther)}
+                      <div className={styles.rowMetaStack}>
+                        <div className={styles.rowMeta}>
+                          {t("cases.detail.heirs.relationLabel")}:{" "}
+                          {renderRelationLabel(invite.relationLabel, invite.relationOther)}
+                        </div>
+                        <div className={styles.rowMeta}>
+                          {t("cases.detail.heirs.memoLabel")}:{" "}
+                          {invite.memo?.trim() ? invite.memo : t("common.unset")}
+                        </div>
                       </div>
                     </div>
-                    <div className={styles.rowSide}>
+                    <div className={styles.rowSideActions}>
                       <span className={styles.statusBadge}>
                         {invite.status === "pending"
                           ? t("cases.detail.heirs.invites.status.pending")
@@ -2424,6 +2514,16 @@ export default function CaseDetailPage({
                             ? t("cases.detail.heirs.invites.status.accepted")
                             : t("cases.detail.heirs.invites.status.declined")}
                       </span>
+                      {isLocked ? null : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenInviteEdit(invite)}
+                        >
+                          {t("cases.detail.heirs.actions.edit")}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2465,6 +2565,77 @@ export default function CaseDetailPage({
               ))}
             </div>
           )}
+          {isOwner ? (
+            <Dialog
+              open={Boolean(editingInvite)}
+              onOpenChange={(open) => {
+                if (open) return;
+                setEditingInvite(null);
+                setInviteEditRelation(relationOptions[0]);
+                setInviteEditRelationOther("");
+                setInviteEditMemo("");
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("cases.detail.heirs.dialog.editTitle")}</DialogTitle>
+                  <DialogDescription>
+                    {t("cases.detail.heirs.dialog.editDescription")}
+                  </DialogDescription>
+                </DialogHeader>
+                <form className={styles.form} onSubmit={handleInviteUpdateSubmit}>
+                  <FormField label={t("cases.detail.heirs.form.email")}>
+                    <Input value={editingInvite?.email ?? ""} readOnly />
+                  </FormField>
+                  <FormField label={t("cases.detail.heirs.form.relation")}>
+                    <select
+                      className={styles.select}
+                      value={inviteEditRelation}
+                      onChange={(event) =>
+                        setInviteEditRelation(event.target.value as RelationOption)
+                      }
+                    >
+                      {relationOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {renderRelationLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  {inviteEditRelation === relationOtherValue ? (
+                    <FormField label={t("cases.detail.heirs.form.relationOther")}>
+                      <Input
+                        value={inviteEditRelationOther}
+                        onChange={(event) => setInviteEditRelationOther(event.target.value)}
+                        placeholder={t("cases.detail.heirs.form.relationOtherPlaceholder")}
+                      />
+                    </FormField>
+                  ) : null}
+                  <FormField label={t("cases.detail.heirs.form.memo")}>
+                    <Textarea
+                      value={inviteEditMemo}
+                      onChange={(event) => setInviteEditMemo(event.target.value)}
+                      placeholder={t("cases.detail.heirs.form.memoPlaceholder")}
+                    />
+                  </FormField>
+                  <div className={styles.formActions}>
+                    <Button type="submit" disabled={inviteUpdating}>
+                      {inviteUpdating
+                        ? t("cases.detail.heirs.actions.saving")
+                        : t("cases.detail.heirs.actions.save")}
+                    </Button>
+                  </div>
+                </form>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button" variant="ghost">
+                      {t("common.close")}
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : null}
         </div>
       ) : null}
 

@@ -499,7 +499,20 @@
           "submit": "Send invite",
           "submitting": "Sending..."
         },
+        "actions": {
+          "add": "Add heir",
+          "edit": "Edit",
+          "save": "Save changes",
+          "saving": "Saving..."
+        },
+        "dialog": {
+          "addTitle": "Add heir",
+          "addDescription": "Enter the heir's email, relation, and optional memo to send an invite.",
+          "editTitle": "Edit heir info",
+          "editDescription": "Update the heir's relation and memo."
+        },
         "relationLabel": "Relation",
+        "memoLabel": "Memo",
         "locked": {
           "title": "Read-only after asset lock",
           "body": "You cannot add or edit heirs."
@@ -515,7 +528,8 @@
             "declined": "Declined"
           },
           "error": {
-            "sendFailed": "Failed to send invite"
+            "sendFailed": "Failed to send invite",
+            "updateFailed": "Failed to update heir info"
           }
         },
         "empty": {

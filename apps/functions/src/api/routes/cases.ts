@@ -10,6 +10,7 @@ import {
   displayNameSchema,
   getWalletAddressFromSeed,
   inviteCreateSchema,
+  inviteUpdateSchema,
   planAllocationSchema,
   planNftAllocationSchema,
   planCreateSchema,
@@ -350,6 +351,50 @@ export const casesRoutes = () => {
     const snapshot = await invitesCollection.where("email", "==", normalizedEmail).get();
     const data = snapshot.docs.map((doc) => ({ inviteId: doc.id, ...doc.data() }));
     return jsonOk(c, data);
+  });
+
+  app.patch(":caseId/invites/:inviteId", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const inviteId = c.req.param("inviteId");
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = inviteUpdateSchema.safeParse({
+      relationLabel: body?.relationLabel,
+      relationOther: body?.relationOther,
+      memo: body?.memo
+    });
+    if (!parsed.success) {
+      return jsonError(c, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "入力が不正です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+    if (caseSnap.data()?.ownerUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const inviteRef = db.collection(`cases/${caseId}/invites`).doc(inviteId);
+    const inviteSnap = await inviteRef.get();
+    if (!inviteSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Invite not found");
+    }
+
+    const now = c.get("deps").now();
+    await inviteRef.set(
+      {
+        relationLabel: parsed.data.relationLabel,
+        relationOther: parsed.data.relationOther?.trim() ?? null,
+        memo: parsed.data.memo?.trim() ?? null,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, { inviteId });
   });
 
   app.post(":caseId/invites/:inviteId/accept", async (c) => {

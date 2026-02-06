@@ -37,12 +37,29 @@ export type InviteCreateInput = {
   memo?: string;
 };
 
+export type InviteUpdateInput = {
+  relationLabel: string;
+  relationOther?: string;
+  memo?: string;
+};
+
 export const createInvite = async (caseId: string, input: InviteCreateInput) => {
   const result = await apiFetch(`/v1/cases/${caseId}/invites`, {
     method: "POST",
     body: JSON.stringify(input)
   });
   return result.data as { inviteId: string };
+};
+
+export const updateInvite = async (
+  caseId: string,
+  inviteId: string,
+  input: InviteUpdateInput
+) => {
+  await apiFetch(`/v1/cases/${caseId}/invites/${inviteId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
 };
 
 export const listInvitesByOwner = async (caseId: string) => {
