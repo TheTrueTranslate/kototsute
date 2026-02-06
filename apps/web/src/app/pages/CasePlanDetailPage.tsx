@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
@@ -35,14 +35,64 @@ const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") =>
   return unitType === "PERCENT" ? `${value}%` : `${value}`;
 };
 
-type TabKey = "summary" | "assets" | "heirs" | "history";
+type TabKey = "assets" | "heirs" | "history";
+const allTabKeys: TabKey[] = ["assets", "heirs", "history"];
+const isTabKey = (value: string | null): value is TabKey =>
+  Boolean(value && allTabKeys.includes(value as TabKey));
 
 type CasePlanDetailPageProps = {
   initialCaseData?: CaseSummary | null;
 };
 
+export const resolvePlanHeirs = (plan: PlanDetail, caseHeirs: CaseHeir[]) => {
+  const orderedHeirUids = Array.isArray(plan.heirUids)
+    ? plan.heirUids.filter(
+        (uid): uid is string => typeof uid === "string" && uid.trim().length > 0
+      )
+    : [];
+  if (orderedHeirUids.length === 0) return [];
+
+  const heirUidSet = new Set(orderedHeirUids);
+  const caseHeirMap = new Map<string, CaseHeir>();
+  for (const heir of caseHeirs) {
+    const uid = heir.acceptedByUid;
+    if (!uid || !heirUidSet.has(uid) || caseHeirMap.has(uid)) continue;
+    caseHeirMap.set(uid, heir);
+  }
+
+  const planHeirMap = new Map<
+    string,
+    { email: string; relationLabel: string; relationOther: string | null }
+  >();
+  for (const heir of plan.heirs) {
+    if (!heir?.uid || !heirUidSet.has(heir.uid) || planHeirMap.has(heir.uid)) continue;
+    planHeirMap.set(heir.uid, {
+      email: heir.email ?? "",
+      relationLabel: heir.relationLabel ?? "",
+      relationOther: heir.relationOther ?? null
+    });
+  }
+
+  return orderedHeirUids.map((uid) => {
+    const matched = caseHeirMap.get(uid);
+    if (matched) return matched;
+
+    const fallback = planHeirMap.get(uid);
+    return {
+      inviteId: `plan-heir-${uid}`,
+      email: fallback?.email ?? "",
+      relationLabel: fallback?.relationLabel ?? "",
+      relationOther: fallback?.relationOther ?? null,
+      acceptedByUid: uid,
+      acceptedAt: null
+    };
+  });
+};
+
 export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanDetailPageProps) {
   const { caseId, planId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryTab = searchParams.get("tab");
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t, i18n } = useTranslation();
@@ -51,7 +101,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   const [assets, setAssets] = useState<PlanAsset[]>([]);
   const [heirs, setHeirs] = useState<CaseHeir[]>([]);
   const [history, setHistory] = useState<PlanHistoryEntry[]>([]);
-  const [tab, setTab] = useState<TabKey>("summary");
+  const [tab, setTab] = useState<TabKey>(() => (isTabKey(queryTab) ? queryTab : "assets"));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -79,7 +129,6 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
   };
 
   const tabItems: { key: TabKey; label: string }[] = [
-    { key: "summary", label: t("plans.detail.tabs.summary") },
     { key: "assets", label: t("plans.detail.tabs.assets") },
     { key: "heirs", label: t("plans.detail.tabs.heirs") },
     { key: "history", label: t("plans.detail.tabs.history") }
@@ -121,7 +170,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
         ]);
         setPlan(detail);
         setAssets(assetItems);
-        setHeirs(heirItems);
+        setHeirs(resolvePlanHeirs(detail, heirItems));
         const historyItems = await listPlanHistory(caseId, planId).catch(() => []);
         setHistory(historyItems);
       } catch (err: any) {
@@ -132,6 +181,13 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
     };
     load();
   }, [caseId, planId]);
+
+  useEffect(() => {
+    const resolved = isTabKey(queryTab) ? queryTab : "assets";
+    if (resolved !== tab) {
+      setTab(resolved);
+    }
+  }, [queryTab, tab]);
 
   const handleDelete = async () => {
     if (!caseId || !planId) {
@@ -157,6 +213,14 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
     }
     const relationKey = getRelationOptionKey(relationLabel);
     return relationKey ? t(relationKey) : relationLabel;
+  };
+
+  const handleTabChange = (value: string) => {
+    if (!isTabKey(value)) return;
+    setTab(value);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", value);
+    setSearchParams(nextParams, { replace: true });
   };
 
   return (
@@ -240,30 +304,7 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
 
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
 
-      <Tabs items={tabItems} value={tab} onChange={(value) => setTab(value as TabKey)} />
-
-      {tab === "summary" ? (
-        <div className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>{t("plans.detail.summary.title")}</h2>
-          </div>
-          {loading ? null : plan ? (
-            <div className={styles.list}>
-              <div className={styles.row}>
-                <div className={styles.rowMain}>
-                  <div className={styles.rowTitle}>{t("plans.detail.summary.updatedAt")}</div>
-                  <div className={styles.rowMeta}>{formatDate(plan.updatedAt)}</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>{t("plans.detail.summary.empty.title")}</div>
-              <div className={styles.emptyBody}>{t("plans.detail.summary.empty.body")}</div>
-            </div>
-          )}
-        </div>
-      ) : null}
+      <Tabs items={tabItems} value={tab} onChange={handleTabChange} />
 
       {tab === "assets" ? (
         <div className={styles.panel}>
