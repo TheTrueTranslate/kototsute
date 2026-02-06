@@ -110,9 +110,15 @@
   "auth": {
     "common": {
       "email": "Email",
-      "emailPlaceholder": "example@kototsute.jp",
+      "emailPlaceholder": "example@kototsute.com",
       "password": "Password",
-      "passwordPlaceholder": "8 characters or more"
+      "passwordPlaceholder": "8 characters or more",
+      "languageLabel": "Language",
+      "languageHintMyPage": "You can also change the display language on My Page.",
+      "language": {
+        "ja": "Japanese",
+        "en": "English"
+      }
     },
     "login": {
       "title": "Sign in",
@@ -127,14 +133,14 @@
     },
     "register": {
       "title": "Sign up",
-      "lead": "Create an account with email and password.",
+      "lead": "Enter your display name, email, and password to create an account.",
       "footer": {
         "login": "Back to sign in",
         "reset": "Reset password"
       },
       "form": {
         "displayName": "Display name",
-        "displayNamePlaceholder": "e.g. Taro Yamada",
+        "displayNamePlaceholder": "e.g. John Doe",
         "confirmPassword": "Confirm password",
         "confirmPasswordPlaceholder": "Re-enter the password"
       },

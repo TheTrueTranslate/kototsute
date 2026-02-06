@@ -27,7 +27,12 @@ export default function AuthLayout({
       <main className={styles.panel}>
         {breadcrumbs ? <div className={styles.breadcrumbs}>{breadcrumbs}</div> : null}
         <header className={styles.header}>
-          <span className={styles.brand}>Kototsute</span>
+          <div className={styles.headerTop}>
+            <div className={styles.branding}>
+              <img className={styles.logo} src="/logo.png" alt="Kototsute" />
+              <span className={styles.brand}>Kototsute</span>
+            </div>
+          </div>
           <h1>{title}</h1>
           {lead ? <p>{lead}</p> : null}
         </header>

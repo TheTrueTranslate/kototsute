@@ -1,20 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import RegisterPage from "./RegisterPage";
+import LoginPage from "./LoginPage";
 
 const render = () =>
-  renderToString(
-    React.createElement(MemoryRouter, null, React.createElement(RegisterPage))
-  );
+  renderToString(React.createElement(MemoryRouter, null, React.createElement(LoginPage)));
 
-describe("RegisterPage", () => {
-  it("shows display name field", () => {
-    const html = render();
-    expect(html).toContain("表示名");
-  });
-
+describe("LoginPage", () => {
   it("shows logo and language switcher", () => {
     const html = render();
     expect(html).toContain('src="/logo.png"');
@@ -26,14 +19,9 @@ describe("RegisterPage", () => {
   it("shows language hint near submit section", () => {
     const html = render();
     const hintIndex = html.indexOf("マイページでも表示言語を切り替えられます。");
-    const submitIndex = html.indexOf(">登録する<");
+    const submitIndex = html.indexOf('type="submit">ログイン<');
     expect(hintIndex).toBeGreaterThan(-1);
     expect(submitIndex).toBeGreaterThan(-1);
     expect(hintIndex).toBeLessThan(submitIndex);
-  });
-
-  it("does not show register lead copy", () => {
-    const html = render();
-    expect(html).not.toContain("表示名・メールアドレス・パスワードを入力して登録してください。");
   });
 });

@@ -61,3 +61,7 @@ export function useLocale() {
   }
   return context;
 }
+
+export function useLocaleOptional() {
+  return useContext(LocaleContext);
+}
