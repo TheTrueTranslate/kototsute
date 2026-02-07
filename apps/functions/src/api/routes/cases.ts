@@ -3654,8 +3654,13 @@ export const casesRoutes = () => {
           .filter((assetId) => assetId.length > 0)
       )
     );
-    if (assetIds.length === 0) {
-      return await finalizeExecution();
+    if (itemEntries.length === 0 || assetIds.length === 0) {
+      return jsonError(
+        c,
+        400,
+        "ASSET_LOCK_ITEMS_EMPTY",
+        "ロック対象の資産がありません。資産を追加してから再実行してください。"
+      );
     }
     const assetSnaps = await Promise.all(
       assetIds.map((assetId) => caseRef.collection("assets").doc(assetId).get())
@@ -3780,6 +3785,16 @@ export const casesRoutes = () => {
           { merge: true }
         );
       }
+    }
+
+    const destinationInfo = await fetchXrplAccountInfo(destination);
+    if (destinationInfo.status !== "ok") {
+      return jsonError(
+        c,
+        400,
+        "DISTRIBUTION_WALLET_NOT_ACTIVATED",
+        "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。"
+      );
     }
 
     return await finalizeExecution();
