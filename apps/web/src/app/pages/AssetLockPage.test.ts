@@ -598,6 +598,49 @@ it("shows verification results on the final step", async () => {
   expect(html).toContain("資産ロックが完了しました");
 });
 
+it("shows transfer progress and verification in a single screen for method B final step", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 4,
+    methodStep: "REGULAR_KEY_CLEARED",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B",
+        initialBalances: {
+          destination: { address: "rDest", balanceXrp: "20", status: "ok", message: null },
+          sources: [{ assetId: "a1", address: "rFrom", balanceXrp: "10", status: "ok", message: null }]
+        }
+      })
+    )
+  );
+  expect(html).toContain("方式Bは自動送金");
+  expect(html).toContain("送金先");
+  expect(html).toContain("20 XRP");
+  expect(html).toContain("STEP");
+  expect(html).toContain("2 / 3");
+});
+
 it("shows complete action when all items are verified", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {

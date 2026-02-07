@@ -123,6 +123,7 @@ export default function AssetLockPage({
   const [transferSendSuccess, setTransferSendSuccess] = useState<string | null>(null);
   const prevUiStepRef = useRef<number | null>(null);
   const current = steps[stepIndex];
+  const showCombinedMethodBStep = method === "B" && current.id === "verify";
   const methodSteps = [
     {
       id: "REGULAR_KEY_SET",
@@ -160,7 +161,8 @@ export default function AssetLockPage({
 
   const resolveAssetAddress = (assetId: string) => assetAddressMap.get(assetId) ?? "";
 
-  const stepLabel = `${stepIndex + 1} / ${steps.length}`;
+  const stepDisplayIndex = showCombinedMethodBStep ? 2 : stepIndex + 1;
+  const stepLabel = `${stepDisplayIndex} / ${steps.length}`;
   const regularKeyStatuses = lockState?.regularKeyStatuses ?? [];
   const isLocked = lockState?.status === "LOCKED";
   const canComplete =
@@ -570,6 +572,133 @@ export default function AssetLockPage({
     }
   };
 
+  const renderVerifySection = () => (
+    <div className={styles.stepBody}>
+      <div className={styles.balanceHeader}>
+        <div className={styles.balanceTitle}>{t("assetLock.verify.balanceTitle")}</div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={loadBalances}
+          disabled={balanceLoading}
+        >
+          {t("assetLock.verify.reload")}
+        </Button>
+      </div>
+      <div className={styles.balanceNote}>
+        {t("assetLock.verify.note")}
+      </div>
+      {balanceError ? <FormAlert variant="error">{t(balanceError)}</FormAlert> : null}
+      {balanceLoading ? (
+        <div className={styles.balanceNote}>{t("assetLock.verify.loadingBalances")}</div>
+      ) : null}
+      {balances ? (
+        <div className={styles.balanceGrid}>
+          <div className={styles.balanceItem}>
+            <div className={styles.balanceLabel}>{t("assetLock.verify.destination")}</div>
+            <div className={styles.balanceValue}>
+              {formatBalanceLabel(balances.destination)}
+            </div>
+            <a
+              className={styles.balanceLink}
+              href={buildExplorerUrl(balances.destination.address)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {balances.destination.address}
+            </a>
+            {balances.destination.status === "error" &&
+            formatBalanceError(balances.destination.message) ? (
+              <div className={styles.balanceError}>
+                {formatBalanceError(balances.destination.message)}
+              </div>
+            ) : null}
+          </div>
+          {balances.sources.map((source) => (
+            <div key={source.assetId ?? source.address} className={styles.balanceItem}>
+              <div className={styles.balanceLabel}>
+                {t("assetLock.verify.source")}
+                {source.assetLabel ? ` (${source.assetLabel})` : ""}
+              </div>
+              <div className={styles.balanceValue}>
+                {formatBalanceLabel(source)}
+              </div>
+              <a
+                className={styles.balanceLink}
+                href={buildExplorerUrl(source.address)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {source.address}
+              </a>
+              {source.status === "error" && formatBalanceError(source.message) ? (
+                <div className={styles.balanceError}>
+                  {formatBalanceError(source.message)}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {(lockState?.items ?? []).length === 0 ? (
+        <div className={styles.emptyState}>{t("assetLock.verify.empty")}</div>
+      ) : (
+        <div className={styles.transferList}>
+          {(lockState?.items ?? []).map((item) => (
+            <div key={item.itemId} className={styles.transferRow}>
+              <div className={styles.transferHeader}>
+                <div className={styles.transferLabel}>{item.assetLabel}</div>
+                <span
+                  className={`${styles.statusBadge} ${getItemStatusClass(item.status)}`}
+                >
+                  {formatItemStatus(item.status)}
+                </span>
+              </div>
+              <div className={styles.transferType}>
+                {item.token
+                  ? t("assetLock.transfer.type.token")
+                  : t("assetLock.transfer.type.xrp")}
+              </div>
+              <div className={styles.transferMeta}>
+                {t("assetLock.transfer.planned", { amount: item.plannedAmount })}
+              </div>
+              {item.txHash ? (
+                <div className={styles.transferMeta}>
+                  TX Hash:{" "}
+                  <a
+                    className={styles.balanceLink}
+                    href={buildTransactionExplorerUrl(item.txHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {item.txHash}
+                  </a>
+                </div>
+              ) : null}
+              {item.error ? (
+                <div className={styles.statusErrorText}>{item.error}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={styles.methodActions}>
+        <Button
+          type="button"
+          onClick={handleComplete}
+          disabled={!canComplete || completeLoading || isLocked}
+        >
+          {isLocked
+            ? t("assetLock.actions.completed")
+            : completeLoading
+              ? t("assetLock.actions.completing")
+              : t("assetLock.actions.complete")}
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -605,7 +734,9 @@ export default function AssetLockPage({
       ) : null}
 
       <div className={styles.stepCard}>
-        <div className={styles.stepTitle}>{current.title}</div>
+        <div className={styles.stepTitle}>
+          {showCombinedMethodBStep ? t("assetLock.steps.transfer") : current.title}
+        </div>
         {current.id === "prepare" ? (
           <div className={styles.stepBody}>
             <div>{t("assetLock.prepare.description")}</div>
@@ -737,7 +868,7 @@ export default function AssetLockPage({
             )}
           </div>
         ) : null}
-        {current.id === "transfer" ? (
+        {(current.id === "transfer" || (method === "B" && current.id === "verify")) ? (
           <div className={styles.stepBody}>
             <div className={styles.transferHint}>
               {t("assetLock.transfer.hint")}
@@ -845,6 +976,7 @@ export default function AssetLockPage({
                     </Button>
                   </div>
                 ) : null}
+                {showCombinedMethodBStep ? renderVerifySection() : null}
               </div>
             ) : (
               <div className={styles.transferList}>
@@ -907,132 +1039,7 @@ export default function AssetLockPage({
             )}
           </div>
         ) : null}
-        {current.id === "verify" ? (
-          <div className={styles.stepBody}>
-            <div className={styles.balanceHeader}>
-              <div className={styles.balanceTitle}>{t("assetLock.verify.balanceTitle")}</div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={loadBalances}
-                disabled={balanceLoading}
-              >
-                {t("assetLock.verify.reload")}
-              </Button>
-            </div>
-            <div className={styles.balanceNote}>
-              {t("assetLock.verify.note")}
-            </div>
-            {balanceError ? <FormAlert variant="error">{t(balanceError)}</FormAlert> : null}
-            {balanceLoading ? (
-              <div className={styles.balanceNote}>{t("assetLock.verify.loadingBalances")}</div>
-            ) : null}
-            {balances ? (
-              <div className={styles.balanceGrid}>
-                <div className={styles.balanceItem}>
-                  <div className={styles.balanceLabel}>{t("assetLock.verify.destination")}</div>
-                  <div className={styles.balanceValue}>
-                    {formatBalanceLabel(balances.destination)}
-                  </div>
-                  <a
-                    className={styles.balanceLink}
-                    href={buildExplorerUrl(balances.destination.address)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {balances.destination.address}
-                  </a>
-                  {balances.destination.status === "error" &&
-                  formatBalanceError(balances.destination.message) ? (
-                    <div className={styles.balanceError}>
-                      {formatBalanceError(balances.destination.message)}
-                    </div>
-                  ) : null}
-                </div>
-                {balances.sources.map((source) => (
-                  <div key={source.assetId ?? source.address} className={styles.balanceItem}>
-                    <div className={styles.balanceLabel}>
-                      {t("assetLock.verify.source")}
-                      {source.assetLabel ? ` (${source.assetLabel})` : ""}
-                    </div>
-                    <div className={styles.balanceValue}>
-                      {formatBalanceLabel(source)}
-                    </div>
-                    <a
-                      className={styles.balanceLink}
-                      href={buildExplorerUrl(source.address)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {source.address}
-                    </a>
-                    {source.status === "error" && formatBalanceError(source.message) ? (
-                      <div className={styles.balanceError}>
-                        {formatBalanceError(source.message)}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {(lockState?.items ?? []).length === 0 ? (
-              <div className={styles.emptyState}>{t("assetLock.verify.empty")}</div>
-            ) : (
-              <div className={styles.transferList}>
-                {(lockState?.items ?? []).map((item) => (
-                  <div key={item.itemId} className={styles.transferRow}>
-                    <div className={styles.transferHeader}>
-                      <div className={styles.transferLabel}>{item.assetLabel}</div>
-                      <span
-                        className={`${styles.statusBadge} ${getItemStatusClass(item.status)}`}
-                      >
-                        {formatItemStatus(item.status)}
-                      </span>
-                    </div>
-                    <div className={styles.transferType}>
-                      {item.token
-                        ? t("assetLock.transfer.type.token")
-                        : t("assetLock.transfer.type.xrp")}
-                    </div>
-                    <div className={styles.transferMeta}>
-                      {t("assetLock.transfer.planned", { amount: item.plannedAmount })}
-                    </div>
-                    {item.txHash ? (
-                      <div className={styles.transferMeta}>
-                        TX Hash:{" "}
-                        <a
-                          className={styles.balanceLink}
-                          href={buildTransactionExplorerUrl(item.txHash)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {item.txHash}
-                        </a>
-                      </div>
-                    ) : null}
-                    {item.error ? (
-                      <div className={styles.statusErrorText}>{item.error}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className={styles.methodActions}>
-              <Button
-                type="button"
-                onClick={handleComplete}
-                disabled={!canComplete || completeLoading || isLocked}
-              >
-                {isLocked
-                  ? t("assetLock.actions.completed")
-                  : completeLoading
-                    ? t("assetLock.actions.completing")
-                    : t("assetLock.actions.complete")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        {current.id === "verify" && method !== "B" ? renderVerifySection() : null}
       </div>
 
       <Dialog
