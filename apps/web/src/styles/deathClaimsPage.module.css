@@ -102,6 +102,22 @@
   @apply mt-2 flex flex-wrap items-center gap-2;
 }
 
+.filePicker {
+  @apply flex flex-wrap items-center gap-3;
+}
+
+.fileInputHidden {
+  @apply sr-only;
+}
+
+.filePickerButton {
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-body-sm font-medium text-foreground transition-colors hover:bg-muted/50;
+}
+
+.filePickerStatus {
+  @apply text-body-sm text-muted-foreground;
+}
+
 .modalOverlay {
   @apply fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4;
 }

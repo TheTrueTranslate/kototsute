@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ref as storageRef, uploadBytes } from "firebase/storage";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
@@ -6,7 +6,6 @@ import { FileList } from "../../features/shared/components/file-list";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
 import { Button } from "../../features/shared/components/ui/button";
-import { Input } from "../../features/shared/components/ui/input";
 import { storage } from "../../features/shared/lib/firebase";
 import { useAuth } from "../../features/auth/auth-provider";
 import {
@@ -79,6 +78,7 @@ export function DeathClaimsPanel({
   const [openingFileId, setOpeningFileId] = useState<string | null>(null);
   const [resubmitDialogOpen, setResubmitDialogOpen] = useState(initialResubmitDialogOpen);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(initialConfirmDialogOpen);
+  const fileInputBaseId = useId();
   const statusLabels: Record<string, string> = {
     SUBMITTED: t("deathClaims.status.submitted"),
     ADMIN_APPROVED: t("deathClaims.status.adminApproved"),
@@ -260,15 +260,27 @@ export function DeathClaimsPanel({
   const renderFileUploadForm = (testId: string) => (
     <div className={styles.form} data-testid={testId}>
       <FormField label={t("deathClaims.upload.label")}>
-        <Input
-          type="file"
-          multiple
-          accept="application/pdf,image/jpeg,image/png"
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            setSelectedFiles(files);
-          }}
-        />
+        <div className={styles.filePicker}>
+          <input
+            id={`${fileInputBaseId}-files`}
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png"
+            className={styles.fileInputHidden}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              setSelectedFiles(files);
+            }}
+          />
+          <label htmlFor={`${fileInputBaseId}-files`} className={styles.filePickerButton}>
+            {t("deathClaims.upload.choose")}
+          </label>
+          <span className={styles.filePickerStatus}>
+            {selectedFiles.length > 0
+              ? t("deathClaims.upload.selectedCount", { count: selectedFiles.length })
+              : t("deathClaims.upload.noneSelected")}
+          </span>
+        </div>
       </FormField>
       <div className={styles.actions}>
         <Button type="button" onClick={handleUpload} disabled={uploading}>
@@ -376,15 +388,27 @@ export function DeathClaimsPanel({
             <div className={styles.emptyBody}>{t("deathClaims.empty.noClaim.body")}</div>
             <div className={styles.form}>
               <FormField label={t("deathClaims.upload.label")}>
-                <Input
-                  type="file"
-                  multiple
-                  accept="application/pdf,image/jpeg,image/png"
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    setSelectedFiles(files);
-                  }}
-                />
+                <div className={styles.filePicker}>
+                  <input
+                    id={`${fileInputBaseId}-submit`}
+                    type="file"
+                    multiple
+                    accept="application/pdf,image/jpeg,image/png"
+                    className={styles.fileInputHidden}
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      setSelectedFiles(files);
+                    }}
+                  />
+                  <label htmlFor={`${fileInputBaseId}-submit`} className={styles.filePickerButton}>
+                    {t("deathClaims.upload.choose")}
+                  </label>
+                  <span className={styles.filePickerStatus}>
+                    {selectedFiles.length > 0
+                      ? t("deathClaims.upload.selectedCount", { count: selectedFiles.length })
+                      : t("deathClaims.upload.noneSelected")}
+                  </span>
+                </div>
               </FormField>
             </div>
             <div className={styles.actions}>

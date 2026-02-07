@@ -1416,6 +1416,9 @@
     },
     "upload": {
       "label": "Add files",
+      "choose": "Choose files",
+      "noneSelected": "No files selected",
+      "selectedCount": "{{count}} selected",
       "action": "Upload",
       "actioning": "Uploading...",
       "disabled": "You can add files only when rejected. File uploads are disabled during admin review."

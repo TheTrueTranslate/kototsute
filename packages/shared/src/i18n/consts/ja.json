@@ -1416,6 +1416,9 @@
     },
     "upload": {
       "label": "ファイルを追加",
+      "choose": "ファイル選択",
+      "noneSelected": "選択されていません",
+      "selectedCount": "{{count}}件選択中",
       "action": "アップロード",
       "actioning": "アップロード中...",
       "disabled": "差し戻し時のみファイルを追加できます。運営確認中は追加できません。"
