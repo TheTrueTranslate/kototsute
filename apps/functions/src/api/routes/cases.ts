@@ -15,6 +15,7 @@ import {
   planAllocationSchema,
   planNftAllocationSchema,
   planCreateSchema,
+  clearRegularKey,
   sendSignerListSet,
   sendTokenPayment,
   sendXrpPayment
@@ -3184,6 +3185,8 @@ export const casesRoutes = () => {
     }
 
     const destinationInfo = await fetchXrplAccountInfo(destination);
+    const destinationAccountNotFound =
+      destinationInfo.status !== "ok" && /account not found/i.test(destinationInfo.message ?? "");
     const destinationStatus =
       destinationInfo.status === "ok"
         ? {
@@ -3191,6 +3194,12 @@ export const casesRoutes = () => {
             balanceXrp: destinationInfo.balanceXrp,
             message: null
           }
+        : lockData.status === "LOCKED" && destinationAccountNotFound
+          ? {
+              status: "ok" as const,
+              balanceXrp: "0",
+              message: null
+            }
         : {
             status: "error" as const,
             balanceXrp: null,
@@ -3553,6 +3562,28 @@ export const casesRoutes = () => {
         "分配用Walletの鍵が一致しません"
       );
     }
+    const regularKeySourceAddresses = Array.from(
+      new Set(
+        (Array.isArray(lockData.regularKeyStatuses) ? lockData.regularKeyStatuses : [])
+          .map((status) => (typeof status?.address === "string" ? status.address : ""))
+          .filter((address) => address.length > 0)
+      )
+    );
+    const clearRegularKeys = async () => {
+      for (const fromAddress of regularKeySourceAddresses) {
+        try {
+          await clearRegularKey({ fromSeed: seed, fromAddress });
+        } catch (error: any) {
+          return jsonError(
+            c,
+            400,
+            "REGULAR_KEY_CLEAR_FAILED",
+            error?.message ?? "RegularKeyの解除に失敗しました"
+          );
+        }
+      }
+      return null;
+    };
     const itemsSnap = await caseRef.collection("assetLockItems").get();
     const itemEntries = itemsSnap.docs.map((doc) => ({
       id: doc.id,
@@ -3560,6 +3591,10 @@ export const casesRoutes = () => {
       data: doc.data() ?? {}
     }));
     const finalizeExecution = async () => {
+      const clearError = await clearRegularKeys();
+      if (clearError) {
+        return clearError;
+      }
       await caseRef
         .collection("assetLock")
         .doc("state")

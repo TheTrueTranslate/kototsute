@@ -23,6 +23,25 @@ const storageMocks = vi.hoisted(() => {
   const bucket = vi.fn(() => ({ file }));
   return { getSignedUrl, download, file, bucket };
 });
+const sharedMocks = vi.hoisted(() => {
+  const sendXrpPayment = vi.fn(async () => ({ txHash: "tx-xrp" }));
+  const sendTokenPayment = vi.fn(async () => ({ txHash: "tx-token" }));
+  const sendSignerListSet = vi.fn(async () => ({ txHash: "tx-signer" }));
+  const clearRegularKey = vi.fn(async () => ({ txHash: "tx-clear-regular-key" }));
+  const createNftSellOffer = vi.fn(async () => ({ offerId: "offer-1", txHash: "tx-nft" }));
+  const createLocalXrplWallet = vi.fn(() => ({
+    address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+    seed: "sLocal"
+  }));
+  return {
+    sendXrpPayment,
+    sendTokenPayment,
+    sendSignerListSet,
+    clearRegularKey,
+    createNftSellOffer,
+    createLocalXrplWallet
+  };
+});
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -233,15 +252,13 @@ vi.mock("@kototsute/shared", async () => {
     assetLabelUpdateSchema:
       (actual as any).assetLabelUpdateSchema ??
       (actual as any).assetCreateSchema.pick({ label: true }),
-    sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
-    sendTokenPayment: async () => ({ txHash: "tx-token" }),
-    sendSignerListSet: async () => ({ txHash: "tx-signer" }),
-    createNftSellOffer: async () => ({ offerId: "offer-1", txHash: "tx-nft" }),
+    sendXrpPayment: sharedMocks.sendXrpPayment,
+    sendTokenPayment: sharedMocks.sendTokenPayment,
+    sendSignerListSet: sharedMocks.sendSignerListSet,
+    clearRegularKey: sharedMocks.clearRegularKey,
+    createNftSellOffer: sharedMocks.createNftSellOffer,
     getWalletAddressFromSeed: vi.fn(() => "rDest"),
-    createLocalXrplWallet: vi.fn(() => ({
-      address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-      seed: "sLocal"
-    }))
+    createLocalXrplWallet: sharedMocks.createLocalXrplWallet
   };
 });
 
@@ -375,6 +392,7 @@ describe("createApiHandler", () => {
     authState.existingEmails.clear();
     authState.users.clear();
     authTokens.clear();
+    vi.clearAllMocks();
   });
 
   const getAuthUser = async (authHeader: string | null | undefined) => {
@@ -2648,6 +2666,10 @@ describe("createApiHandler", () => {
     expect(itemSnap.data()?.status).toBe("VERIFIED");
     const lockSnap = await db.collection("cases").doc(caseId).collection("assetLock").doc("state").get();
     expect(lockSnap.data()?.methodStep).toBe("REGULAR_KEY_CLEARED");
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledTimes(1);
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAddress: "rFrom" })
+    );
     const caseSnap = await db.collection("cases").doc(caseId).get();
     expect(caseSnap.data()?.stage).toBe("WAITING");
     (globalThis as any).fetch = fetchOriginal;
@@ -2706,6 +2728,10 @@ describe("createApiHandler", () => {
     expect(execRes.statusCode).toBe(200);
     expect(execRes.body?.data?.items ?? []).toHaveLength(0);
     expect(execRes.body?.data?.methodStep).toBe("REGULAR_KEY_CLEARED");
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledTimes(1);
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAddress: "rFrom" })
+    );
     const caseSnap = await db.collection("cases").doc(caseId).get();
     expect(caseSnap.data()?.stage).toBe("WAITING");
   });
@@ -3072,6 +3098,81 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.destination?.balanceXrp).toBe("20");
     expect(res.body?.data?.sources?.[0]?.assetId).toBe("asset-1");
     expect(res.body?.data?.sources?.[0]?.balanceXrp).toBe("10");
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns destination balance as zero when locked state destination is not found", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method !== "account_info") {
+        return { ok: false, json: async () => ({}) };
+      }
+      const account = body?.params?.[0]?.account;
+      if (account === "rFrom") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "10000000" } }
+          })
+        };
+      }
+      if (account === "rDest") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { error: "actNotFound", error_message: "Account not found." }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+      address: "rFrom",
+      reserveXrp: "0",
+      label: "Wallet"
+    });
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "LOCKED",
+      method: "B",
+      wallet: { address: "rDest" }
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/asset-lock/balances`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.destination?.status).toBe("ok");
+    expect(res.body?.data?.destination?.balanceXrp).toBe("0");
+    expect(res.body?.data?.destination?.message).toBeNull();
     (globalThis as any).fetch = fetchOriginal;
   });
 
