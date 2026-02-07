@@ -2659,6 +2659,7 @@ describe("createApiHandler", () => {
     );
 
     expect(execRes.statusCode).toBe(200);
+    expect(execRes.body?.data?.status).toBe("LOCKED");
     expect(execRes.body?.data?.items ?? []).toHaveLength(1);
     expect(execRes.body?.data?.items?.[0]?.status).toBe("VERIFIED");
     expect(execRes.body?.data?.items?.[0]?.txHash).toBe("tx-xrp");
@@ -2726,6 +2727,7 @@ describe("createApiHandler", () => {
     );
 
     expect(execRes.statusCode).toBe(200);
+    expect(execRes.body?.data?.status).toBe("LOCKED");
     expect(execRes.body?.data?.items ?? []).toHaveLength(0);
     expect(execRes.body?.data?.methodStep).toBe("REGULAR_KEY_CLEARED");
     expect(sharedMocks.clearRegularKey).toHaveBeenCalledTimes(1);
@@ -3157,6 +3159,83 @@ describe("createApiHandler", () => {
     await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
       status: "LOCKED",
       method: "B",
+      wallet: { address: "rDest" }
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/asset-lock/balances`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.destination?.status).toBe("ok");
+    expect(res.body?.data?.destination?.balanceXrp).toBe("0");
+    expect(res.body?.data?.destination?.message).toBeNull();
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns destination balance as zero when case is locked and destination account is missing", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method !== "account_info") {
+        return { ok: false, json: async () => ({}) };
+      }
+      const account = body?.params?.[0]?.account;
+      if (account === "rFrom") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "10000000" } }
+          })
+        };
+      }
+      if (account === "rDest") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { error: "actNotFound", error_message: "Account not found." }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ assetLockStatus: "LOCKED" }, { merge: true });
+    await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+      address: "rFrom",
+      reserveXrp: "0",
+      label: "Wallet"
+    });
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "B",
+      methodStep: "REGULAR_KEY_CLEARED",
       wallet: { address: "rDest" }
     });
 

@@ -2949,6 +2949,7 @@ export const casesRoutes = () => {
 
     const lockSnap = await caseRef.collection("assetLock").doc("state").get();
     const lockData = lockSnap.data() ?? {};
+    const caseLocked = caseSnap.data()?.assetLockStatus === "LOCKED";
     const destination = lockData?.wallet?.address;
     if (!destination) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
@@ -3096,6 +3097,7 @@ export const casesRoutes = () => {
 
     const lockSnap = await caseRef.collection("assetLock").doc("state").get();
     const lockData = lockSnap.data() ?? {};
+    const caseLocked = caseSnap.data()?.assetLockStatus === "LOCKED";
     const destination = lockData?.wallet?.address;
     if (!destination) {
       return jsonError(c, 400, "VALIDATION_ERROR", "送金先ウォレットが未設定です");
@@ -3187,6 +3189,10 @@ export const casesRoutes = () => {
     const destinationInfo = await fetchXrplAccountInfo(destination);
     const destinationAccountNotFound =
       destinationInfo.status !== "ok" && /account not found/i.test(destinationInfo.message ?? "");
+    const destinationFinalized =
+      lockData.status === "LOCKED" ||
+      caseLocked ||
+      lockData.methodStep === "REGULAR_KEY_CLEARED";
     const destinationStatus =
       destinationInfo.status === "ok"
         ? {
@@ -3194,7 +3200,7 @@ export const casesRoutes = () => {
             balanceXrp: destinationInfo.balanceXrp,
             message: null
           }
-        : lockData.status === "LOCKED" && destinationAccountNotFound
+        : destinationFinalized && destinationAccountNotFound
           ? {
               status: "ok" as const,
               balanceXrp: "0",
@@ -3603,7 +3609,12 @@ export const casesRoutes = () => {
         .collection("assetLock")
         .doc("state")
         .set(
-          { methodStep: "REGULAR_KEY_CLEARED", uiStep: 4, updatedAt: c.get("deps").now() },
+          {
+            status: "LOCKED",
+            methodStep: "REGULAR_KEY_CLEARED",
+            uiStep: 4,
+            updatedAt: c.get("deps").now()
+          },
           { merge: true }
         );
       await caseRef.set({ assetLockStatus: "LOCKED", stage: "WAITING" }, { merge: true });
