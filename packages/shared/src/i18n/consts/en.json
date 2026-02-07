@@ -775,6 +775,36 @@
           "verifyConfirmed": "Verification completed",
           "synced": "Synced",
           "syncLog": "Sync log"
+        },
+        "items": {
+          "created": {
+            "summary": "Asset registered"
+          },
+          "updated": {
+            "summary": "Asset name updated"
+          },
+          "deleted": {
+            "summary": "Asset deleted"
+          },
+          "reserve": {
+            "summary": "Reserve settings updated"
+          },
+          "verifyRequested": {
+            "summary": "Ownership verification started"
+          },
+          "verifyConfirmed": {
+            "summary": "Ownership verification completed"
+          },
+          "synced": {
+            "summary": "Wallet data synced",
+            "detailBalance": "Balance {{balanceXrp}} XRP"
+          },
+          "syncLog": {
+            "summary": "Sync log",
+            "success": "Sync succeeded",
+            "failed": "Sync failed",
+            "detailSuccess": "Ledger {{ledgerIndex}} / Balance {{balanceXrp}} XRP"
+          }
         }
       },
       "delete": {
@@ -1151,6 +1181,37 @@
         "empty": {
           "title": "No history yet",
           "body": "Plan activity will appear here."
+        },
+        "items": {
+          "planCreated": {
+            "title": "Plan created"
+          },
+          "planTitleUpdated": {
+            "title": "Plan title updated"
+          },
+          "planHeirAdded": {
+            "title": "Heir added"
+          },
+          "planHeirRemoved": {
+            "title": "Heir removed"
+          },
+          "planAssetAdded": {
+            "title": "Asset added"
+          },
+          "planAllocationUpdated": {
+            "title": "Allocation updated"
+          },
+          "planNftAllocationsUpdated": {
+            "title": "NFT allocation updated"
+          },
+          "planAssetRemoved": {
+            "title": "Asset removed"
+          },
+          "detail": {
+            "title": "Title: {{title}}",
+            "heirWithRelation": "{{relation}} / {{email}}",
+            "heirEmail": "{{email}}"
+          }
         }
       },
       "error": {

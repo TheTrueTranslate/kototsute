@@ -252,6 +252,26 @@ describe("AssetDetailPage", () => {
     expect(html).toContain("owner@example.com");
   });
 
+  it("localizes asset history summary by type instead of raw stored title", async () => {
+    const html = await render({
+      initialTab: "history",
+      initialHistoryItems: [
+        {
+          historyId: "history-2",
+          type: "ASSET_SYNCED",
+          title: "RAW_ASSET_HISTORY_TITLE",
+          detail: "残高 10 XRP",
+          actorUid: "owner_1",
+          actorEmail: "owner@example.com",
+          createdAt: "2024-01-04T00:00:00.000Z",
+          meta: null
+        }
+      ]
+    });
+    expect(html).toContain("ウォレット情報を同期");
+    expect(html).not.toContain("RAW_ASSET_HISTORY_TITLE");
+  });
+
   it("renders auto verify guidance without tx hash input", async () => {
     const html = await render();
     expect(html).toContain("data-testid=\"wallet-verify-panel\"");

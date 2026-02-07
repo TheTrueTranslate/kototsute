@@ -74,6 +74,109 @@ export const shouldCloseVerifyDialogOnSuccess = (
   verificationStatus: AssetDetail["verificationStatus"] | null | undefined
 ) => verificationStatus === "VERIFIED";
 
+type TranslateFn = (key: string, values?: Record<string, unknown>) => string;
+
+const readHistoryMetaString = (meta: Record<string, unknown> | null, key: string) => {
+  const value = meta?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+};
+
+const parseLegacySyncBalance = (detail: string | null) => {
+  if (!detail) return null;
+  const matched = detail.match(/^残高\s+(.+)\s+XRP$/);
+  return matched?.[1]?.trim() || null;
+};
+
+const parseLegacySyncLogDetail = (detail: string | null) => {
+  if (!detail) return null;
+  const matched = detail.match(/^Ledger\s+(.+)\s+\/\s+残高\s+(.+)\s+XRP$/);
+  if (!matched) return null;
+  return {
+    ledgerIndex: matched[1]?.trim() || "-",
+    balanceXrp: matched[2]?.trim() || "-"
+  };
+};
+
+const translateStoredHistoryValue = (value: string, t: TranslateFn) => {
+  if (value.startsWith("assets.")) return t(value);
+  return value;
+};
+
+export const localizeAssetHistoryItem = (item: AssetHistoryItem, t: TranslateFn) => {
+  switch (item.type) {
+    case "ASSET_CREATED":
+      return {
+        summary: t("assets.detail.history.items.created.summary"),
+        detail: item.detail
+      };
+    case "ASSET_UPDATED":
+      return {
+        summary: t("assets.detail.history.items.updated.summary"),
+        detail: item.detail
+      };
+    case "ASSET_DELETED":
+      return {
+        summary: t("assets.detail.history.items.deleted.summary"),
+        detail: item.detail
+      };
+    case "ASSET_RESERVE_UPDATED":
+      return {
+        summary: t("assets.detail.history.items.reserve.summary"),
+        detail: item.detail
+      };
+    case "ASSET_VERIFY_REQUESTED":
+      return {
+        summary: t("assets.detail.history.items.verifyRequested.summary"),
+        detail: item.detail
+      };
+    case "ASSET_VERIFY_CONFIRMED":
+      return {
+        summary: t("assets.detail.history.items.verifyConfirmed.summary"),
+        detail: item.detail
+      };
+    case "ASSET_SYNCED": {
+      const balanceXrp = readHistoryMetaString(item.meta, "balanceXrp") ?? parseLegacySyncBalance(item.detail);
+      return {
+        summary: t("assets.detail.history.items.synced.summary"),
+        detail: balanceXrp
+          ? t("assets.detail.history.items.synced.detailBalance", { balanceXrp })
+          : item.detail
+      };
+    }
+    case "SYNC_LOG": {
+      const status = readHistoryMetaString(item.meta, "status");
+      const legacy = parseLegacySyncLogDetail(item.detail);
+      const ledgerIndex =
+        readHistoryMetaString(item.meta, "ledgerIndex") ?? legacy?.ledgerIndex ?? "-";
+      const balanceXrp = readHistoryMetaString(item.meta, "balanceXrp") ?? legacy?.balanceXrp ?? "-";
+      if (status === "ok") {
+        return {
+          summary: t("assets.detail.history.items.syncLog.success"),
+          detail: t("assets.detail.history.items.syncLog.detailSuccess", {
+            ledgerIndex,
+            balanceXrp
+          })
+        };
+      }
+      if (status === "error") {
+        return {
+          summary: t("assets.detail.history.items.syncLog.failed"),
+          detail: item.detail
+        };
+      }
+      return {
+        summary: t("assets.detail.history.items.syncLog.summary"),
+        detail: item.detail
+      };
+    }
+    default:
+      return {
+        summary: translateStoredHistoryValue(item.title, t),
+        detail: item.detail
+      };
+  }
+};
+
 export default function AssetDetailPage({
   initialAsset,
   initialHistoryItems,
@@ -934,6 +1037,7 @@ export default function AssetDetailPage({
                   <div className={styles.logList}>
                     {historyItems.map((item) => {
                       const label = historyTypeLabels[item.type] ?? item.type;
+                      const localizedHistory = localizeAssetHistoryItem(item, t);
                       const status =
                         item.meta && typeof item.meta.status === "string"
                           ? item.meta.status
@@ -958,10 +1062,10 @@ export default function AssetDetailPage({
                               >
                                 {label}
                               </span>
-                              <div className={styles.logSummary}>{item.title}</div>
+                              <div className={styles.logSummary}>{localizedHistory.summary}</div>
                             </div>
                             <div className={styles.logMessage}>
-                              {item.detail ?? t("assets.detail.history.emptyDetail")}
+                              {localizedHistory.detail ?? t("assets.detail.history.emptyDetail")}
                             </div>
                             {actorLabel ? (
                               <div className={styles.logActor}>

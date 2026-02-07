@@ -775,6 +775,36 @@
           "verifyConfirmed": "検証完了",
           "synced": "同期",
           "syncLog": "同期ログ"
+        },
+        "items": {
+          "created": {
+            "summary": "資産を登録"
+          },
+          "updated": {
+            "summary": "資産名を更新"
+          },
+          "deleted": {
+            "summary": "資産を削除"
+          },
+          "reserve": {
+            "summary": "留保設定を更新"
+          },
+          "verifyRequested": {
+            "summary": "所有権検証を開始"
+          },
+          "verifyConfirmed": {
+            "summary": "所有権検証を完了"
+          },
+          "synced": {
+            "summary": "ウォレット情報を同期",
+            "detailBalance": "残高 {{balanceXrp}} XRP"
+          },
+          "syncLog": {
+            "summary": "同期ログ",
+            "success": "同期成功",
+            "failed": "同期失敗",
+            "detailSuccess": "Ledger {{ledgerIndex}} / 残高 {{balanceXrp}} XRP"
+          }
         }
       },
       "delete": {
@@ -1151,6 +1181,37 @@
         "empty": {
           "title": "履歴はまだありません",
           "body": "指図の操作履歴がここに表示されます。"
+        },
+        "items": {
+          "planCreated": {
+            "title": "指図を作成"
+          },
+          "planTitleUpdated": {
+            "title": "指図タイトルを更新"
+          },
+          "planHeirAdded": {
+            "title": "相続人を追加"
+          },
+          "planHeirRemoved": {
+            "title": "相続人を削除"
+          },
+          "planAssetAdded": {
+            "title": "資産を追加"
+          },
+          "planAllocationUpdated": {
+            "title": "配分を更新"
+          },
+          "planNftAllocationsUpdated": {
+            "title": "NFT割当を更新"
+          },
+          "planAssetRemoved": {
+            "title": "資産を削除"
+          },
+          "detail": {
+            "title": "タイトル: {{title}}",
+            "heirWithRelation": "{{relation}} / {{email}}",
+            "heirEmail": "{{email}}"
+          }
         }
       },
       "error": {

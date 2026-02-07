@@ -13,6 +13,7 @@ let caseData = {
   updatedAt: "2024-01-01"
 };
 let planAssets: any[] = [];
+let planHistory: any[] = [];
 
 vi.mock("../api/cases", () => ({
   getCase: async () => caseData
@@ -27,7 +28,7 @@ vi.mock("../api/plans", () => ({
     updatedAt: "2024-01-02"
   }),
   listPlanAssets: async () => planAssets,
-  listPlanHistory: async () => [],
+  listPlanHistory: async () => planHistory,
   deletePlan: async () => {}
 }));
 
@@ -66,6 +67,32 @@ describe("CasePlanDetailPage", () => {
   it("uses tab query parameter as initial tab", async () => {
     const html = await render(undefined, "/cases/case-1/plans/plan-1?tab=history");
     expect(html).toMatch(/<button[^>]*aria-selected="true"[^>]*>\s*履歴\s*<\/button>/);
+  });
+
+  it("localizes plan history title by type instead of raw stored title", async () => {
+    const { localizePlanHistoryEntry } = await import("./CasePlanDetailPage");
+    const localized = localizePlanHistoryEntry(
+      {
+        historyId: "history-1",
+        type: "PLAN_CREATED",
+        title: "RAW_PLAN_HISTORY_TITLE",
+        detail: "タイトル: 指図A",
+        actorUid: "owner",
+        actorEmail: "owner@example.com",
+        createdAt: "2024-01-02T00:00:00.000Z",
+        meta: { title: "指図A" }
+      },
+      (key, values) => {
+        if (key === "plans.detail.history.items.planCreated.title") return "指図を作成";
+        if (key === "plans.detail.history.items.detail.title") {
+          return `タイトル: ${String(values?.title ?? "")}`;
+        }
+        return key;
+      }
+    );
+    expect(localized.title).toBe("指図を作成");
+    expect(localized.title).not.toBe("RAW_PLAN_HISTORY_TITLE");
+    expect(localized.detail).toBe("タイトル: 指図A");
   });
 
   it("shows delete action for owner", async () => {
