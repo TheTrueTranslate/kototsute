@@ -111,10 +111,28 @@ export function DeathClaimsPanel({
 
   const handleSubmit = async () => {
     if (!caseId) return;
+    if (selectedFiles.length === 0) {
+      setError("deathClaims.errors.noFileSelected");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await submitDeathClaim(caseId);
+      const { claimId } = await submitDeathClaim(caseId);
+      for (const file of selectedFiles) {
+        if (!file.type) {
+          throw new Error("deathClaims.errors.fileTypeUnknown");
+        }
+        const request = await createDeathClaimUploadRequest(caseId, claimId, {
+          fileName: file.name,
+          contentType: file.type,
+          size: file.size
+        });
+        const uploadRef = storageRef(storage, request.uploadPath);
+        await uploadBytes(uploadRef, file, { contentType: file.type });
+        await finalizeDeathClaimFile(caseId, claimId, request.requestId);
+      }
+      setSelectedFiles([]);
       await fetchClaim();
     } catch (err: any) {
       setError(err?.message ?? "deathClaims.errors.submitFailed");
@@ -356,8 +374,25 @@ export function DeathClaimsPanel({
           <div className={styles.emptyState}>
             <div className={styles.emptyTitle}>{t("deathClaims.empty.noClaim.title")}</div>
             <div className={styles.emptyBody}>{t("deathClaims.empty.noClaim.body")}</div>
+            <div className={styles.form}>
+              <FormField label={t("deathClaims.upload.label")}>
+                <Input
+                  type="file"
+                  multiple
+                  accept="application/pdf,image/jpeg,image/png"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    setSelectedFiles(files);
+                  }}
+                />
+              </FormField>
+            </div>
             <div className={styles.actions}>
-              <Button type="button" onClick={handleSubmit} disabled={submitting}>
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || selectedFiles.length === 0}
+              >
                 {submitting
                   ? t("deathClaims.empty.noClaim.actioning")
                   : t("deathClaims.empty.noClaim.action")}
