@@ -630,7 +630,7 @@
   "assets": {
     "types": {
       "xrp": {
-        "label": "XRPウォレット",
+        "label": "XPRLウォレット",
         "desc": "ウォレットアドレスを登録します"
       },
       "bank": {
@@ -649,20 +649,33 @@
     "new": {
       "title": "資産登録",
       "section": {
-        "type": "資産タイプ"
+        "type": "追加対象"
       },
-      "type": {
-        "unavailable": "準備中",
-        "next": "次へ",
-        "change": "変更する",
-        "unselected": "未選択"
+      "wallet": {
+        "title": "XRPLウォレット",
+        "desc": "XRPLウォレットアドレスを登録します"
+      },
+      "supplement": {
+        "title": "以下は補足資産として管理できます",
+        "examples": {
+          "stablecoin": "ステーブルコイン",
+          "realEstate": "不動産",
+          "stock": "株式",
+          "corporateBond": "社債",
+          "membership": "会員権",
+          "digitalAsset": "デジタル資産"
+        }
       },
       "form": {
         "label": "ラベル",
         "labelPlaceholder": "例: 自分のウォレット",
-        "address": "XRPアドレス",
+        "address": "XRPLアドレス",
         "addressPlaceholder": "r...",
-        "submit": "登録する"
+        "submit": "追加する"
+      },
+      "success": {
+        "created": "XRPLウォレットを追加しました",
+        "back": "戻る"
       },
       "error": {
         "caseIdMissing": "ケースIDが取得できません",
@@ -1233,6 +1246,25 @@
     "empty": {
       "title": "通知はまだありません",
       "body": "招待や指図の更新があると表示されます。"
+    },
+    "items": {
+      "inviteSent": {
+        "title": "相続人招待が届きました",
+        "body": "相続人招待を受け取りました。"
+      },
+      "inviteAccepted": {
+        "title": "招待が受諾されました",
+        "body": "招待が受諾されました。"
+      },
+      "inviteDeclined": {
+        "title": "招待が辞退されました",
+        "body": "招待が辞退されました。"
+      },
+      "caseInviteSent": {
+        "title": "ケース招待が届きました",
+        "body": "{{ownerName}}さんからケース招待が届きました。",
+        "fallbackOwner": "招待者"
+      }
     },
     "error": {
       "loadFailed": "通知の取得に失敗しました",

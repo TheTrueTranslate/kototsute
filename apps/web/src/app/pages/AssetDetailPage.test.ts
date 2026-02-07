@@ -140,6 +140,12 @@ const render = async (props?: Record<string, unknown>) => {
 };
 
 describe("AssetDetailPage", () => {
+  it("closes verify dialog when verification is completed", async () => {
+    const { shouldCloseVerifyDialogOnSuccess } = await import("./AssetDetailPage");
+    expect(shouldCloseVerifyDialogOnSuccess("VERIFIED")).toBe(true);
+    expect(shouldCloseVerifyDialogOnSuccess("PENDING")).toBe(false);
+  });
+
   it("highlights verify action only when unverified and unlocked", async () => {
     const { shouldHighlightVerifyOwnership } = await import("./AssetDetailPage");
     expect(shouldHighlightVerifyOwnership("UNVERIFIED", false)).toBe(true);

@@ -630,7 +630,7 @@
   "assets": {
     "types": {
       "xrp": {
-        "label": "XRP wallet",
+        "label": "XPRL Wallet",
         "desc": "Register a wallet address"
       },
       "bank": {
@@ -649,20 +649,33 @@
     "new": {
       "title": "Add asset",
       "section": {
-        "type": "Asset type"
+        "type": "Primary asset"
       },
-      "type": {
-        "unavailable": "Coming soon",
-        "next": "Next",
-        "change": "Change",
-        "unselected": "Not selected"
+      "wallet": {
+        "title": "XRPL Wallet",
+        "desc": "Register an XRPL wallet address"
+      },
+      "supplement": {
+        "title": "The following can be managed as supplemental assets",
+        "examples": {
+          "stablecoin": "Stablecoin",
+          "realEstate": "Real estate",
+          "stock": "Stocks",
+          "corporateBond": "Corporate bonds",
+          "membership": "Membership rights",
+          "digitalAsset": "Digital assets"
+        }
       },
       "form": {
         "label": "Label",
         "labelPlaceholder": "e.g. My wallet",
-        "address": "XRP address",
+        "address": "XRPL address",
         "addressPlaceholder": "r...",
-        "submit": "Register"
+        "submit": "Add"
+      },
+      "success": {
+        "created": "XRPL wallet added",
+        "back": "Back"
       },
       "error": {
         "caseIdMissing": "Case ID is missing",
@@ -1233,6 +1246,25 @@
     "empty": {
       "title": "No notifications yet",
       "body": "Invites and plan updates will appear here."
+    },
+    "items": {
+      "inviteSent": {
+        "title": "Heir invite received",
+        "body": "You have received an heir invite."
+      },
+      "inviteAccepted": {
+        "title": "Invite accepted",
+        "body": "Your invite was accepted."
+      },
+      "inviteDeclined": {
+        "title": "Invite declined",
+        "body": "Your invite was declined."
+      },
+      "caseInviteSent": {
+        "title": "Case invite received",
+        "body": "You received a case invite from {{ownerName}}.",
+        "fallbackOwner": "an inviter"
+      }
     },
     "error": {
       "loadFailed": "Failed to load notifications",

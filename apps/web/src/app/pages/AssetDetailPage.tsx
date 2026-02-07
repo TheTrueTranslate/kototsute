@@ -70,6 +70,10 @@ export const shouldHighlightVerifyOwnership = (
   isLocked: boolean
 ) => verificationStatus !== "VERIFIED" && !isLocked;
 
+export const shouldCloseVerifyDialogOnSuccess = (
+  verificationStatus: AssetDetail["verificationStatus"] | null | undefined
+) => verificationStatus === "VERIFIED";
+
 export default function AssetDetailPage({
   initialAsset,
   initialHistoryItems,
@@ -223,11 +227,12 @@ export default function AssetDetailPage({
   }, [asset?.assetId]);
 
   const loadAsset = async (options?: { includeXrpl?: boolean }) => {
-    if (!caseId || !assetId) return;
+    if (!caseId || !assetId) return null;
     const detail = await getAsset(caseId, assetId, {
       includeXrpl: Boolean(options?.includeXrpl)
     });
     setAsset(detail);
+    return detail;
   };
 
   const loadHistory = async () => {
@@ -462,9 +467,16 @@ export default function AssetDetailPage({
       setChallenge(result.challenge);
       setVerifySecret("");
       setVerifySuccess("assets.detail.verify.success");
-      await loadAsset();
+      const latestAsset = await loadAsset();
       if (tab === "history") {
         await loadHistory();
+      }
+      if (
+        shouldCloseVerifyDialogOnSuccess(
+          latestAsset?.verificationStatus ?? asset?.verificationStatus
+        )
+      ) {
+        setVerifyOpen(false);
       }
     } catch (err: any) {
       setVerifyError(err?.message ?? "assets.detail.verify.error");
