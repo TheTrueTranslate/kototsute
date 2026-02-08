@@ -719,10 +719,13 @@ export const casesRoutes = () => {
     const address = typeof wallet.address === "string" ? wallet.address : null;
     const verificationStatus =
       typeof wallet.verificationStatus === "string" ? wallet.verificationStatus : null;
+    const verificationTxHash =
+      typeof wallet.verificationTxHash === "string" ? wallet.verificationTxHash : null;
 
     return jsonOk(c, {
       address,
       verificationStatus,
+      verificationTxHash,
       verificationIssuedAt: wallet.verificationIssuedAt ?? null,
       verificationVerifiedAt: wallet.verificationVerifiedAt ?? null,
       createdAt: wallet.createdAt ?? null,
@@ -765,6 +768,7 @@ export const casesRoutes = () => {
         createdAt: walletData.createdAt ?? now,
         updatedAt: now,
         verificationStatus: addressChanged ? null : walletData.verificationStatus ?? null,
+        verificationTxHash: addressChanged ? null : walletData.verificationTxHash ?? null,
         verificationChallenge: addressChanged ? null : walletData.verificationChallenge ?? null,
         verificationIssuedAt: addressChanged ? null : walletData.verificationIssuedAt ?? null,
         verificationVerifiedAt: addressChanged ? null : walletData.verificationVerifiedAt ?? null
@@ -805,6 +809,7 @@ export const casesRoutes = () => {
     await walletRef.set(
       {
         verificationStatus: "PENDING",
+        verificationTxHash: null,
         verificationChallenge: challenge,
         verificationIssuedAt: c.get("deps").now()
       },
@@ -885,6 +890,7 @@ export const casesRoutes = () => {
     await walletRef.set(
       {
         verificationStatus: "VERIFIED",
+        verificationTxHash: txHash,
         verificationVerifiedAt: c.get("deps").now(),
         updatedAt: c.get("deps").now()
       },
@@ -2357,6 +2363,7 @@ export const casesRoutes = () => {
       label: parsed.data.label,
       address: parsed.data.address,
       verificationStatus: "UNVERIFIED",
+      verificationTxHash: null,
       reserveXrp: "0",
       reserveTokens: [],
       reserveNfts: [],
@@ -2541,6 +2548,8 @@ export const casesRoutes = () => {
       updatedAt: formatDate(assetData.updatedAt),
       verificationStatus: assetData.verificationStatus ?? "UNVERIFIED",
       verificationChallenge: assetData.verificationChallenge ?? null,
+      verificationTxHash:
+        typeof assetData.verificationTxHash === "string" ? assetData.verificationTxHash : null,
       verificationAddress: XRPL_VERIFY_ADDRESS,
       reserveXrp: typeof assetData.reserveXrp === "string" ? assetData.reserveXrp : "0",
       reserveTokens: Array.isArray(assetData.reserveTokens) ? assetData.reserveTokens : [],
@@ -2822,6 +2831,7 @@ export const casesRoutes = () => {
       {
         verificationStatus: "PENDING",
         verificationChallenge: challenge,
+        verificationTxHash: null,
         verificationIssuedAt: deps.now()
       },
       { merge: true }
@@ -2849,6 +2859,7 @@ export const casesRoutes = () => {
     if (typeof txHash !== "string" || txHash.trim().length === 0) {
       return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
     }
+    const normalizedTxHash = txHash.trim();
 
     const db = getFirestore();
     const caseRef = db.collection("cases").doc(caseId);
@@ -2876,7 +2887,7 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "VALIDATION_ERROR", "アドレスが取得できません");
     }
 
-    const result = await fetchXrplTx(txHash);
+    const result = await fetchXrplTx(normalizedTxHash);
     if (!result.ok) {
       return jsonError(c, 400, "XRPL_TX_NOT_FOUND", result.message);
     }
@@ -2907,6 +2918,7 @@ export const casesRoutes = () => {
     await assetRef.set(
       {
         verificationStatus: "VERIFIED",
+        verificationTxHash: normalizedTxHash,
         verificationVerifiedAt: deps.now()
       },
       { merge: true }
@@ -2915,7 +2927,8 @@ export const casesRoutes = () => {
       type: "ASSET_VERIFY_CONFIRMED",
       title: "所有権検証を完了しました",
       actorUid: auth.uid,
-      actorEmail: auth.email ?? null
+      actorEmail: auth.email ?? null,
+      meta: { txHash: normalizedTxHash }
     });
 
     return jsonOk(c);

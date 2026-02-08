@@ -4517,6 +4517,7 @@ describe("createApiHandler", () => {
     );
     expect(detailRes.body?.data?.address).toBe("rHeirWallet");
     expect(detailRes.body?.data?.verificationStatus).toBe("VERIFIED");
+    expect(detailRes.body?.data?.verificationTxHash).toBe("tx_hash");
   });
 
   it("forbids owner from managing heir wallet", async () => {
@@ -4703,6 +4704,53 @@ describe("createApiHandler", () => {
       detailRes as any
     );
     expect(detailRes.body?.data?.label).toBe("新しい資産名");
+  });
+
+  it("returns verification tx hash in asset detail", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    await getFirestore()
+      .collection(`cases/${caseId}/assets`)
+      .doc(assetId)
+      .set({ verificationTxHash: "TX_HASH_001" }, { merge: true });
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.verificationTxHash).toBe("TX_HASH_001");
   });
 
   it("rejects case asset deletion when related plan exists", async () => {
