@@ -701,7 +701,8 @@
         "labelUpdateError": "Failed to update asset name",
         "createdAt": "Registered",
         "updatedAt": "Updated",
-        "status": "Status"
+        "status": "Status",
+        "verifyTxHash": "Verification Tx Hash"
       },
       "wallet": {
         "title": "Wallet info",
@@ -1487,6 +1488,9 @@
     "memo": {
       "label": "Memo",
       "hint": "We will send 1 drops (=0.000001 XRP)."
+    },
+    "txHash": {
+      "label": "Tx hash used for verification"
     },
     "secret": {
       "label": "Secret",

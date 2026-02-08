@@ -63,7 +63,7 @@ import {
 } from "../../features/xrpl/xrpl-client";
 import { shouldAutoRequestChallenge } from "../../features/shared/lib/auto-challenge";
 import { shouldCloseWalletDialogOnVerify } from "../../features/shared/lib/wallet-dialog";
-import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import { WalletOwnershipVerifyDialog } from "../../features/shared/components/wallet-ownership-verify-dialog";
 import XrplExplorerLink from "../../features/shared/components/xrpl-explorer-link";
 import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import styles from "../../styles/caseDetailPage.module.css";
@@ -467,6 +467,7 @@ export default function CaseDetailPage({
   const [heirWalletVerifyLoading, setHeirWalletVerifyLoading] = useState(false);
   const [heirWalletVerifyError, setHeirWalletVerifyError] = useState<string | null>(null);
   const [heirWalletVerifySuccess, setHeirWalletVerifySuccess] = useState<string | null>(null);
+  const [heirWalletVerifyTxHash, setHeirWalletVerifyTxHash] = useState<string | null>(null);
   const [heirWalletSending, setHeirWalletSending] = useState(false);
   const [heirWalletSecret, setHeirWalletSecret] = useState("");
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -624,6 +625,28 @@ export default function CaseDetailPage({
     (heirWalletVerifyLoading
       ? t("cases.detail.wallet.memoIssuing")
       : t("cases.detail.wallet.memoEmpty"));
+  const heirWalletVerifyTxHashDisplay = (
+    heirWallet?.verificationTxHash ??
+    heirWalletVerifyTxHash ??
+    ""
+  ).trim();
+  const heirWalletVerifyAlerts = [
+    heirWalletError ? { variant: "error" as const, message: t(heirWalletError) } : null,
+    heirWalletVerifyError
+      ? { variant: "error" as const, message: t(heirWalletVerifyError) }
+      : null,
+    heirWalletVerifySuccess
+      ? { variant: "success" as const, message: t(heirWalletVerifySuccess) }
+      : null,
+    copyMessage ? ({ variant: "info" as const, message: copyMessage }) : null
+  ].filter(
+    (
+      item
+    ): item is {
+      variant: "error" | "success" | "info";
+      message: string;
+    } => item !== null
+  );
   const renderRelationLabel = (label?: string | null, other?: string | null) => {
     if (!label) return t("common.unset");
     if (label === relationOtherValue) {
@@ -1269,37 +1292,19 @@ export default function CaseDetailPage({
     setNftReceiveExecuting(false);
   };
 
-  const handleSaveHeirWallet = async () => {
-    if (!caseId) return;
-    const address = heirWalletAddressInput.trim();
-    if (!address) {
-      setHeirWalletError("cases.detail.wallet.error.addressRequired");
-      return;
-    }
-    setHeirWalletSaving(true);
-    setHeirWalletError(null);
-    setHeirWalletVerifySuccess(null);
-    try {
-      await saveHeirWallet(caseId, address);
-      const wallet = await getHeirWallet(caseId);
-      setHeirWallet(wallet);
-      setHeirWalletChallenge(null);
-    } catch (err: any) {
-      setHeirWalletError(err?.message ?? "cases.detail.wallet.error.saveFailed");
-    } finally {
-      setHeirWalletSaving(false);
-    }
-  };
-
   const handleRequestHeirWalletChallenge = async () => {
     if (!caseId) return;
     setHeirWalletVerifyError(null);
     setHeirWalletVerifySuccess(null);
+    setHeirWalletVerifyTxHash(null);
     setHeirWalletSecret("");
     setHeirWalletVerifyLoading(true);
     try {
       const result = await requestHeirWalletVerifyChallenge(caseId);
       setHeirWalletChallenge(result);
+      setHeirWallet((current) =>
+        current ? { ...current, verificationTxHash: null } : current
+      );
     } catch (err: any) {
       setHeirWalletVerifyError(err?.message ?? "cases.detail.wallet.error.challengeFailed");
     } finally {
@@ -1320,17 +1325,41 @@ export default function CaseDetailPage({
       setHeirWalletVerifyError("cases.detail.wallet.error.caseIdMissing");
       return;
     }
-    if (!heirWallet?.address) {
-      setHeirWalletVerifyError("cases.detail.wallet.error.addressMissing");
+    const inputAddress = heirWalletAddressInput.trim();
+    if (!inputAddress) {
+      setHeirWalletVerifyError("cases.detail.wallet.error.addressRequired");
       return;
     }
     setHeirWalletVerifyError(null);
     setHeirWalletVerifySuccess(null);
+    setHeirWalletVerifyTxHash(null);
     setHeirWalletSending(true);
+    let walletAddress = heirWallet?.address?.trim() ?? "";
     try {
+      if (!walletAddress || walletAddress !== inputAddress) {
+        setHeirWalletSaving(true);
+        setHeirWalletError(null);
+        try {
+          await saveHeirWallet(caseId, inputAddress);
+          const latestWallet = await getHeirWallet(caseId);
+          setHeirWallet(latestWallet);
+          setHeirWalletChallenge(null);
+          walletAddress = latestWallet?.address?.trim() ?? "";
+        } catch (err: any) {
+          setHeirWalletError(err?.message ?? "cases.detail.wallet.error.saveFailed");
+          setHeirWalletVerifyError(err?.message ?? "cases.detail.wallet.error.saveFailed");
+          return;
+        } finally {
+          setHeirWalletSaving(false);
+        }
+      }
+      if (!walletAddress) {
+        setHeirWalletVerifyError("cases.detail.wallet.error.addressMissing");
+        return;
+      }
       const result = await autoVerifyWalletOwnership(
         {
-          walletAddress: heirWallet.address,
+          walletAddress,
           secret: heirWalletSecret,
           challenge: heirWalletChallenge
         },
@@ -1344,6 +1373,7 @@ export default function CaseDetailPage({
       );
       setHeirWalletChallenge(result.challenge);
       setHeirWalletSecret("");
+      setHeirWalletVerifyTxHash(result.txHash);
       const wallet = await getHeirWallet(caseId);
       setHeirWallet(wallet);
       setHeirWalletVerifySuccess("cases.detail.wallet.verify.success");
@@ -2632,109 +2662,71 @@ export default function CaseDetailPage({
                   </XrplExplorerLink>
                 </div>
               ) : null}
+              {heirWalletVerifyTxHashDisplay ? (
+                <div className={styles.walletAddress}>
+                  <div className={styles.walletAddressLabel}>{t("walletVerify.txHash.label")}</div>
+                  <XrplExplorerLink
+                    className={styles.walletAddressValue}
+                    value={heirWalletVerifyTxHashDisplay}
+                    resource="transaction"
+                  >
+                    {heirWalletVerifyTxHashDisplay}
+                  </XrplExplorerLink>
+                </div>
+              ) : null}
               <div className={styles.walletActions}>
-                {isHeirWalletVerified ? null : (
+                {isHeirWalletVerified || hasHeirWallet ? null : (
                   <Button type="button" onClick={() => handleOpenWalletDialog("register")}>
                     {t("cases.detail.wallet.actions.register")}
                   </Button>
                 )}
-                {isHeirWalletVerified ? null : (
+                {isHeirWalletVerified || !hasHeirWallet ? null : (
                   <Button
                     type="button"
-                    variant="outline"
                     onClick={() => handleOpenWalletDialog("verify")}
-                    disabled={!hasHeirWallet}
                   >
                     {t("cases.detail.wallet.actions.verify")}
                   </Button>
                 )}
               </div>
-              <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>
-                      {walletDialogMode === "verify"
-                        ? t("cases.detail.wallet.dialog.verifyTitle")
-                        : t("cases.detail.wallet.dialog.registerTitle")}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {t("cases.detail.wallet.dialog.description")}
-                    </DialogDescription>
-                  </DialogHeader>
-                  {heirWalletError ? (
-                    <FormAlert variant="error">{t(heirWalletError)}</FormAlert>
-                  ) : null}
-                  {heirWalletVerifyError ? (
-                    <FormAlert variant="error">{t(heirWalletVerifyError)}</FormAlert>
-                  ) : null}
-                  {heirWalletVerifySuccess ? (
-                    <FormAlert variant="success">{t(heirWalletVerifySuccess)}</FormAlert>
-                  ) : null}
-                  {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
-                  <div className={styles.walletForm}>
-                    <FormField label={t("cases.detail.wallet.form.addressLabel")}>
-                      <Input
-                        value={heirWalletAddressInput}
-                        onChange={(event) => setHeirWalletAddressInput(event.target.value)}
-                        placeholder="r..."
-                      />
-                    </FormField>
-                    <div className={styles.walletActions}>
-                      <Button
-                        type="button"
-                        onClick={handleSaveHeirWallet}
-                        disabled={heirWalletSaving}
-                      >
-                        {heirWalletSaving
-                          ? t("cases.detail.wallet.form.saving")
-                          : t("cases.detail.wallet.form.save")}
-                      </Button>
-                      {hasHeirWallet ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleRequestHeirWalletChallenge}
-                          disabled={heirWalletVerifyLoading}
-                        >
-                          {t("cases.detail.wallet.form.startVerify")}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                  {hasHeirWallet ? (
-                    <div className={styles.walletVerifyBox}>
-                      <WalletVerifyPanel
-                        destination={heirWalletDestinationDisplay}
-                        memo={heirWalletMemoDisplay}
-                        secret={heirWalletSecret}
-                        onSecretChange={setHeirWalletSecret}
-                        onSubmit={handleAutoVerifyHeirWallet}
-                        isSubmitting={heirWalletSending}
-                        submitDisabled={heirWalletSending || heirWalletVerifyLoading}
-                        secretDisabled={heirWalletSending}
-                      />
-                    </div>
-                  ) : (
-                    walletDialogMode === "verify" && (
-                      <div className={styles.emptyState}>
-                        <div className={styles.emptyTitle}>
-                          {t("cases.detail.wallet.dialog.empty.title")}
-                        </div>
-                        <div className={styles.emptyBody}>
-                          {t("cases.detail.wallet.dialog.empty.body")}
-                        </div>
-                      </div>
-                    )
-                  )}
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="ghost">
-                        {t("common.close")}
-                      </Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <WalletOwnershipVerifyDialog
+                open={walletDialogOpen}
+                onOpenChange={setWalletDialogOpen}
+                title={
+                  walletDialogMode === "verify"
+                    ? t("cases.detail.wallet.dialog.verifyTitle")
+                    : t("cases.detail.wallet.dialog.registerTitle")
+                }
+                description={t("cases.detail.wallet.dialog.description")}
+                closeLabel={t("common.close")}
+                alerts={heirWalletVerifyAlerts}
+                addressForm={{
+                  label: t("cases.detail.wallet.form.addressLabel"),
+                  value: heirWalletAddressInput,
+                  onChange: setHeirWalletAddressInput,
+                  placeholder: "r..."
+                }}
+                showVerifyPanel={true}
+                verifyPanel={{
+                  destination: heirWalletDestinationDisplay,
+                  memo: heirWalletMemoDisplay,
+                  secret: heirWalletSecret,
+                  onSecretChange: setHeirWalletSecret,
+                  onSubmit: handleAutoVerifyHeirWallet,
+                  isSubmitting: heirWalletSending,
+                  submitDisabled: heirWalletSending || heirWalletVerifyLoading,
+                  secretDisabled: heirWalletSending,
+                  verifiedTxHash: heirWalletVerifyTxHashDisplay
+                }}
+                classNames={{
+                  form: styles.walletForm,
+                  actions: styles.walletActions,
+                  verifyBox: styles.walletVerifyBox,
+                  emptyState: styles.emptyState,
+                  emptyTitle: styles.emptyTitle,
+                  emptyBody: styles.emptyBody
+                }}
+              />
             </div>
           ) : (
             <div className={styles.emptyState}>

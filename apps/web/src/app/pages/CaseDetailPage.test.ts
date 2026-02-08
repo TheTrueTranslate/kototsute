@@ -5,7 +5,11 @@ import { MemoryRouter } from "react-router-dom";
 
 let authUser = { uid: "owner" };
 let searchParams = new URLSearchParams();
-let heirWalletData: { address: string | null; verificationStatus: string | null } = {
+let heirWalletData: {
+  address: string | null;
+  verificationStatus: string | null;
+  verificationTxHash?: string | null;
+} = {
   address: null,
   verificationStatus: null
 };
@@ -72,8 +76,13 @@ vi.mock("../api/plans", () => ({
 vi.mock("../../features/shared/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
     React.createElement("div", null, open ? children : null),
-  DialogContent: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
+  DialogContent: ({
+    children,
+    ...props
+  }: {
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => React.createElement("div", props, children),
   DialogHeader: ({ children }: { children: React.ReactNode }) =>
     React.createElement("div", null, children),
   DialogFooter: ({ children }: { children: React.ReactNode }) =>
@@ -1332,7 +1341,7 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false });
     expect(html).not.toContain("残高確認");
     expect(html).toContain("登録/変更");
-    expect(html).toContain("所有確認");
+    expect(html).not.toContain("所有確認");
   });
 
   it("hides verify button when heir wallet is verified", async () => {
@@ -1364,6 +1373,21 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("https://testnet.xrpl.org/accounts/rHeir");
   });
 
+  it("shows verification tx hash in receiving wallet section", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = {
+      address: "rHeir",
+      verificationStatus: "VERIFIED",
+      verificationTxHash: "TX123"
+    };
+
+    const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
+    expect(html).toContain("検証に使用したTx Hash");
+    expect(html).toContain("TX123");
+    expect(html).toContain("https://testnet.xrpl.org/transactions/TX123");
+  });
+
   it("shows wallet status label in wallet tab", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=wallet");
@@ -1372,6 +1396,8 @@ describe("CaseDetailPage", () => {
     const html = await render({ initialIsOwner: false, initialHeirWallet: heirWalletData });
     expect(html).toContain("ステータス");
     expect(html).toContain("未確認");
+    expect(html).toContain("所有確認");
+    expect(html).not.toContain("登録/変更");
   });
 
   it("shows copyable verification fields for heir wallet", async () => {
@@ -1385,14 +1411,37 @@ describe("CaseDetailPage", () => {
       initialWalletDialogOpen: true,
       initialWalletDialogMode: "verify"
     });
+    expect(html).toContain('data-testid="wallet-ownership-verify-dialog"');
     expect(html).toContain("Destination（運営確認用ウォレット）");
     expect(html).toContain("システムの検証用アドレス");
     expect(html).toContain("1 drops (=0.000001 XRP)");
     expect(html).not.toContain("Amount (drops)");
     expect(html).not.toContain("Amount (XRP)");
     expect(html).not.toContain("取引ハッシュ");
+    expect(html).not.toContain("登録する");
+    expect(html).not.toContain("所有確認を開始");
     expect(html).not.toContain("Destinationをコピー");
     expect(html).not.toContain("Memoをコピー");
+  });
+
+  it("shows saved verification tx hash in heir wallet dialog", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=wallet");
+    heirWalletData = {
+      address: "rHeir",
+      verificationStatus: "VERIFIED",
+      verificationTxHash: "TX123"
+    };
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: heirWalletData,
+      initialWalletDialogOpen: true,
+      initialWalletDialogMode: "verify"
+    });
+    expect(html).toContain("検証に使用したTx Hash");
+    expect(html).toContain("TX123");
+    expect(html).toContain("https://testnet.xrpl.org/transactions/TX123");
   });
 
 });

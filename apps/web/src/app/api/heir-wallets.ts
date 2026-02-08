@@ -3,6 +3,7 @@ import { apiFetch } from "../../features/shared/lib/api";
 export type HeirWallet = {
   address: string | null;
   verificationStatus: string | null;
+  verificationTxHash?: string | null;
   verificationIssuedAt?: string | null;
   verificationVerifiedAt?: string | null;
   createdAt?: string | null;

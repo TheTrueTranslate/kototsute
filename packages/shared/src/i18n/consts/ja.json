@@ -701,7 +701,8 @@
         "labelUpdateError": "資産名の更新に失敗しました",
         "createdAt": "登録日",
         "updatedAt": "更新日",
-        "status": "ステータス"
+        "status": "ステータス",
+        "verifyTxHash": "検証Tx Hash"
       },
       "wallet": {
         "title": "ウォレット情報",
@@ -1487,6 +1488,9 @@
     "memo": {
       "label": "Memo",
       "hint": "1 drops (=0.000001 XRP) を送信します。"
+    },
+    "txHash": {
+      "label": "検証に使用したTx Hash"
     },
     "secret": {
       "label": "シークレット",

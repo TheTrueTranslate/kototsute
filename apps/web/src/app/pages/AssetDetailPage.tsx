@@ -31,7 +31,8 @@ import {
   type AssetReserveToken
 } from "../api/assets";
 import { getCase, type CaseSummary } from "../api/cases";
-import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import { WalletOwnershipVerifyDialog } from "../../features/shared/components/wallet-ownership-verify-dialog";
+import XrplExplorerLink from "../../features/shared/components/xrpl-explorer-link";
 import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import {
   createPaymentTx,
@@ -196,6 +197,7 @@ export default function AssetDetailPage({
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
   const [verifySecret, setVerifySecret] = useState("");
   const [verifySending, setVerifySending] = useState(false);
+  const [verifyTxHash, setVerifyTxHash] = useState<string | null>(null);
   const [verifyChallengeLoading, setVerifyChallengeLoading] = useState(false);
   const [challenge, setChallenge] = useState<
     | {
@@ -268,6 +270,18 @@ export default function AssetDetailPage({
     (verifyChallengeLoading
       ? t("assets.detail.verify.memoIssuing")
       : t("assets.detail.verify.memoEmpty"));
+  const verifyTxHashDisplay = (asset?.verificationTxHash ?? verifyTxHash ?? "").trim();
+  const verifyAlerts = [
+    verifyError ? { variant: "error" as const, message: t(verifyError) } : null,
+    verifySuccess ? { variant: "success" as const, message: t(verifySuccess) } : null
+  ].filter(
+    (
+      item
+    ): item is {
+      variant: "error" | "success";
+      message: string;
+    } => item !== null
+  );
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -410,6 +424,7 @@ export default function AssetDetailPage({
     if (!caseId || !assetId) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifyTxHash(null);
     setVerifyChallengeLoading(true);
     try {
       const result = await requestVerifyChallenge(caseId, assetId);
@@ -551,6 +566,7 @@ export default function AssetDetailPage({
     if (!caseId || !assetId || !asset) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifyTxHash(null);
     setVerifySending(true);
     try {
       const result = await autoVerifyWalletOwnership(
@@ -569,6 +585,7 @@ export default function AssetDetailPage({
       );
       setChallenge(result.challenge);
       setVerifySecret("");
+      setVerifyTxHash(result.txHash);
       setVerifySuccess("assets.detail.verify.success");
       const latestAsset = await loadAsset();
       if (tab === "history") {
@@ -667,14 +684,6 @@ export default function AssetDetailPage({
                 </div>
                 <div className={styles.metaGrid}>
                   <div>
-                    <div className={styles.metaLabel}>{t("assets.detail.overview.createdAt")}</div>
-                    <div className={styles.metaValue}>{formatDate(asset.createdAt)}</div>
-                  </div>
-                  <div>
-                    <div className={styles.metaLabel}>{t("assets.detail.overview.updatedAt")}</div>
-                    <div className={styles.metaValue}>{formatDate(asset.updatedAt)}</div>
-                  </div>
-                  <div>
                     <div className={styles.metaLabel}>{t("assets.detail.overview.status")}</div>
                     <div className={styles.metaValue}>
                       <div className={styles.statusRow}>
@@ -696,6 +705,18 @@ export default function AssetDetailPage({
                       </div>
                     </div>
                   </div>
+                  {verifyTxHashDisplay ? (
+                    <div>
+                      <div className={styles.metaLabel}>{t("assets.detail.overview.verifyTxHash")}</div>
+                      <XrplExplorerLink
+                        value={verifyTxHashDisplay}
+                        resource="transaction"
+                        className={styles.metaValue}
+                      >
+                        {verifyTxHashDisplay}
+                      </XrplExplorerLink>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -984,38 +1005,26 @@ export default function AssetDetailPage({
                 </div>
               </div>
 
-              <Dialog open={verifyOpen} onOpenChange={setVerifyOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t("assets.detail.verify.title")}</DialogTitle>
-                    <DialogDescription>
-                      {t("assets.detail.verify.description")}
-                    </DialogDescription>
-                  </DialogHeader>
-                  {verifyError ? (
-                    <FormAlert variant="error">{t(verifyError)}</FormAlert>
-                  ) : null}
-                  {verifySuccess ? (
-                    <FormAlert variant="success">{t(verifySuccess)}</FormAlert>
-                  ) : null}
-
-                  <WalletVerifyPanel
-                    destination={asset.verificationAddress}
-                    memo={memoDisplay}
-                    secret={verifySecret}
-                    onSecretChange={setVerifySecret}
-                    onSubmit={handleAutoVerify}
-                    isSubmitting={verifySending}
-                    submitDisabled={isLocked || verifySending || verifyChallengeLoading}
-                    secretDisabled={isLocked || verifySending}
-                  />
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="ghost">{t("common.close")}</Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <WalletOwnershipVerifyDialog
+                open={verifyOpen}
+                onOpenChange={setVerifyOpen}
+                title={t("assets.detail.verify.title")}
+                description={t("assets.detail.verify.description")}
+                closeLabel={t("common.close")}
+                alerts={verifyAlerts}
+                showVerifyPanel={true}
+                verifyPanel={{
+                  destination: asset.verificationAddress,
+                  memo: memoDisplay,
+                  secret: verifySecret,
+                  onSecretChange: setVerifySecret,
+                  onSubmit: handleAutoVerify,
+                  isSubmitting: verifySending,
+                  submitDisabled: isLocked || verifySending || verifyChallengeLoading,
+                  secretDisabled: isLocked || verifySending,
+                  verifiedTxHash: verifyTxHashDisplay
+                }}
+              />
             </div>
           ) : null}
 
