@@ -1098,14 +1098,6 @@ export default function CaseDetailPage({
   }, [caseId]);
 
   useEffect(() => {
-    if (!canPollApprovalStatus) return;
-    const intervalId = window.setInterval(() => {
-      void fetchApprovalTx();
-    }, 60_000);
-    return () => window.clearInterval(intervalId);
-  }, [canPollApprovalStatus, fetchApprovalTx]);
-
-  useEffect(() => {
     if (distribution?.status !== "RUNNING") return;
     const intervalId = window.setInterval(() => {
       void fetchDistributionState();
@@ -1910,7 +1902,13 @@ export default function CaseDetailPage({
                             {t("cases.detail.signer.tx.sentLabel")}
                           </div>
                           <div className={styles.signerTxValue}>
-                            {approvalSubmittedTxHash || "-"}
+                            {approvalSubmittedTxHash ? (
+                              <XrplExplorerLink value={approvalSubmittedTxHash} resource="transaction">
+                                {approvalSubmittedTxHash}
+                              </XrplExplorerLink>
+                            ) : (
+                              "-"
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1944,11 +1942,11 @@ export default function CaseDetailPage({
                           {t("cases.detail.signer.tx.actions.reload")}
                         </Button>
                       </div>
-                      <div className={styles.signerTxNote}>
-                        {canReprepareApproval
-                          ? t("cases.detail.signer.tx.note.expired")
-                          : t("cases.detail.signer.tx.note.refresh")}
-                      </div>
+                      {canReprepareApproval ? (
+                        <div className={styles.signerTxNote}>
+                          {t("cases.detail.signer.tx.note.expired")}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {approvalLoading ? (
@@ -2000,7 +1998,13 @@ export default function CaseDetailPage({
                           {t("cases.detail.signer.tx.sentLabel")}
                         </div>
                         <div className={styles.signerTxValue}>
-                          {approvalSubmittedTxHash || "-"}
+                          {approvalSubmittedTxHash ? (
+                            <XrplExplorerLink value={approvalSubmittedTxHash} resource="transaction">
+                              {approvalSubmittedTxHash}
+                            </XrplExplorerLink>
+                          ) : (
+                            "-"
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2034,11 +2038,11 @@ export default function CaseDetailPage({
                         {t("cases.detail.signer.tx.actions.reload")}
                       </Button>
                     </div>
-                    <div className={styles.signerTxNote}>
-                      {canReprepareApproval
-                        ? t("cases.detail.signer.tx.note.expired")
-                        : t("cases.detail.signer.tx.note.refresh")}
-                    </div>
+                    {canReprepareApproval ? (
+                      <div className={styles.signerTxNote}>
+                        {t("cases.detail.signer.tx.note.expired")}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               )}

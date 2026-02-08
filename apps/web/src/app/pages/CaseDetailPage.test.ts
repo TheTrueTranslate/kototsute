@@ -879,6 +879,8 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("STEP 3/4");
     expect(html).not.toContain("3/4: 署名");
     expect(html).not.toContain("分配を実行");
+    expect(html).toContain('href="https://testnet.xrpl.org/transactions/tx-hash"');
+    expect(html).not.toContain("1分ごとに自動更新します。");
   });
 
   it("keeps signature step even when signer quorum is met but approval tx is not validated", async () => {
