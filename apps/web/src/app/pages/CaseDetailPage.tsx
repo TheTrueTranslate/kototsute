@@ -64,6 +64,7 @@ import {
 import { shouldAutoRequestChallenge } from "../../features/shared/lib/auto-challenge";
 import { shouldCloseWalletDialogOnVerify } from "../../features/shared/lib/wallet-dialog";
 import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import XrplExplorerLink from "../../features/shared/components/xrpl-explorer-link";
 import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import styles from "../../styles/caseDetailPage.module.css";
 import { DeathClaimsPanel } from "./DeathClaimsPage";
@@ -81,7 +82,6 @@ type LocalizedMessage = {
 };
 
 type NftReceiveStatus = "PENDING" | "SUCCESS" | "FAILED";
-const XRPL_EXPLORER_BASE = "https://testnet.xrpl.org/accounts";
 
 export const formatDistributionProgressText = (
   distribution: DistributionState | null
@@ -224,6 +224,24 @@ export const resolveHeirFlowStepIndex = (input: {
   if (!input.hasSignature) return 2;
   if (!input.hasReceive) return 3;
   return 3;
+};
+
+export const resolveHeirFlowDisplayStepIndex = (input: {
+  currentStepIndex: number;
+  reviewStepIndex: number | null;
+  totalSteps: number;
+}) => {
+  const maxIndex = input.totalSteps - 1;
+  const current =
+    Number.isInteger(input.currentStepIndex) &&
+    input.currentStepIndex >= 0 &&
+    input.currentStepIndex <= maxIndex
+      ? input.currentStepIndex
+      : 0;
+  if (!Number.isInteger(input.reviewStepIndex)) return current;
+  const review = input.reviewStepIndex as number;
+  if (review < 0 || review > maxIndex) return current;
+  return review;
 };
 
 export const resolveDeathClaimDocumentsHintKey = (input: {
@@ -403,6 +421,7 @@ export default function CaseDetailPage({
   const [tab, setTab] = useState<TabKey>(() =>
     initialTab ?? (isTabKey(queryTab) ? queryTab : "assets")
   );
+  const [heirFlowReviewStepIndex, setHeirFlowReviewStepIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(!initialCaseData);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(() => {
@@ -561,7 +580,7 @@ export default function CaseDetailPage({
     [caseData, t]
   );
   const showOwnerDistributionWallet =
-    isOwner === true && caseData?.stage === "IN_PROGRESS";
+    isOwner === true && caseData?.assetLockStatus === "LOCKED";
   const isHeir = isOwner === false;
   const isLocked = caseData?.assetLockStatus === "LOCKED";
   const canAccessDeathClaims =
@@ -664,9 +683,20 @@ export default function CaseDetailPage({
     hasSignature: signatureStepCompleted,
     hasReceive: receiveStepCompleted
   });
+  const heirFlowDisplayStepIndex = useMemo(
+    () =>
+      resolveHeirFlowDisplayStepIndex({
+        currentStepIndex: heirFlowStepIndex,
+        reviewStepIndex: isHeir ? heirFlowReviewStepIndex : null,
+        totalSteps: heirFlowSteps.length
+      }),
+    [heirFlowReviewStepIndex, heirFlowStepIndex, heirFlowSteps.length, isHeir]
+  );
   const heirFlowCurrent = heirFlowStepIndex + 1;
+  const heirFlowDisplayCurrent = heirFlowDisplayStepIndex + 1;
   const heirFlowTotal = heirFlowSteps.length;
   const heirFlowProgressPercent = (heirFlowCurrent / heirFlowTotal) * 100;
+  const isHeirFlowReviewing = isHeir && heirFlowDisplayStepIndex !== heirFlowStepIndex;
   const shouldLockInheritanceFlowByWallet = isHeir && !hasHeirWallet;
   const deathClaimDocumentsHintKey = resolveDeathClaimDocumentsHintKey({
     isHeir,
@@ -674,9 +704,11 @@ export default function CaseDetailPage({
     claimStatus: deathClaim?.claim?.status ?? null,
     confirmedByMe: Boolean(deathClaim?.confirmedByMe)
   });
-  const shouldShowDeathClaimDocuments = !isHeir || heirFlowStepIndex === 1;
-  const shouldShowApprovalSection = !isHeir || heirFlowStepIndex === 2;
-  const shouldShowDistributionSection = !isHeir || heirFlowStepIndex >= 3;
+  const shouldShowWalletReviewSection =
+    isHeir && !shouldLockInheritanceFlowByWallet && heirFlowDisplayStepIndex === 0;
+  const shouldShowDeathClaimDocuments = !isHeir || heirFlowDisplayStepIndex === 1;
+  const shouldShowApprovalSection = !isHeir || heirFlowDisplayStepIndex === 2;
+  const shouldShowDistributionSection = !isHeir || heirFlowDisplayStepIndex >= 3;
   const totalHeirCount = heirs.length;
   const unverifiedHeirCount = heirs.filter((heir) => heir.walletStatus !== "VERIFIED").length;
   const prepareDisabledReason = useMemo(
@@ -1536,10 +1568,18 @@ export default function CaseDetailPage({
             </Button>
           </div>
           <div className={styles.walletAddress}>
-            <div className={styles.walletAddressValue}>
-              {ownerDistributionWalletAddress ??
-                t("cases.detail.distributionWallet.empty")}
-            </div>
+            {ownerDistributionWalletAddress ? (
+              <XrplExplorerLink
+                className={styles.walletAddressValue}
+                value={ownerDistributionWalletAddress}
+              >
+                {ownerDistributionWalletAddress}
+              </XrplExplorerLink>
+            ) : (
+              <div className={styles.walletAddressValue}>
+                {t("cases.detail.distributionWallet.empty")}
+              </div>
+            )}
           </div>
           {copyMessage ? <FormAlert variant="info">{copyMessage}</FormAlert> : null}
         </div>
@@ -1727,42 +1767,67 @@ export default function CaseDetailPage({
                       key={label}
                       className={`${styles.heirStepperItem} ${
                         index < heirFlowStepIndex ? styles.heirStepperItemDone : ""
-                      } ${index === heirFlowStepIndex ? styles.heirStepperItemActive : ""}`}
+                      } ${index === heirFlowDisplayStepIndex ? styles.heirStepperItemActive : ""}`}
                     >
-                      <span
-                        className={`${styles.heirStepperNumber} ${
-                          index <= heirFlowStepIndex ? styles.heirStepperNumberActive : ""
-                        }`}
+                      <button
+                        type="button"
+                        className={styles.heirStepperButton}
+                        onClick={() => setHeirFlowReviewStepIndex(index)}
+                        data-heir-flow-review-step={index + 1}
+                        aria-current={index === heirFlowDisplayStepIndex ? "step" : undefined}
                       >
-                        {index + 1}
-                      </span>
-                      <span
-                        className={`${styles.heirStepperLabel} ${
-                          index === heirFlowStepIndex ? styles.heirStepperLabelActive : ""
-                        }`}
-                      >
-                        {label}
-                      </span>
+                        <span
+                          className={`${styles.heirStepperNumber} ${
+                            index <= heirFlowStepIndex || index === heirFlowDisplayStepIndex
+                              ? styles.heirStepperNumberActive
+                              : ""
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <span
+                          className={`${styles.heirStepperLabel} ${
+                            index === heirFlowDisplayStepIndex ? styles.heirStepperLabelActive : ""
+                          }`}
+                        >
+                          {label}
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ol>
                 <div className={styles.nextActionBody}>
                   {t("cases.detail.inheritance.flow.stepLabel", {
-                    current: heirFlowCurrent,
+                    current: heirFlowDisplayCurrent,
                     total: heirFlowTotal,
-                    step: heirFlowSteps[heirFlowStepIndex] ?? "-"
+                    step: heirFlowSteps[heirFlowDisplayStepIndex] ?? "-"
                   })}
                 </div>
+                {isHeirFlowReviewing ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={styles.heirStepperReset}
+                    onClick={() => setHeirFlowReviewStepIndex(null)}
+                  >
+                    {t("cases.detail.inheritance.flow.reviewReset")}
+                  </Button>
+                ) : null}
                 <div className={styles.nextActionSteps}>
                   {heirFlowSteps.map((label, index) => (
-                    <span
+                    <button
+                      type="button"
                       key={`${label}-chip`}
-                      className={`${styles.nextActionStep} ${
-                        index === heirFlowStepIndex ? styles.nextActionStepActive : ""
+                      className={`${styles.nextActionStep} ${styles.nextActionStepButton} ${
+                        index === heirFlowDisplayStepIndex ? styles.nextActionStepActive : ""
                       }`}
+                      onClick={() => setHeirFlowReviewStepIndex(index)}
+                      data-heir-flow-review-step={index + 1}
+                      aria-pressed={index === heirFlowDisplayStepIndex}
                     >
                       {label}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1783,6 +1848,21 @@ export default function CaseDetailPage({
               </div>
             ) : (
               <>
+                {shouldShowWalletReviewSection ? (
+                  <div className={styles.heirFlowReviewCard}>
+                    <div className={styles.heirFlowReviewTitle}>
+                      {t("cases.detail.inheritance.flow.review.title")}
+                    </div>
+                    <div className={styles.heirFlowReviewBody}>
+                      {t("cases.detail.inheritance.flow.review.body")}
+                    </div>
+                    <div className={styles.panelActions}>
+                      <Button type="button" variant="outline" onClick={() => handleTabChange("wallet")}>
+                        {t("cases.detail.inheritance.flow.review.action")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 {shouldShowDeathClaimDocuments ? (
                   <div className={styles.collapsible}>
                     <div className={styles.collapsibleBody}>
@@ -2549,14 +2629,12 @@ export default function CaseDetailPage({
                   <div className={styles.walletAddressLabel}>
                     {t("cases.detail.wallet.addressLabel")}
                   </div>
-                  <a
+                  <XrplExplorerLink
                     className={styles.walletAddressValue}
-                    href={`${XRPL_EXPLORER_BASE}/${heirWallet?.address ?? ""}`}
-                    target="_blank"
-                    rel="noreferrer"
+                    value={heirWallet?.address ?? ""}
                   >
                     {heirWallet?.address}
-                  </a>
+                  </XrplExplorerLink>
                 </div>
               ) : null}
               <div className={styles.walletActions}>

@@ -185,6 +185,26 @@ describe("CaseDetailPage", () => {
     });
     expect(html).toContain("分配用ウォレットアドレス</span>");
     expect(html).toContain("rDistributionWallet");
+    expect(html).toContain('href="https://testnet.xrpl.org/accounts/rDistributionWallet"');
+    expect(html).toContain('data-xrpl-explorer-link="true"');
+  });
+
+  it("shows distribution wallet for owner after asset lock is completed", async () => {
+    const html = await render({
+      initialIsOwner: true,
+      initialCaseData: {
+        ...caseData,
+        stage: "WAITING",
+        assetLockStatus: "LOCKED"
+      },
+      initialDistributionWalletAddress: "rDistributionWalletAfterLock"
+    });
+    expect(html).toContain("分配用ウォレットアドレス</span>");
+    expect(html).toContain("rDistributionWalletAfterLock");
+    expect(html).toContain(
+      'href="https://testnet.xrpl.org/accounts/rDistributionWalletAfterLock"'
+    );
+    expect(html).toContain('data-xrpl-explorer-link="true"');
   });
 
   it("hides edit actions when asset lock is locked", async () => {
@@ -558,6 +578,8 @@ describe("CaseDetailPage", () => {
     });
     expect(html).toContain("STEP 2/4");
     expect(html).toContain("死亡診断書");
+    expect(html).toContain('data-heir-flow-review-step="1"');
+    expect(html).toContain('data-heir-flow-review-step="4"');
     expect(html).not.toContain("相続実行の同意");
     expect(html).not.toContain("受取用ウォレットを開く");
   });

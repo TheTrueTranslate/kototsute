@@ -38,6 +38,50 @@
   @apply mt-2 text-body-sm text-muted-foreground;
 }
 
+.walletCheckCard {
+  @apply mt-3 grid gap-2 rounded-xl border border-border/60 bg-background px-3 py-3;
+}
+
+.walletCheckHeader {
+  @apply flex items-center justify-between gap-2;
+}
+
+.walletCheckTitle {
+  @apply text-body text-foreground;
+}
+
+.walletCheckStatus {
+  @apply rounded-full px-2 py-0.5 text-[11px] font-semibold;
+}
+
+.walletCheckStatusActivated {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.walletCheckStatusPending {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.walletCheckStatusError {
+  @apply bg-destructive/10 text-destructive;
+}
+
+.walletCheckAddressRow {
+  @apply grid gap-1 rounded-lg border border-border/60 bg-muted/20 px-3 py-2;
+}
+
+.walletCheckLabel {
+  @apply text-meta text-muted-foreground;
+}
+
+.walletCheckAddress {
+  @apply break-all text-body text-foreground;
+}
+
+.walletCheckMessage {
+  @apply text-meta text-muted-foreground;
+}
+
 .transferHint {
   @apply text-body-sm text-muted-foreground;
 }

@@ -453,11 +453,17 @@
           "title": "Inheritance flow",
           "progress": "STEP {{current}}/{{total}}",
           "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "reviewReset": "Back to current step",
           "steps": {
             "wallet": "Register receiving wallet",
             "deathClaim": "Death certificate",
             "signature": "Sign",
             "receive": "Receive"
+          },
+          "review": {
+            "title": "Review receiving wallet",
+            "body": "You can revisit receiving wallet registration and ownership verification in the Wallet tab.",
+            "action": "Open receiving wallet"
           },
           "walletGate": {
             "title": "Register a receiving wallet first",
@@ -834,7 +840,7 @@
       "transfer": "Send / input",
       "verify": "Transfer complete"
     },
-    "completed": "Asset lock completed. Returning to case details in {{seconds}} seconds.",
+    "completed": "Asset lock completed.",
     "validation": {
       "noPlans": "No plans available for inheritance",
       "missingHeirs": "Some plans have no heirs set",
@@ -859,6 +865,15 @@
       "confirm": "Confirmed",
       "confirming": "Recording...",
       "waitingOwner": "Waiting for the owner's confirmation."
+    },
+    "walletCheck": {
+      "title": "Inheritance wallet",
+      "addressLabel": "Wallet address",
+      "status": {
+        "activated": "Activated",
+        "pending": "Not activated",
+        "error": "Activation check error"
+      }
     },
     "planPreview": {
       "title": "Plan preview",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import { useAuth } from "../../features/auth/auth-provider";
@@ -7,6 +7,7 @@ import { Button } from "../../features/shared/components/ui/button";
 import FormField from "../../features/shared/components/form-field";
 import FormAlert from "../../features/shared/components/form-alert";
 import { Input } from "../../features/shared/components/ui/input";
+import XrplExplorerLink from "../../features/shared/components/xrpl-explorer-link";
 import {
   Dialog,
   DialogContent,
@@ -39,9 +40,6 @@ import { createPaymentTx, signSingle, submitSignedBlob } from "../../features/xr
 import { getRelationOptionKey, relationOtherValue } from "@kototsute/shared";
 import styles from "../../styles/assetLockPage.module.css";
 
-const XRPL_EXPLORER_BASE = "https://testnet.xrpl.org/accounts";
-const XRPL_TRANSACTION_EXPLORER_BASE = "https://testnet.xrpl.org/transactions";
-
 type AssetLockPageProps = {
   initialLock?: AssetLockState | null;
   initialStep?: number;
@@ -55,6 +53,8 @@ type AssetLockPageProps = {
   initialBalances?: AssetLockBalances | null;
 };
 
+type WalletActivationStatus = NonNullable<AssetLockState["wallet"]>["activationStatus"];
+
 export default function AssetLockPage({
   initialLock = null,
   initialStep = 0,
@@ -67,7 +67,6 @@ export default function AssetLockPage({
   initialBalances = null
 }: AssetLockPageProps) {
   const { caseId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useTranslation();
   const steps = [
@@ -110,7 +109,6 @@ export default function AssetLockPage({
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
-  const [redirectSeconds, setRedirectSeconds] = useState<number | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferDialogItem, setTransferDialogItem] = useState<
@@ -196,10 +194,6 @@ export default function AssetLockPage({
     }
     return message;
   };
-
-  const buildExplorerUrl = (address: string) => `${XRPL_EXPLORER_BASE}/${address}`;
-  const buildTransactionExplorerUrl = (txHash: string) =>
-    `${XRPL_TRANSACTION_EXPLORER_BASE}/${txHash}`;
 
   const handleOpenTransferDialog = (item: AssetLockState["items"][number]) => {
     setTransferDialogItem(item);
@@ -288,26 +282,6 @@ export default function AssetLockPage({
     if (!caseId || current?.id !== "verify") return;
     loadBalances();
   }, [caseId, current?.id]);
-
-  useEffect(() => {
-    if (!caseId || !isLocked) {
-      setRedirectSeconds(null);
-      return;
-    }
-    setRedirectSeconds(5);
-    const endAt = Date.now() + 5000;
-    const interval = window.setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
-      setRedirectSeconds(remaining);
-    }, 1000);
-    const timeout = window.setTimeout(() => {
-      navigate(`/cases/${caseId}`);
-    }, 5000);
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(timeout);
-    };
-  }, [caseId, isLocked, navigate]);
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -456,6 +430,18 @@ export default function AssetLockPage({
     return styles.statusPending;
   };
 
+  const formatWalletActivationStatus = (status: WalletActivationStatus) => {
+    if (status === "ACTIVATED") return t("assetLock.walletCheck.status.activated");
+    if (status === "ERROR") return t("assetLock.walletCheck.status.error");
+    return t("assetLock.walletCheck.status.pending");
+  };
+
+  const getWalletActivationStatusClass = (status: WalletActivationStatus) => {
+    if (status === "ACTIVATED") return styles.walletCheckStatusActivated;
+    if (status === "ERROR") return styles.walletCheckStatusError;
+    return styles.walletCheckStatusPending;
+  };
+
   const getRegularKeySummary = (
     statuses: {
       status: "VERIFIED" | "UNVERIFIED" | "ERROR";
@@ -600,14 +586,12 @@ export default function AssetLockPage({
             <div className={styles.balanceValue}>
               {formatBalanceLabel(balances.destination)}
             </div>
-            <a
+            <XrplExplorerLink
               className={styles.balanceLink}
-              href={buildExplorerUrl(balances.destination.address)}
-              target="_blank"
-              rel="noreferrer"
+              value={balances.destination.address}
             >
               {balances.destination.address}
-            </a>
+            </XrplExplorerLink>
             {balances.destination.status === "error" &&
             formatBalanceError(balances.destination.message) ? (
               <div className={styles.balanceError}>
@@ -624,14 +608,9 @@ export default function AssetLockPage({
               <div className={styles.balanceValue}>
                 {formatBalanceLabel(source)}
               </div>
-              <a
-                className={styles.balanceLink}
-                href={buildExplorerUrl(source.address)}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <XrplExplorerLink className={styles.balanceLink} value={source.address}>
                 {source.address}
-              </a>
+              </XrplExplorerLink>
               {source.status === "error" && formatBalanceError(source.message) ? (
                 <div className={styles.balanceError}>
                   {formatBalanceError(source.message)}
@@ -666,14 +645,13 @@ export default function AssetLockPage({
               {item.txHash ? (
                 <div className={styles.transferMeta}>
                   TX Hash:{" "}
-                  <a
+                  <XrplExplorerLink
                     className={styles.balanceLink}
-                    href={buildTransactionExplorerUrl(item.txHash)}
-                    target="_blank"
-                    rel="noreferrer"
+                    value={item.txHash}
+                    resource="transaction"
                   >
                     {item.txHash}
-                  </a>
+                  </XrplExplorerLink>
                 </div>
               ) : null}
               {item.error ? (
@@ -729,7 +707,7 @@ export default function AssetLockPage({
       {error ? <FormAlert variant="error">{t(error)}</FormAlert> : null}
       {isLocked ? (
         <FormAlert variant="success">
-          {t("assetLock.completed", { seconds: redirectSeconds ?? 5 })}
+          {t("assetLock.completed")}
         </FormAlert>
       ) : null}
 
@@ -737,6 +715,34 @@ export default function AssetLockPage({
         <div className={styles.stepTitle}>
           {showCombinedMethodBStep ? t("assetLock.steps.transfer") : current.title}
         </div>
+        {lockState?.wallet?.address ? (
+          <div className={styles.walletCheckCard}>
+            <div className={styles.walletCheckHeader}>
+              <div className={styles.walletCheckTitle}>{t("assetLock.walletCheck.title")}</div>
+              <span
+                className={`${styles.walletCheckStatus} ${getWalletActivationStatusClass(
+                  lockState.wallet.activationStatus
+                )}`}
+              >
+                {formatWalletActivationStatus(lockState.wallet.activationStatus)}
+              </span>
+            </div>
+            <div className={styles.walletCheckAddressRow}>
+              <div className={styles.walletCheckLabel}>
+                {t("assetLock.walletCheck.addressLabel")}
+              </div>
+              <XrplExplorerLink
+                className={styles.walletCheckAddress}
+                value={lockState.wallet.address}
+              >
+                {lockState.wallet.address}
+              </XrplExplorerLink>
+            </div>
+            {lockState.wallet.activationMessage ? (
+              <div className={styles.walletCheckMessage}>{lockState.wallet.activationMessage}</div>
+            ) : null}
+          </div>
+        ) : null}
         {current.id === "prepare" ? (
           <div className={styles.stepBody}>
             <div>{t("assetLock.prepare.description")}</div>

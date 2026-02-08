@@ -294,6 +294,39 @@ it("shows balances on verify step", async () => {
   expect(html).toContain("https://testnet.xrpl.org/accounts/rDest");
 });
 
+it("shows inheritance wallet address confirmation with activation status", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 3,
+    methodStep: "REGULAR_KEY_SET",
+    wallet: {
+      address: "rDest",
+      activationStatus: "PENDING",
+      activationMessage: "Account not found."
+    },
+    items: []
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 2,
+        initialMethod: "B"
+      })
+    )
+  );
+  expect(html).toContain("相続用ウォレット");
+  expect(html).toContain("rDest");
+  expect(html).toContain('href="https://testnet.xrpl.org/accounts/rDest"');
+  expect(html).toContain('data-xrpl-explorer-link="true"');
+  expect(html).toContain("未アクティベート");
+  expect(html).toContain("Account not found.");
+});
+
 it("shows pending message when account is not found", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
@@ -596,6 +629,7 @@ it("shows verification results on the final step", async () => {
   expect(html).toContain(">ABC</a>");
   expect(html).not.toContain(">https://testnet.xrpl.org/transactions/ABC</a>");
   expect(html).toContain("資産ロックが完了しました");
+  expect(html).not.toContain("ケース詳細に戻ります");
 });
 
 it("shows transfer progress and verification in a single screen for method B final step", async () => {

@@ -1,0 +1,8 @@
+.link {
+  @apply underline underline-offset-2 transition;
+  word-break: break-all;
+}
+
+.link:hover {
+  @apply opacity-80;
+}

@@ -453,11 +453,17 @@
           "title": "相続の手順",
           "progress": "STEP {{current}}/{{total}}",
           "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "reviewReset": "現在のSTEPに戻る",
           "steps": {
             "wallet": "受取用ウォレットを登録",
             "deathClaim": "死亡診断書",
             "signature": "署名",
             "receive": "受け取り"
+          },
+          "review": {
+            "title": "受取用ウォレットの確認",
+            "body": "受取用ウォレットの登録・所有確認はウォレットタブで見直せます。",
+            "action": "受取用ウォレットを開く"
           },
           "walletGate": {
             "title": "先に受取用ウォレットを登録してください",
@@ -834,7 +840,7 @@
       "transfer": "送金実行/入力",
       "verify": "送金完了"
     },
-    "completed": "資産ロックが完了しました。{{seconds}}秒でケース詳細に戻ります。",
+    "completed": "資産ロックが完了しました。",
     "validation": {
       "noPlans": "相続対象の指図がありません",
       "missingHeirs": "相続人が未設定の指図があります",
@@ -859,6 +865,15 @@
       "confirm": "確認しました",
       "confirming": "記録中...",
       "waitingOwner": "被相続人の確認待ちです。"
+    },
+    "walletCheck": {
+      "title": "相続用ウォレット",
+      "addressLabel": "ウォレットアドレス",
+      "status": {
+        "activated": "アクティベート済み",
+        "pending": "未アクティベート",
+        "error": "確認エラー"
+      }
     },
     "planPreview": {
       "title": "指図プレビュー",
