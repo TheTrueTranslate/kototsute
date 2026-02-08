@@ -18,7 +18,12 @@ export type AssetLockState = {
   method: AssetLockMethod | null;
   uiStep: number | null;
   methodStep: string | null;
-  wallet: { address: string } | null;
+  wallet: {
+    address: string;
+    activationStatus?: "ACTIVATED" | "PENDING" | "ERROR" | null;
+    activationCheckedAt?: string | null;
+    activationMessage?: string | null;
+  } | null;
   items: AssetLockItem[];
   regularKeyStatuses?: {
     assetId: string;

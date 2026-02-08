@@ -64,6 +64,14 @@ const toDrops = (value: string) => {
   return (drops * sign).toString();
 };
 
+const toBigInt = (value: unknown, fallback = 0n) => {
+  try {
+    return BigInt(String(value ?? "0"));
+  } catch {
+    return fallback;
+  }
+};
+
 const isValidXrplClassicAddress = (address: string) =>
   /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address);
 
@@ -103,6 +111,81 @@ const createXrplWallet = async () => {
   }
 };
 
+type AssetLockWalletActivationStatus = "ACTIVATED" | "PENDING" | "ERROR";
+
+const normalizeAssetLockWalletActivationStatus = (
+  value: unknown
+): AssetLockWalletActivationStatus | null => {
+  if (value === "ACTIVATED" || value === "PENDING" || value === "ERROR") {
+    return value;
+  }
+  return null;
+};
+
+const buildAssetLockWalletResponse = (wallet: Record<string, any> | null | undefined) => {
+  const address = typeof wallet?.address === "string" ? wallet.address : "";
+  if (!address) return null;
+  return {
+    address,
+    activationStatus: normalizeAssetLockWalletActivationStatus(wallet?.activationStatus),
+    activationCheckedAt: wallet?.activationCheckedAt ?? null,
+    activationMessage: typeof wallet?.activationMessage === "string" ? wallet.activationMessage : null
+  };
+};
+
+const resolveAssetLockWalletActivation = async (
+  address: string,
+  now: Date
+): Promise<{
+  activationStatus: AssetLockWalletActivationStatus;
+  activationCheckedAt: Date;
+  activationMessage: string | null;
+}> => {
+  const info = await fetchXrplAccountInfo(address);
+  if (info.status === "ok") {
+    return {
+      activationStatus: "ACTIVATED",
+      activationCheckedAt: now,
+      activationMessage: null
+    };
+  }
+  const message = typeof info.message === "string" ? info.message : "XRPL account info failed";
+  if (/account not found/i.test(message)) {
+    return {
+      activationStatus: "PENDING",
+      activationCheckedAt: now,
+      activationMessage: message
+    };
+  }
+  return {
+    activationStatus: "ERROR",
+    activationCheckedAt: now,
+    activationMessage: message
+  };
+};
+
+const waitForAssetLockWalletActivation = async (
+  address: string,
+  now: () => Date
+): Promise<{
+  activationStatus: AssetLockWalletActivationStatus;
+  activationCheckedAt: Date;
+  activationMessage: string | null;
+}> => {
+  const maxChecksRaw = Number(process.env.ASSET_LOCK_ACTIVATION_MAX_CHECKS ?? "5");
+  const intervalMsRaw = Number(process.env.ASSET_LOCK_ACTIVATION_INTERVAL_MS ?? "300");
+  const maxChecks = Number.isFinite(maxChecksRaw) ? Math.max(1, Math.floor(maxChecksRaw)) : 5;
+  const intervalMs = Number.isFinite(intervalMsRaw) ? Math.max(0, Math.floor(intervalMsRaw)) : 300;
+  let activation = await resolveAssetLockWalletActivation(address, now());
+  for (let i = 1; i < maxChecks && activation.activationStatus === "PENDING"; i += 1) {
+    if (intervalMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    activation = await resolveAssetLockWalletActivation(address, now());
+  }
+  return activation;
+};
+
 const calcPlannedXrp = (asset: Record<string, any>) => {
   const balance = toNumber(asset.xrplSummary?.balanceXrp ?? 0);
   const reserve = toNumber(asset.reserveXrp ?? 0);
@@ -121,6 +204,102 @@ const calcPlannedToken = (
   const reserve = toNumber(reserveToken?.reserveAmount ?? 0);
   const planned = Math.max(0, balance - reserve);
   return planned.toString();
+};
+
+const resolveAssetLockSourceSnapshot = async (asset: Record<string, any>) => {
+  const address = typeof asset.address === "string" ? asset.address : "";
+  const cachedBalanceXrp =
+    typeof asset.xrplSummary?.balanceXrp === "string" ? asset.xrplSummary.balanceXrp : null;
+  const cachedTokens = Array.isArray(asset.xrplSummary?.tokens) ? asset.xrplSummary.tokens : [];
+  if (address) {
+    const info = await fetchXrplAccountInfo(address);
+    if (info.status === "ok") {
+      const lines = await fetchXrplAccountLines(address);
+      return {
+        balanceXrp: info.balanceXrp,
+        tokens: lines.status === "ok" ? lines.tokens : cachedTokens
+      };
+    }
+  }
+  if (asset.xrplSummary?.status === "ok" && cachedBalanceXrp !== null) {
+    return {
+      balanceXrp: cachedBalanceXrp,
+      tokens: cachedTokens
+    };
+  }
+  return {
+    balanceXrp: "0",
+    tokens: []
+  };
+};
+
+const createAssetLockItemsFromAssets = async (
+  caseRef: any,
+  assets: Array<{ assetId: string; asset: Record<string, any> }>,
+  now: Date
+) => {
+  const items: Array<Record<string, any>> = [];
+  for (const { assetId, asset } of assets) {
+    const source = await resolveAssetLockSourceSnapshot(asset);
+    const assetForCalc = {
+      ...asset,
+      xrplSummary: {
+        ...(asset.xrplSummary ?? {}),
+        status: "ok",
+        balanceXrp: source.balanceXrp,
+        tokens: source.tokens
+      }
+    };
+    const plannedXrp = calcPlannedXrp(assetForCalc);
+    if (toNumber(plannedXrp) > 0) {
+      const xrpItemRef = caseRef.collection("assetLockItems").doc();
+      const xrpItem = {
+        itemId: xrpItemRef.id,
+        assetId,
+        assetLabel: asset.label ?? "",
+        assetAddress: asset.address ?? "",
+        token: null,
+        plannedAmount: toDrops(plannedXrp),
+        status: "PENDING",
+        txHash: null,
+        error: null,
+        createdAt: now
+      };
+      await xrpItemRef.set(xrpItem);
+      items.push(xrpItem);
+    }
+
+    const tokens = Array.isArray(assetForCalc.xrplSummary?.tokens)
+      ? assetForCalc.xrplSummary.tokens
+      : [];
+    const reserveTokens = Array.isArray(asset.reserveTokens) ? asset.reserveTokens : [];
+    for (const token of tokens) {
+      const planned = calcPlannedToken(token, reserveTokens);
+      if (toNumber(planned) <= 0) {
+        continue;
+      }
+      const tokenItemRef = caseRef.collection("assetLockItems").doc();
+      const tokenItem = {
+        itemId: tokenItemRef.id,
+        assetId,
+        assetLabel: asset.label ?? "",
+        assetAddress: asset.address ?? "",
+        token: {
+          currency: token.currency ?? "",
+          issuer: token.issuer ?? null,
+          isNative: false
+        },
+        plannedAmount: planned,
+        status: "PENDING",
+        txHash: null,
+        error: null,
+        createdAt: now
+      };
+      await tokenItemRef.set(tokenItem);
+      items.push(tokenItem);
+    }
+  }
+  return items;
 };
 
 export const casesRoutes = () => {
@@ -2803,8 +2982,25 @@ export const casesRoutes = () => {
       );
     }
     const now = deps.now();
+    const walletActivation = await resolveAssetLockWalletActivation(wallet.address, now);
     const uiStep = 3;
     const methodStep = "REGULAR_KEY_SET";
+    const items = await createAssetLockItemsFromAssets(
+      caseRef,
+      assetsSnap.docs.map((doc) => ({
+        assetId: doc.id,
+        asset: doc.data() ?? {}
+      })),
+      now
+    );
+    if (items.length === 0) {
+      return jsonError(
+        c,
+        400,
+        "NOT_READY",
+        "ロック対象の資産がありません。資産を追加してから再実行してください。"
+      );
+    }
     await caseRef.collection("assetLock").doc("state").set({
       status: "READY",
       method,
@@ -2813,7 +3009,8 @@ export const casesRoutes = () => {
       wallet: {
         address: wallet.address,
         seedEncrypted: encryptPayload(wallet.seed),
-        createdAt: now
+        createdAt: now,
+        ...walletActivation
       },
       createdAt: now,
       updatedAt: now
@@ -2862,63 +3059,15 @@ export const casesRoutes = () => {
       }
     }
 
-    const items: Array<Record<string, any>> = [];
-    for (const doc of assetsSnap.docs) {
-      const asset = doc.data() ?? {};
-      const plannedXrp = calcPlannedXrp(asset);
-      if (toNumber(plannedXrp) > 0) {
-        const xrpItemRef = caseRef.collection("assetLockItems").doc();
-        const xrpItem = {
-          itemId: xrpItemRef.id,
-          assetId: doc.id,
-          assetLabel: asset.label ?? "",
-          assetAddress: asset.address ?? "",
-          token: null,
-          plannedAmount: toDrops(plannedXrp),
-          status: "PENDING",
-          txHash: null,
-          error: null,
-          createdAt: now
-        };
-        await xrpItemRef.set(xrpItem);
-        items.push(xrpItem);
-      }
-
-      const tokens = Array.isArray(asset.xrplSummary?.tokens) ? asset.xrplSummary.tokens : [];
-      const reserveTokens = Array.isArray(asset.reserveTokens) ? asset.reserveTokens : [];
-      for (const token of tokens) {
-        const planned = calcPlannedToken(token, reserveTokens);
-        if (toNumber(planned) <= 0) {
-          continue;
-        }
-        const tokenItemRef = caseRef.collection("assetLockItems").doc();
-        const tokenItem = {
-          itemId: tokenItemRef.id,
-          assetId: doc.id,
-          assetLabel: asset.label ?? "",
-          assetAddress: asset.address ?? "",
-          token: {
-            currency: token.currency ?? "",
-            issuer: token.issuer ?? null,
-            isNative: false
-          },
-          plannedAmount: planned,
-          status: "PENDING",
-          txHash: null,
-          error: null,
-          createdAt: now
-        };
-        await tokenItemRef.set(tokenItem);
-        items.push(tokenItem);
-      }
-    }
-
     return jsonOk(c, {
       status: "READY",
       method,
       uiStep,
       methodStep,
-      wallet: { address: wallet.address },
+      wallet: buildAssetLockWalletResponse({
+        address: wallet.address,
+        ...walletActivation
+      }),
       items,
       regularKeyStatuses: []
     });
@@ -3031,7 +3180,7 @@ export const casesRoutes = () => {
       method: lockData.method ?? null,
       uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : null,
       methodStep: lockData.methodStep ?? null,
-      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      wallet: buildAssetLockWalletResponse(lockData.wallet),
       items,
       regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
         ? lockData.regularKeyStatuses
@@ -3052,8 +3201,31 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const lockSnap = await caseRef.collection("assetLock").doc("state").get();
+    const lockRef = caseRef.collection("assetLock").doc("state");
+    const lockSnap = await lockRef.get();
     const lockData = lockSnap.data() ?? {};
+    const lockWallet = buildAssetLockWalletResponse(lockData.wallet);
+    let wallet = lockWallet;
+    if (lockWallet) {
+      const activation = await resolveAssetLockWalletActivation(
+        lockWallet.address,
+        c.get("deps").now()
+      );
+      wallet = {
+        ...lockWallet,
+        ...activation
+      };
+      await lockRef.set(
+        {
+          wallet: {
+            ...(lockData.wallet ?? {}),
+            ...activation
+          },
+          updatedAt: c.get("deps").now()
+        },
+        { merge: true }
+      );
+    }
     const itemsSnap = await caseRef.collection("assetLockItems").get();
     const items = itemsSnap.docs.map((doc) => {
       const item = doc.data() ?? {};
@@ -3074,7 +3246,7 @@ export const casesRoutes = () => {
       method: lockData.method ?? null,
       uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : null,
       methodStep: lockData.methodStep ?? null,
-      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      wallet,
       items,
       regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
         ? lockData.regularKeyStatuses
@@ -3271,7 +3443,7 @@ export const casesRoutes = () => {
       method: lockData.method ?? null,
       uiStep: typeof lockData.uiStep === "number" ? lockData.uiStep : 4,
       methodStep: lockData.methodStep ?? null,
-      wallet: lockData.wallet?.address ? { address: lockData.wallet.address } : null,
+      wallet: buildAssetLockWalletResponse(lockData.wallet),
       items,
       regularKeyStatuses: Array.isArray(lockData.regularKeyStatuses)
         ? lockData.regularKeyStatuses
@@ -3378,7 +3550,7 @@ export const casesRoutes = () => {
       method: latest.method ?? null,
       uiStep: typeof latest.uiStep === "number" ? latest.uiStep : null,
       methodStep: latest.methodStep ?? null,
-      wallet: latest.wallet?.address ? { address: latest.wallet.address } : null,
+      wallet: buildAssetLockWalletResponse(latest.wallet),
       items,
       regularKeyStatuses: Array.isArray(latest.regularKeyStatuses)
         ? latest.regularKeyStatuses
@@ -3518,7 +3690,7 @@ export const casesRoutes = () => {
       method: latest.method ?? null,
       uiStep: typeof latest.uiStep === "number" ? latest.uiStep : null,
       methodStep: latest.methodStep ?? null,
-      wallet: latest.wallet?.address ? { address: latest.wallet.address } : null,
+      wallet: buildAssetLockWalletResponse(latest.wallet),
       items,
       regularKeyStatuses: Array.isArray(latest.regularKeyStatuses)
         ? latest.regularKeyStatuses
@@ -3591,11 +3763,30 @@ export const casesRoutes = () => {
       return null;
     };
     const itemsSnap = await caseRef.collection("assetLockItems").get();
-    const itemEntries = itemsSnap.docs.map((doc) => ({
+    let itemEntries = itemsSnap.docs.map((doc) => ({
       id: doc.id,
       ref: doc.ref,
       data: doc.data() ?? {}
     }));
+    if (itemEntries.length === 0) {
+      const assetsSnap = await caseRef.collection("assets").get();
+      const rebuiltItems = await createAssetLockItemsFromAssets(
+        caseRef,
+        assetsSnap.docs.map((doc) => ({
+          assetId: doc.id,
+          asset: doc.data() ?? {}
+        })),
+        c.get("deps").now()
+      );
+      if (rebuiltItems.length > 0) {
+        const rebuiltItemsSnap = await caseRef.collection("assetLockItems").get();
+        itemEntries = rebuiltItemsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ref: doc.ref,
+          data: doc.data() ?? {}
+        }));
+      }
+    }
     const finalizeExecution = async () => {
       const clearError = await clearRegularKeys();
       if (clearError) {
@@ -3640,7 +3831,7 @@ export const casesRoutes = () => {
         method: finalLockData.method ?? null,
         uiStep: typeof finalLockData.uiStep === "number" ? finalLockData.uiStep : null,
         methodStep: finalLockData.methodStep ?? null,
-        wallet: finalLockData.wallet?.address ? { address: finalLockData.wallet.address } : null,
+        wallet: buildAssetLockWalletResponse(finalLockData.wallet),
         items,
         regularKeyStatuses: Array.isArray(finalLockData.regularKeyStatuses)
           ? finalLockData.regularKeyStatuses
@@ -3654,7 +3845,7 @@ export const casesRoutes = () => {
           .filter((assetId) => assetId.length > 0)
       )
     );
-    if (itemEntries.length === 0 || assetIds.length === 0) {
+    if (itemEntries.length === 0) {
       return jsonError(
         c,
         400,
@@ -3694,6 +3885,7 @@ export const casesRoutes = () => {
         ? BigInt(reserveInfo.reserveIncDrops)
         : BigInt(toDrops(process.env.XRPL_RESERVE_INC_XRP ?? "2"));
     const plannedOverrides = new Map<string, string>();
+    const availableDropsByAsset = new Map<string, bigint>();
     for (const assetId of assetIds) {
       const asset = assetMap.get(assetId);
       if (!asset) continue;
@@ -3715,8 +3907,7 @@ export const casesRoutes = () => {
       const totalReserveDrops = requiredReserveDrops + reserveDrops;
       const feeDrops = txCount * feePerTxDrops;
       const availableDrops = balanceDrops - totalReserveDrops - feeDrops;
-      // DEBUG
-      // console.log("adjust", { assetId, txCount: txCount.toString(), balanceDrops: balanceDrops.toString(), reserveDrops: reserveDrops.toString(), feeDrops: feeDrops.toString(), availableDrops: availableDrops.toString() });
+      availableDropsByAsset.set(assetId, availableDrops);
       if (availableDrops <= 0n) {
         const labelSuffix = asset.label ? `「${asset.label}」` : "";
         return jsonError(
@@ -3728,7 +3919,7 @@ export const casesRoutes = () => {
       }
       const xrpEntry = itemsForAsset.find((entry) => !entry.data?.token);
       if (xrpEntry) {
-        const plannedDrops = BigInt(String(xrpEntry.data?.plannedAmount ?? "0"));
+        const plannedDrops = toBigInt(xrpEntry.data?.plannedAmount);
         const adjustedDrops = plannedDrops > availableDrops ? availableDrops : plannedDrops;
         if (adjustedDrops !== plannedDrops) {
           plannedOverrides.set(xrpEntry.id, adjustedDrops.toString());
@@ -3742,6 +3933,112 @@ export const casesRoutes = () => {
         entry.data.plannedAmount = override;
         await entry.ref.set({ plannedAmount: override }, { merge: true });
       }
+    }
+
+    const prefundedTxHashByItemId = new Map<string, string | null>();
+    const initialDestinationActivation = await resolveAssetLockWalletActivation(
+      destination,
+      c.get("deps").now()
+    );
+    if (initialDestinationActivation.activationStatus === "PENDING") {
+      const prefundDrops = reserveBaseDrops;
+      const xrpEntries = itemEntries.filter((entry) => !entry.data?.token);
+      const plannedXrpByAsset = new Map<string, bigint>();
+      for (const entry of xrpEntries) {
+        const assetId = String(entry.data?.assetId ?? "");
+        if (!assetId) continue;
+        const plannedDrops = toBigInt(plannedOverrides.get(entry.id) ?? entry.data?.plannedAmount ?? "0");
+        plannedXrpByAsset.set(assetId, (plannedXrpByAsset.get(assetId) ?? 0n) + plannedDrops);
+      }
+
+      let prefundTarget:
+        | {
+            entryId: string;
+            entryRef: any;
+            fromAddress: string;
+            remainingDrops: bigint;
+          }
+        | null = null;
+      for (const entry of xrpEntries) {
+        const item = entry.data ?? {};
+        const assetId = String(item.assetId ?? "");
+        const asset = assetId ? assetMap.get(assetId) : null;
+        const fromAddress =
+          typeof item.assetAddress === "string" && item.assetAddress.length > 0
+            ? item.assetAddress
+            : asset?.address ?? "";
+        if (!fromAddress) continue;
+        const plannedDrops = toBigInt(plannedOverrides.get(entry.id) ?? item.plannedAmount ?? "0");
+        if (plannedDrops <= 0n) continue;
+        const availableDrops = assetId ? availableDropsByAsset.get(assetId) : undefined;
+        const plannedByAsset = assetId ? plannedXrpByAsset.get(assetId) ?? 0n : plannedDrops;
+        const spareDrops =
+          availableDrops !== undefined && availableDrops > plannedByAsset
+            ? availableDrops - plannedByAsset
+            : 0n;
+        const feeShortageDrops = spareDrops >= feePerTxDrops ? 0n : feePerTxDrops - spareDrops;
+        const requiredDrops = prefundDrops + feeShortageDrops;
+        if (plannedDrops < requiredDrops) continue;
+        prefundTarget = {
+          entryId: entry.id,
+          entryRef: entry.ref,
+          fromAddress,
+          remainingDrops: plannedDrops - requiredDrops
+        };
+        break;
+      }
+
+      if (!prefundTarget) {
+        return jsonError(
+          c,
+          400,
+          "INSUFFICIENT_BALANCE",
+          "相続先ウォレットの預かり金が不足しています。資産ウォレットにXRPを追加してください。"
+        );
+      }
+
+      const prefundResult = await sendXrpPayment({
+        fromSeed: seed,
+        fromAddress: prefundTarget.fromAddress,
+        to: destination,
+        amountDrops: prefundDrops.toString()
+      });
+      const remainingDropsText = prefundTarget.remainingDrops.toString();
+      plannedOverrides.set(prefundTarget.entryId, remainingDropsText);
+      const targetEntry = itemEntries.find((entry) => entry.id === prefundTarget?.entryId);
+      if (targetEntry) {
+        targetEntry.data.plannedAmount = remainingDropsText;
+      }
+      await prefundTarget.entryRef.set({ plannedAmount: remainingDropsText }, { merge: true });
+      if (prefundTarget.remainingDrops <= 0n) {
+        prefundedTxHashByItemId.set(prefundTarget.entryId, prefundResult.txHash ?? null);
+      }
+    }
+
+    const destinationActivation = await waitForAssetLockWalletActivation(
+      destination,
+      c.get("deps").now
+    );
+    await caseRef
+      .collection("assetLock")
+      .doc("state")
+      .set(
+        {
+          wallet: {
+            ...(lockData.wallet ?? {}),
+            ...destinationActivation
+          },
+          updatedAt: c.get("deps").now()
+        },
+        { merge: true }
+      );
+    if (destinationActivation.activationStatus !== "ACTIVATED") {
+      return jsonError(
+        c,
+        400,
+        "DISTRIBUTION_WALLET_NOT_ACTIVATED",
+        "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。"
+      );
     }
 
     await caseRef
@@ -3762,6 +4059,10 @@ export const casesRoutes = () => {
         return jsonError(c, 400, "VALIDATION_ERROR", "送金元アドレスが取得できません");
       }
       if (item.token) {
+        if (toNumber(plannedAmount) <= 0) {
+          await entry.ref.set({ status: "VERIFIED", txHash: item.txHash ?? null, error: null }, { merge: true });
+          continue;
+        }
         const result = await sendTokenPayment({
           fromSeed: seed,
           fromAddress,
@@ -3774,27 +4075,29 @@ export const casesRoutes = () => {
           { merge: true }
         );
       } else {
+        const plannedDrops = toBigInt(plannedAmount);
+        if (plannedDrops <= 0n) {
+          await entry.ref.set(
+            {
+              status: "VERIFIED",
+              txHash: prefundedTxHashByItemId.get(entry.id) ?? item.txHash ?? null,
+              error: null
+            },
+            { merge: true }
+          );
+          continue;
+        }
         const result = await sendXrpPayment({
           fromSeed: seed,
           fromAddress,
           to: destination,
-          amountDrops: String(plannedAmount)
+          amountDrops: plannedDrops.toString()
         });
         await entry.ref.set(
           { status: "VERIFIED", txHash: result.txHash ?? null, error: null },
           { merge: true }
         );
       }
-    }
-
-    const destinationInfo = await fetchXrplAccountInfo(destination);
-    if (destinationInfo.status !== "ok") {
-      return jsonError(
-        c,
-        400,
-        "DISTRIBUTION_WALLET_NOT_ACTIVATED",
-        "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。"
-      );
     }
 
     return await finalizeExecution();

@@ -7,6 +7,7 @@ export const shouldStartAssetLock = (
 ) => {
   if (!lockState) return true;
   if (lockState.method !== method) return true;
+  if (!Array.isArray(lockState.items) || lockState.items.length === 0) return true;
   const address = lockState.wallet?.address ?? "";
   if (!address) return true;
   if (!isValidXrplClassicAddress(address)) return true;
