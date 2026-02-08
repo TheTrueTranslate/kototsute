@@ -695,7 +695,6 @@ export default function CaseDetailPage({
   const heirFlowCurrent = heirFlowStepIndex + 1;
   const heirFlowDisplayCurrent = heirFlowDisplayStepIndex + 1;
   const heirFlowTotal = heirFlowSteps.length;
-  const heirFlowProgressPercent = (heirFlowCurrent / heirFlowTotal) * 100;
   const isHeirFlowReviewing = isHeir && heirFlowDisplayStepIndex !== heirFlowStepIndex;
   const shouldLockInheritanceFlowByWallet = isHeir && !hasHeirWallet;
   const deathClaimDocumentsHintKey = resolveDeathClaimDocumentsHintKey({
@@ -1754,12 +1753,6 @@ export default function CaseDetailPage({
                       total: heirFlowTotal
                     })}
                   </div>
-                </div>
-                <div className={styles.heirStepperTrack} aria-hidden="true">
-                  <div
-                    className={styles.heirStepperFill}
-                    style={{ width: `${heirFlowProgressPercent}%` }}
-                  />
                 </div>
                 <ol className={styles.heirStepperList}>
                   {heirFlowSteps.map((label, index) => (
