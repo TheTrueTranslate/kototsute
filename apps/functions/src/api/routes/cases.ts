@@ -1822,6 +1822,7 @@ export const casesRoutes = () => {
 
         const status =
           failedCount > 0 || skippedCount > 0 ? "PARTIAL" : "COMPLETED";
+        const updatedAt = c.get("deps").now();
         await stateRef.set(
           {
             status,
@@ -1829,10 +1830,13 @@ export const casesRoutes = () => {
             failedCount,
             skippedCount,
             escalationCount,
-            updatedAt: c.get("deps").now()
+            updatedAt
           },
           { merge: true }
         );
+        if (status === "COMPLETED") {
+          await caseRef.set({ stage: "COMPLETED", updatedAt }, { merge: true });
+        }
 
         return jsonOk(c, {
           status,
@@ -1842,7 +1846,7 @@ export const casesRoutes = () => {
           skippedCount,
           escalationCount,
           startedAt: existingState.startedAt ?? null,
-          updatedAt: c.get("deps").now()
+          updatedAt
         });
       }
     }
@@ -2202,15 +2206,19 @@ export const casesRoutes = () => {
     }
 
     const status = failedCount > 0 ? "PARTIAL" : "COMPLETED";
+    const updatedAt = c.get("deps").now();
     await stateRef.set(
       {
         status,
         successCount,
         failedCount,
-        updatedAt: c.get("deps").now()
+        updatedAt
       },
       { merge: true }
     );
+    if (status === "COMPLETED") {
+      await caseRef.set({ stage: "COMPLETED", updatedAt }, { merge: true });
+    }
 
     return jsonOk(c, {
       status,
@@ -2220,7 +2228,7 @@ export const casesRoutes = () => {
       skippedCount: 0,
       escalationCount: 0,
       startedAt: now,
-      updatedAt: c.get("deps").now()
+      updatedAt
     });
   });
 

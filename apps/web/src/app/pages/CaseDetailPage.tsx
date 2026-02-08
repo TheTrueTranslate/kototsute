@@ -132,6 +132,16 @@ export const resolveDistributionDisabledReason = (input: {
   return null;
 };
 
+export const resolveCaseStageFromDistribution = (input: {
+  caseStage?: CaseSummary["stage"] | null;
+  distributionStatus?: DistributionState["status"] | null;
+}) => {
+  if (input.caseStage === "IN_PROGRESS" && input.distributionStatus === "COMPLETED") {
+    return "COMPLETED" as const;
+  }
+  return input.caseStage ?? null;
+};
+
 export const shouldFetchApprovalTx = (input: {
   isHeir: boolean;
   tab: string | null;
@@ -1016,6 +1026,15 @@ export default function CaseDetailPage({
     try {
       const data = await getDistributionState(caseId);
       setDistribution(data);
+      setCaseData((previous) => {
+        if (!previous) return previous;
+        const stage = resolveCaseStageFromDistribution({
+          caseStage: previous.stage,
+          distributionStatus: data.status
+        });
+        if (!stage || stage === previous.stage) return previous;
+        return { ...previous, stage };
+      });
     } catch (err: any) {
       setDistributionError(err?.message ?? "cases.detail.distribution.error.loadFailed");
     } finally {
@@ -1168,6 +1187,15 @@ export default function CaseDetailPage({
     try {
       const data = await executeDistribution(caseId);
       setDistribution(data);
+      setCaseData((previous) => {
+        if (!previous) return previous;
+        const stage = resolveCaseStageFromDistribution({
+          caseStage: previous.stage,
+          distributionStatus: data.status
+        });
+        if (!stage || stage === previous.stage) return previous;
+        return { ...previous, stage };
+      });
     } catch (err: any) {
       setDistributionError(err?.message ?? "cases.detail.distribution.error.executeFailed");
     } finally {

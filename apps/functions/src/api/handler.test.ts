@@ -5913,6 +5913,8 @@ describe("createApiHandler", () => {
 
     const stateSnap = await db.collection(`cases/${caseId}/distribution`).doc("state").get();
     expect(stateSnap.data()?.totalCount).toBe(1);
+    const caseStageSnap = await db.collection("cases").doc(caseId).get();
+    expect(caseStageSnap.data()?.stage).toBe("COMPLETED");
     const itemsSnap = await db
       .collection(`cases/${caseId}/distribution`)
       .doc("state")
@@ -6308,6 +6310,8 @@ describe("createApiHandler", () => {
     expect(itemSnap.data()?.status).toBe("SKIPPED");
     const stateSnap = await stateRef.get();
     expect(stateSnap.data()?.escalationCount).toBe(1);
+    const caseSnap = await db.collection("cases").doc(caseId).get();
+    expect(caseSnap.data()?.stage).toBe("IN_PROGRESS");
     (globalThis as any).fetch = fetchOriginal;
   });
 

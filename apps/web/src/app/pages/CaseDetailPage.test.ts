@@ -1254,6 +1254,26 @@ describe("CaseDetailPage", () => {
     expect(reason).toEqual({ key: "cases.detail.distribution.disabled.completed" });
   });
 
+  it("resolves case stage as completed when distribution is completed", async () => {
+    const { resolveCaseStageFromDistribution } = await import("./CaseDetailPage");
+    expect(
+      resolveCaseStageFromDistribution({
+        caseStage: "IN_PROGRESS",
+        distributionStatus: "COMPLETED"
+      })
+    ).toBe("COMPLETED");
+  });
+
+  it("keeps case stage when distribution is not completed", async () => {
+    const { resolveCaseStageFromDistribution } = await import("./CaseDetailPage");
+    expect(
+      resolveCaseStageFromDistribution({
+        caseStage: "IN_PROGRESS",
+        distributionStatus: "RUNNING"
+      })
+    ).toBe("IN_PROGRESS");
+  });
+
   it("shows wallet status badge in heirs tab", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=heirs");
