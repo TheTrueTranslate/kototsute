@@ -693,9 +693,7 @@ export default function CaseDetailPage({
     [heirFlowReviewStepIndex, heirFlowStepIndex, heirFlowSteps.length, isHeir]
   );
   const heirFlowCurrent = heirFlowStepIndex + 1;
-  const heirFlowDisplayCurrent = heirFlowDisplayStepIndex + 1;
   const heirFlowTotal = heirFlowSteps.length;
-  const isHeirFlowReviewing = isHeir && heirFlowDisplayStepIndex !== heirFlowStepIndex;
   const shouldLockInheritanceFlowByWallet = isHeir && !hasHeirWallet;
   const deathClaimDocumentsHintKey = resolveDeathClaimDocumentsHintKey({
     isHeir,
@@ -703,8 +701,6 @@ export default function CaseDetailPage({
     claimStatus: deathClaim?.claim?.status ?? null,
     confirmedByMe: Boolean(deathClaim?.confirmedByMe)
   });
-  const shouldShowWalletReviewSection =
-    isHeir && !shouldLockInheritanceFlowByWallet && heirFlowDisplayStepIndex === 0;
   const shouldShowDeathClaimDocuments = !isHeir || heirFlowDisplayStepIndex === 1;
   const shouldShowApprovalSection = !isHeir || heirFlowDisplayStepIndex === 2;
   const shouldShowDistributionSection = !isHeir || heirFlowDisplayStepIndex >= 3;
@@ -1789,40 +1785,6 @@ export default function CaseDetailPage({
                     </li>
                   ))}
                 </ol>
-                <div className={styles.nextActionBody}>
-                  {t("cases.detail.inheritance.flow.stepLabel", {
-                    current: heirFlowDisplayCurrent,
-                    total: heirFlowTotal,
-                    step: heirFlowSteps[heirFlowDisplayStepIndex] ?? "-"
-                  })}
-                </div>
-                {isHeirFlowReviewing ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className={styles.heirStepperReset}
-                    onClick={() => setHeirFlowReviewStepIndex(null)}
-                  >
-                    {t("cases.detail.inheritance.flow.reviewReset")}
-                  </Button>
-                ) : null}
-                <div className={styles.nextActionSteps}>
-                  {heirFlowSteps.map((label, index) => (
-                    <button
-                      type="button"
-                      key={`${label}-chip`}
-                      className={`${styles.nextActionStep} ${styles.nextActionStepButton} ${
-                        index === heirFlowDisplayStepIndex ? styles.nextActionStepActive : ""
-                      }`}
-                      onClick={() => setHeirFlowReviewStepIndex(index)}
-                      data-heir-flow-review-step={index + 1}
-                      aria-pressed={index === heirFlowDisplayStepIndex}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
               </div>
             ) : null}
             {shouldLockInheritanceFlowByWallet ? (
@@ -1841,21 +1803,6 @@ export default function CaseDetailPage({
               </div>
             ) : (
               <>
-                {shouldShowWalletReviewSection ? (
-                  <div className={styles.heirFlowReviewCard}>
-                    <div className={styles.heirFlowReviewTitle}>
-                      {t("cases.detail.inheritance.flow.review.title")}
-                    </div>
-                    <div className={styles.heirFlowReviewBody}>
-                      {t("cases.detail.inheritance.flow.review.body")}
-                    </div>
-                    <div className={styles.panelActions}>
-                      <Button type="button" variant="outline" onClick={() => handleTabChange("wallet")}>
-                        {t("cases.detail.inheritance.flow.review.action")}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
                 {shouldShowDeathClaimDocuments ? (
                   <div className={styles.collapsible}>
                     <div className={styles.collapsibleBody}>

@@ -579,6 +579,7 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("STEP 2/4");
     expect(html).toContain("死亡診断書");
     expect(html).not.toContain("heirStepperTrack");
+    expect(html).not.toContain("2/4: 死亡診断書");
     expect(html).toContain('data-heir-flow-review-step="1"');
     expect(html).toContain('data-heir-flow-review-step="4"');
     expect(html).not.toContain("相続実行の同意");
@@ -876,6 +877,7 @@ describe("CaseDetailPage", () => {
     });
 
     expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("3/4: 署名");
     expect(html).not.toContain("分配を実行");
   });
 
@@ -924,6 +926,7 @@ describe("CaseDetailPage", () => {
     });
 
     expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("3/4: 署名");
     expect(html).not.toContain("分配を実行");
   });
 
