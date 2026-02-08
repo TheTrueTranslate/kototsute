@@ -95,6 +95,35 @@ describe("CasePlanDetailPage", () => {
     expect(localized.detail).toBe("タイトル: 指図A");
   });
 
+  it("localizes relation label in history when relation key is stored", async () => {
+    const { localizePlanHistoryEntry } = await import("./CasePlanDetailPage");
+    const localized = localizePlanHistoryEntry(
+      {
+        historyId: "history-2",
+        type: "PLAN_HEIR_ADDED",
+        title: "RAW",
+        detail: null,
+        actorUid: "owner",
+        actorEmail: "owner@example.com",
+        createdAt: "2024-01-02T00:00:00.000Z",
+        meta: {
+          relationLabel: "relations.eldestSon",
+          email: "heir@example.com"
+        }
+      },
+      (key, values) => {
+        if (key === "plans.detail.history.items.planHeirAdded.title") return "相続人を追加";
+        if (key === "relations.eldestSon") return "長男";
+        if (key === "plans.detail.history.items.detail.heirWithRelation") {
+          return `${String(values?.relation ?? "")} / ${String(values?.email ?? "")}`;
+        }
+        return key;
+      }
+    );
+    expect(localized.title).toBe("相続人を追加");
+    expect(localized.detail).toBe("長男 / heir@example.com");
+  });
+
   it("shows delete action for owner", async () => {
     planAssets = [];
     const html = await render({ initialCaseData: caseData });

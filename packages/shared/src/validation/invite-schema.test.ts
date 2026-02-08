@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { inviteCreateSchema, inviteUpdateSchema } from "./invite-schema";
+import {
+  getRelationOptionKey,
+  inviteCreateSchema,
+  inviteUpdateSchema
+} from "./invite-schema";
 
 describe("inviteCreateSchema", () => {
   it("accepts valid input", () => {
@@ -54,5 +58,15 @@ describe("inviteUpdateSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("validation.relationOther.required");
+  });
+});
+
+describe("getRelationOptionKey", () => {
+  it("maps stored translation key directly", () => {
+    expect(getRelationOptionKey("relations.eldestSon")).toBe("relations.eldestSon");
+  });
+
+  it("normalizes relation label with extra spaces", () => {
+    expect(getRelationOptionKey(" 長男 ")).toBe("relations.eldestSon");
   });
 });

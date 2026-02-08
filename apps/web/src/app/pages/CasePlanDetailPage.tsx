@@ -34,6 +34,7 @@ const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") =>
   if (!Number.isFinite(value)) return "-";
   return unitType === "PERCENT" ? `${value}%` : `${value}`;
 };
+const relationOtherKey = getRelationOptionKey(relationOtherValue);
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -63,10 +64,10 @@ const localizeRelationLabel = (
   t: TranslateFn
 ) => {
   if (!relationLabel) return null;
-  if (relationLabel === relationOtherValue) {
+  const relationKey = getRelationOptionKey(relationLabel);
+  if (relationKey === relationOtherKey) {
     return relationOther?.trim() || t("relations.other");
   }
-  const relationKey = getRelationOptionKey(relationLabel);
   return relationKey ? t(relationKey) : relationLabel;
 };
 
@@ -303,10 +304,10 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
 
   const renderRelationLabel = (relationLabel?: string | null, relationOther?: string | null) => {
     if (!relationLabel) return t("common.unset");
-    if (relationLabel === relationOtherValue) {
+    const relationKey = getRelationOptionKey(relationLabel);
+    if (relationKey === relationOtherKey) {
       return relationOther?.trim() ? relationOther : t("relations.other");
     }
-    const relationKey = getRelationOptionKey(relationLabel);
     return relationKey ? t(relationKey) : relationLabel;
   };
 

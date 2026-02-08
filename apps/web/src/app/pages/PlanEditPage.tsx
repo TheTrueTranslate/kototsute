@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { relationOtherValue } from "@kototsute/shared";
+import { getRelationOptionKey, relationOtherValue } from "@kototsute/shared";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
 import FormAlert from "../../features/shared/components/form-alert";
 import FormField from "../../features/shared/components/form-field";
@@ -42,6 +42,7 @@ type AllocationUpdateInput = {
 };
 
 const roundAllocationValue = (value: number) => Number(value.toFixed(6));
+const relationOtherKey = getRelationOptionKey(relationOtherValue);
 
 export const parseAllocationValue = (value: string) => {
   const trimmed = value.trim();
@@ -68,6 +69,19 @@ export const buildAllocationSignature = (input: AllocationUpdateInput) =>
       value: roundAllocationValue(allocation.value)
     }))
   );
+
+export const localizePlanRelationLabel = (
+  relationLabel: string | null | undefined,
+  relationOther: string | null | undefined,
+  t: (key: string) => string
+) => {
+  if (!relationLabel) return null;
+  const relationKey = getRelationOptionKey(relationLabel);
+  if (relationKey === relationOtherKey) {
+    return relationOther?.trim() ? relationOther : t("plans.edit.heir.other");
+  }
+  return relationKey ? t(relationKey) : relationLabel;
+};
 
 const buildAllocationDraftValues = (
   heirUids: string[],
@@ -390,8 +404,10 @@ export default function PlanEditPage() {
 
   const renderRelationLabel = (relationLabel?: string | null, relationOther?: string | null) => {
     if (!relationLabel) return t("plans.edit.heir.defaultLabel");
-    if (relationLabel === relationOtherValue) return relationOther ?? t("plans.edit.heir.other");
-    return relationLabel;
+    return (
+      localizePlanRelationLabel(relationLabel, relationOther, t) ??
+      t("plans.edit.heir.defaultLabel")
+    );
   };
 
   const palette = [
