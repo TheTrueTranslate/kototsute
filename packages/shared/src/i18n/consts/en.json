@@ -159,22 +159,6 @@
       "success": "Password reset email sent."
     }
   },
-  "home": {
-    "title": "Post-login Home (WIP)",
-    "lead": "The authenticated home is under construction.",
-    "footer": {
-      "login": "Back to sign in",
-      "register": "Sign up"
-    },
-    "placeholder": {
-      "lead": "We plan to add entry points for inviting heirs here.",
-      "items": {
-        "invite": "Issue invite links",
-        "cases": "List of inheritance cases",
-        "timeline": "Status timeline"
-      }
-    }
-  },
   "cases": {
     "title": "Cases",
     "detail": {
