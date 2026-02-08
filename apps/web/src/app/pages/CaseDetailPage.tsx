@@ -81,6 +81,11 @@ type LocalizedMessage = {
   values?: Record<string, number | string>;
 };
 
+type ApiErrorLike = {
+  message?: string | null;
+  data?: { code?: string | null };
+} | null | undefined;
+
 type NftReceiveStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 export const formatDistributionProgressText = (
@@ -317,6 +322,16 @@ export const resolveSignerListErrorMessage = (
     return { key: "cases.detail.signer.error.accountNotFound" };
   }
   return message;
+};
+
+export const resolveCaseDetailApiErrorMessage = (error: ApiErrorLike, fallbackKey: string): string => {
+  if (error?.data?.code === "DISTRIBUTION_WALLET_NOT_ACTIVATED") {
+    return "cases.detail.signer.error.accountNotFound";
+  }
+  if (typeof error?.message === "string" && error.message.length > 0) {
+    return error.message;
+  }
+  return fallbackKey;
 };
 
 type AssetRowProps = {
@@ -1036,7 +1051,9 @@ export default function CaseDetailPage({
         return { ...previous, stage };
       });
     } catch (err: any) {
-      setDistributionError(err?.message ?? "cases.detail.distribution.error.loadFailed");
+      setDistributionError(
+        resolveCaseDetailApiErrorMessage(err, "cases.detail.distribution.error.loadFailed")
+      );
     } finally {
       setDistributionLoading(false);
     }
@@ -1050,7 +1067,9 @@ export default function CaseDetailPage({
       const data = await listDistributionItems(caseId);
       setDistributionItems(data);
     } catch (err: any) {
-      setDistributionItemsError(err?.message ?? "cases.detail.nftReceive.error.loadFailed");
+      setDistributionItemsError(
+        resolveCaseDetailApiErrorMessage(err, "cases.detail.nftReceive.error.loadFailed")
+      );
     } finally {
       setDistributionItemsLoading(false);
     }
@@ -1145,7 +1164,7 @@ export default function CaseDetailPage({
       } else if (code === "NOT_READY") {
         setPrepareError("cases.detail.prepare.disabled.notInProgress");
       } else {
-        setPrepareError(err?.message ?? "cases.detail.signer.prepare.error.failed");
+        setPrepareError(resolveCaseDetailApiErrorMessage(err, "cases.detail.signer.prepare.error.failed"));
       }
     } finally {
       setPrepareLoading(false);
@@ -1173,7 +1192,9 @@ export default function CaseDetailPage({
       } else if (code === "NOT_READY") {
         setPrepareError("cases.detail.signer.prepare.error.submitted");
       } else {
-        setPrepareError(err?.message ?? "cases.detail.signer.prepare.error.reprepareFailed");
+        setPrepareError(
+          resolveCaseDetailApiErrorMessage(err, "cases.detail.signer.prepare.error.reprepareFailed")
+        );
       }
     } finally {
       setPrepareLoading(false);
@@ -1197,7 +1218,9 @@ export default function CaseDetailPage({
         return { ...previous, stage };
       });
     } catch (err: any) {
-      setDistributionError(err?.message ?? "cases.detail.distribution.error.executeFailed");
+      setDistributionError(
+        resolveCaseDetailApiErrorMessage(err, "cases.detail.distribution.error.executeFailed")
+      );
     } finally {
       setDistributionExecuting(false);
     }

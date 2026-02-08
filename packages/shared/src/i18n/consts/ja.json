@@ -354,7 +354,7 @@
         "error": {
           "statusLoadFailed": "署名状況の取得に失敗しました",
           "loadFailed": "署名対象の取得に失敗しました",
-          "accountNotFound": "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。",
+          "accountNotFound": "分配用ウォレットがXRPL上でまだ有効化されていません。処理中の可能性があるため、数秒待ってから同意の準備を再実行してください。",
           "txMissing": "署名対象トランザクションが取得できません",
           "signFailed": "署名の生成に失敗しました",
           "signedBlobRequired": "署名済みデータを入力してください",

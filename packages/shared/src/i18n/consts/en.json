@@ -354,7 +354,7 @@
         "error": {
           "statusLoadFailed": "Failed to load signing status",
           "loadFailed": "Failed to load signable payload",
-          "accountNotFound": "The distribution wallet is not activated on XRPL. Fund the distribution wallet with XRP, then run consent preparation again.",
+          "accountNotFound": "The distribution wallet is not yet activated on XRPL. If processing is still in progress, wait a few seconds, then run consent preparation again.",
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",

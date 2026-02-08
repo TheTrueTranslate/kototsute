@@ -446,6 +446,26 @@ describe("CaseDetailPage", () => {
     expect(resolveSignerListErrorMessage("Unexpected")).toBe("Unexpected");
   });
 
+  it("maps distribution wallet activation code to localized key", async () => {
+    const { resolveCaseDetailApiErrorMessage } = await import("./CaseDetailPage");
+    expect(
+      resolveCaseDetailApiErrorMessage(
+        {
+          message: "分配用ウォレットがXRPL上で未有効です。",
+          data: { code: "DISTRIBUTION_WALLET_NOT_ACTIVATED" }
+        },
+        "cases.detail.distribution.error.executeFailed"
+      )
+    ).toBe("cases.detail.signer.error.accountNotFound");
+  });
+
+  it("uses fallback key when api message and code are unavailable", async () => {
+    const { resolveCaseDetailApiErrorMessage } = await import("./CaseDetailPage");
+    expect(resolveCaseDetailApiErrorMessage({}, "cases.detail.distribution.error.executeFailed")).toBe(
+      "cases.detail.distribution.error.executeFailed"
+    );
+  });
+
   it("ignores approval tx not found error", async () => {
     const { resolveApprovalTxErrorMessage } = await import("./CaseDetailPage");
     const message = resolveApprovalTxErrorMessage({
