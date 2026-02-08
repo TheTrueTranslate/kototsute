@@ -324,7 +324,7 @@
         },
         "prepare": {
           "title": "Prepare consent",
-          "hint": "Create signable payload for heirs' consent.",
+          "hint": "Create signable payload for heirs' consent. If processing is still in progress, wait a few tens of seconds before running it.",
           "action": "Start preparing consent",
           "loading": "Preparing...",
           "success": "Preparation completed. Enter your secret to proceed.",
@@ -354,7 +354,7 @@
         "error": {
           "statusLoadFailed": "Failed to load signing status",
           "loadFailed": "Failed to load signable payload",
-          "accountNotFound": "The distribution wallet is not yet activated on XRPL. If processing is still in progress, wait a few seconds, then run consent preparation again.",
+          "accountNotFound": "The distribution wallet is not yet activated on XRPL. If processing is still in progress, wait a few tens of seconds, then run consent preparation again.",
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",
@@ -422,7 +422,7 @@
           },
           "preparing": {
             "title": "Preparing heir consent",
-            "description": "Start preparing consent."
+            "description": "Start preparing consent. If processing is still in progress, wait a few tens of seconds before running it."
           },
           "awaitingSign": {
             "title": "Heir consent in progress",
