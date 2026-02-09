@@ -643,16 +643,6 @@ export default function CaseDetailPage({
     caseData?.stage === "COMPLETED";
   const hasHeirWallet = Boolean(heirWallet?.address);
   const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
-  const heirWalletDestinationDisplay =
-    heirWalletChallenge?.address ??
-    (heirWalletVerifyLoading
-      ? t("cases.detail.wallet.memoIssuing")
-      : t("cases.detail.wallet.memoEmpty"));
-  const heirWalletMemoDisplay =
-    heirWalletChallenge?.challenge ??
-    (heirWalletVerifyLoading
-      ? t("cases.detail.wallet.memoIssuing")
-      : t("cases.detail.wallet.memoEmpty"));
   const heirWalletVerifyTxHashDisplay = (
     heirWallet?.verificationTxHash ??
     heirWalletVerifyTxHash ??
@@ -2690,20 +2680,22 @@ export default function CaseDetailPage({
                 }}
                 showVerifyPanel={true}
                 verifyPanel={{
-                  destination: heirWalletDestinationDisplay,
-                  memo: heirWalletMemoDisplay,
+                  destination: "",
+                  memo: "",
                   secret: heirWalletSecret,
                   onSecretChange: setHeirWalletSecret,
                   onSubmit: handleAutoVerifyHeirWallet,
                   isSubmitting: heirWalletSending,
                   submitDisabled: heirWalletSending || heirWalletVerifyLoading,
                   secretDisabled: heirWalletSending,
-                  verifiedTxHash: heirWalletVerifyTxHashDisplay
+                  verifiedTxHash: heirWalletVerifyTxHashDisplay,
+                  showVerificationDetails: false,
+                  verificationHint: t("cases.detail.wallet.dialog.verifyHint")
                 }}
                 classNames={{
                   form: styles.walletForm,
                   actions: styles.walletActions,
-                  verifyBox: styles.walletVerifyBox,
+                  verifyBox: styles.walletForm,
                   emptyState: styles.emptyState,
                   emptyTitle: styles.emptyTitle,
                   emptyBody: styles.emptyBody

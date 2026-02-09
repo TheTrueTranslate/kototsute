@@ -52,6 +52,8 @@ type WalletOwnershipVerifyPanelProps = {
   submitDisabled: boolean;
   secretDisabled: boolean;
   verifiedTxHash?: string | null;
+  showVerificationDetails?: boolean;
+  verificationHint?: string | null;
 };
 
 type WalletOwnershipVerifyDialogProps = {
@@ -164,6 +166,8 @@ export const WalletOwnershipVerifyDialog = ({
               submitDisabled={verifyPanel.submitDisabled}
               secretDisabled={verifyPanel.secretDisabled}
               verifiedTxHash={verifyPanel.verifiedTxHash}
+              showVerificationDetails={verifyPanel.showVerificationDetails}
+              verificationHint={verifyPanel.verificationHint}
             />
           </div>
         ) : emptyState?.show ? (

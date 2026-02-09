@@ -3588,7 +3588,150 @@ describe("createApiHandler", () => {
         expect.objectContaining({
           fromAddress: "rFrom",
           to: "rDest",
+          amountDrops: "20000000"
+        })
+      );
+    } finally {
+      (globalThis as any).fetch = fetchOriginal;
+    }
+  });
+
+  it("allows prefund using spare balance even when planned xrp is small", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    let destinationActivated = false;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        const account = body?.params?.[0]?.account;
+        if (account === "rFrom") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: { account_data: { Balance: "100000000", OwnerCount: 0 } }
+            })
+          };
+        }
+        if (account === "rDest") {
+          if (!destinationActivated) {
+            return {
+              ok: true,
+              json: async () => ({
+                result: { error: "actNotFound", error_message: "Account not found." }
+              })
+            };
+          }
+          return {
+            ok: true,
+            json: async () => ({
+              result: { account_data: { Balance: "1000000", OwnerCount: 0 } }
+            })
+          };
+        }
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "10000000", reserve_inc: "2000000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+    sharedMocks.sendXrpPayment.mockImplementation(async (input) => {
+      if (input.to === "rDest" && input.amountDrops === "10000000") {
+        destinationActivated = true;
+        return { txHash: "tx-activation" };
+      }
+      return { txHash: "tx-xrp" };
+    });
+
+    try {
+      const handler = createApiHandler({
+        repo: new InMemoryAssetRepository(),
+        caseRepo: new FirestoreCaseRepository(),
+        now: () => new Date("2024-01-01T00:00:00.000Z"),
+        getAuthUser,
+        getOwnerUidForRead: async (uid) => uid
+      });
+
+      const createCaseRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: "/v1/cases",
+          body: { ownerDisplayName: "山田" }
+        }) as any,
+        createCaseRes as any
+      );
+      const caseId = createCaseRes.body?.data?.caseId;
+
+      const db = getFirestore();
+      await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+        address: "rFrom",
+        reserveXrp: "0",
+        label: "Wallet"
+      });
+      await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+        status: "READY",
+        method: "B",
+        wallet: {
+          address: "rDest",
+          seedEncrypted: encryptPayload("seed")
+        },
+        regularKeyStatuses: [
+          {
+            assetId: "asset-1",
+            assetLabel: "Wallet",
+            address: "rFrom",
+            status: "VERIFIED",
+            message: null
+          }
+        ]
+      });
+
+      const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+      await itemRef.set({
+        itemId: itemRef.id,
+        assetId: "asset-1",
+        assetLabel: "XRP",
+        assetAddress: "rFrom",
+        token: null,
+        plannedAmount: "1",
+        status: "PENDING",
+        txHash: null,
+        error: null
+      });
+
+      const execRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: `/v1/cases/${caseId}/asset-lock/execute`
+        }) as any,
+        execRes as any
+      );
+
+      expect(execRes.statusCode).toBe(200);
+      expect(sharedMocks.sendXrpPayment).toHaveBeenCalledTimes(2);
+      expect(sharedMocks.sendXrpPayment).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          fromAddress: "rFrom",
+          to: "rDest",
           amountDrops: "10000000"
+        })
+      );
+      expect(sharedMocks.sendXrpPayment).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          fromAddress: "rFrom",
+          to: "rDest",
+          amountDrops: "1"
         })
       );
     } finally {

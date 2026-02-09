@@ -4075,39 +4075,48 @@ export const casesRoutes = () => {
 
       let prefundTarget:
         | {
-            entryId: string;
-            entryRef: any;
             fromAddress: string;
-            remainingDrops: bigint;
+            adjustment:
+              | {
+                  entryId: string;
+                  entryRef: any;
+                  remainingDrops: bigint;
+                }
+              | null;
           }
         | null = null;
-      for (const entry of xrpEntries) {
-        const item = entry.data ?? {};
-        const assetId = String(item.assetId ?? "");
-        const asset = assetId ? assetMap.get(assetId) : null;
-        const fromAddress =
-          typeof item.assetAddress === "string" && item.assetAddress.length > 0
-            ? item.assetAddress
-            : asset?.address ?? "";
+      const prefundAndFeeDrops = prefundDrops + feePerTxDrops;
+      for (const assetId of assetIds) {
+        const asset = assetMap.get(assetId);
+        const fromAddress = asset?.address ?? "";
         if (!fromAddress) continue;
-        const plannedDrops = toBigInt(plannedOverrides.get(entry.id) ?? item.plannedAmount ?? "0");
-        if (plannedDrops <= 0n) continue;
-        const availableDrops = assetId ? availableDropsByAsset.get(assetId) : undefined;
-        const plannedByAsset = assetId ? plannedXrpByAsset.get(assetId) ?? 0n : plannedDrops;
+        const availableDrops = availableDropsByAsset.get(assetId);
+        if (availableDrops === undefined) continue;
+        const plannedByAsset = plannedXrpByAsset.get(assetId) ?? 0n;
         const spareDrops =
-          availableDrops !== undefined && availableDrops > plannedByAsset
-            ? availableDrops - plannedByAsset
-            : 0n;
-        const feeShortageDrops = spareDrops >= feePerTxDrops ? 0n : feePerTxDrops - spareDrops;
-        const requiredDrops = prefundDrops + feeShortageDrops;
-        if (plannedDrops < requiredDrops) continue;
-        prefundTarget = {
-          entryId: entry.id,
-          entryRef: entry.ref,
-          fromAddress,
-          remainingDrops: plannedDrops - requiredDrops
-        };
-        break;
+          availableDrops > plannedByAsset ? availableDrops - plannedByAsset : 0n;
+        const requiredFromPlannedDrops =
+          spareDrops >= prefundAndFeeDrops ? 0n : prefundAndFeeDrops - spareDrops;
+        if (requiredFromPlannedDrops <= 0n) {
+          prefundTarget = { fromAddress, adjustment: null };
+          break;
+        }
+        for (const entry of xrpEntries) {
+          const item = entry.data ?? {};
+          if (String(item.assetId ?? "") !== assetId) continue;
+          const plannedDrops = toBigInt(plannedOverrides.get(entry.id) ?? item.plannedAmount ?? "0");
+          if (plannedDrops < requiredFromPlannedDrops) continue;
+          prefundTarget = {
+            fromAddress,
+            adjustment: {
+              entryId: entry.id,
+              entryRef: entry.ref,
+              remainingDrops: plannedDrops - requiredFromPlannedDrops
+            }
+          };
+          break;
+        }
+        if (prefundTarget) break;
       }
 
       if (!prefundTarget) {
@@ -4125,15 +4134,25 @@ export const casesRoutes = () => {
         to: destination,
         amountDrops: prefundDrops.toString()
       });
-      const remainingDropsText = prefundTarget.remainingDrops.toString();
-      plannedOverrides.set(prefundTarget.entryId, remainingDropsText);
-      const targetEntry = itemEntries.find((entry) => entry.id === prefundTarget?.entryId);
-      if (targetEntry) {
-        targetEntry.data.plannedAmount = remainingDropsText;
-      }
-      await prefundTarget.entryRef.set({ plannedAmount: remainingDropsText }, { merge: true });
-      if (prefundTarget.remainingDrops <= 0n) {
-        prefundedTxHashByItemId.set(prefundTarget.entryId, prefundResult.txHash ?? null);
+      if (prefundTarget.adjustment) {
+        const remainingDropsText = prefundTarget.adjustment.remainingDrops.toString();
+        plannedOverrides.set(prefundTarget.adjustment.entryId, remainingDropsText);
+        const targetEntry = itemEntries.find(
+          (entry) => entry.id === prefundTarget?.adjustment?.entryId
+        );
+        if (targetEntry) {
+          targetEntry.data.plannedAmount = remainingDropsText;
+        }
+        await prefundTarget.adjustment.entryRef.set(
+          { plannedAmount: remainingDropsText },
+          { merge: true }
+        );
+        if (prefundTarget.adjustment.remainingDrops <= 0n) {
+          prefundedTxHashByItemId.set(
+            prefundTarget.adjustment.entryId,
+            prefundResult.txHash ?? null
+          );
+        }
       }
     }
 

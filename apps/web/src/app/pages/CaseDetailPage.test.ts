@@ -1607,7 +1607,7 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("登録/変更");
   });
 
-  it("shows copyable verification fields for heir wallet", async () => {
+  it("shows minimal verify form for heir wallet without destination and memo", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=wallet");
     heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
@@ -1619,9 +1619,12 @@ describe("CaseDetailPage", () => {
       initialWalletDialogMode: "verify"
     });
     expect(html).toContain('data-testid="wallet-ownership-verify-dialog"');
-    expect(html).toContain("Destination（運営確認用ウォレット）");
-    expect(html).toContain("システムの検証用アドレス");
-    expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).toContain("ウォレットアドレスとシークレットを入力すると、所有確認を実行します。");
+    expect(html).toContain("シークレットは一時的に利用し、保存しません。");
+    expect(html).not.toContain("Destination（運営確認用ウォレット）");
+    expect(html).not.toContain("システムの検証用アドレス");
+    expect(html).not.toContain("Memo");
+    expect(html).not.toContain("1 drops (=0.000001 XRP)");
     expect(html).not.toContain("Amount (drops)");
     expect(html).not.toContain("Amount (XRP)");
     expect(html).not.toContain("取引ハッシュ");

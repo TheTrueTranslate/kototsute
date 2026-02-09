@@ -567,6 +567,7 @@
           "verifyTitle": "Verify receiving wallet ownership",
           "registerTitle": "Register receiving wallet",
           "description": "Register a wallet address and verify ownership.",
+          "verifyHint": "Enter the wallet address and secret to run ownership verification.",
           "empty": {
             "title": "Register first",
             "body": "You can verify ownership after registering the receiving wallet."
