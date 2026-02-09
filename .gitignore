@@ -7,6 +7,7 @@ apps/functions/lib/
 apps/functions/node_modules/
 apps/web/node_modules/
 .firebase/
+firebase-export-*/
 *.log
 .DS_Store
 .env
