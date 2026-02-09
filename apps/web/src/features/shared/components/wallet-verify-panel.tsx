@@ -15,6 +15,8 @@ type WalletVerifyPanelProps = {
   submitDisabled: boolean;
   secretDisabled: boolean;
   verifiedTxHash?: string | null;
+  showVerificationDetails?: boolean;
+  verificationHint?: string | null;
 };
 
 export const WalletVerifyPanel = ({
@@ -26,38 +28,56 @@ export const WalletVerifyPanel = ({
   isSubmitting,
   submitDisabled,
   secretDisabled,
-  verifiedTxHash
+  verifiedTxHash,
+  showVerificationDetails = true,
+  verificationHint = null
 }: WalletVerifyPanelProps) => {
   const { t } = useTranslation();
   const txHash = verifiedTxHash?.trim() || "";
+  const normalizedVerificationHint = verificationHint?.trim() ?? "";
   return (
     <div className={styles.panel} data-testid="wallet-verify-panel">
-      <div className={styles.block}>
-        <div className={styles.row}>
-          <div>
-            <div className={styles.label}>{t("walletVerify.destination.label")}</div>
-            <div className={styles.value}>{destination}</div>
-          </div>
-        </div>
-        <div className={styles.hint}>{t("walletVerify.destination.hint")}</div>
-        <div className={styles.row}>
-          <div>
-            <div className={styles.label}>{t("walletVerify.memo.label")}</div>
-            <div className={styles.value}>{memo}</div>
-          </div>
-        </div>
-        <div className={styles.hint}>{t("walletVerify.memo.hint")}</div>
-        {txHash ? (
+      {showVerificationDetails ? (
+        <div className={styles.block}>
           <div className={styles.row}>
             <div>
-              <div className={styles.label}>{t("walletVerify.txHash.label")}</div>
-              <XrplExplorerLink value={txHash} resource="transaction" className={styles.value}>
-                {txHash}
-              </XrplExplorerLink>
+              <div className={styles.label}>{t("walletVerify.destination.label")}</div>
+              <div className={styles.value}>{destination}</div>
             </div>
           </div>
-        ) : null}
-      </div>
+          <div className={styles.hint}>{t("walletVerify.destination.hint")}</div>
+          <div className={styles.row}>
+            <div>
+              <div className={styles.label}>{t("walletVerify.memo.label")}</div>
+              <div className={styles.value}>{memo}</div>
+            </div>
+          </div>
+          <div className={styles.hint}>{t("walletVerify.memo.hint")}</div>
+          {txHash ? (
+            <div className={styles.row}>
+              <div>
+                <div className={styles.label}>{t("walletVerify.txHash.label")}</div>
+                <XrplExplorerLink value={txHash} resource="transaction" className={styles.value}>
+                  {txHash}
+                </XrplExplorerLink>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {!showVerificationDetails && normalizedVerificationHint ? (
+        <div className={styles.hint}>{normalizedVerificationHint}</div>
+      ) : null}
+      {!showVerificationDetails && txHash ? (
+        <div className={styles.row}>
+          <div>
+            <div className={styles.label}>{t("walletVerify.txHash.label")}</div>
+            <XrplExplorerLink value={txHash} resource="transaction" className={styles.value}>
+              {txHash}
+            </XrplExplorerLink>
+          </div>
+        </div>
+      ) : null}
 
       <FormField label={t("walletVerify.secret.label")}>
         <Input

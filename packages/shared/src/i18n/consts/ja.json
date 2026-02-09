@@ -268,7 +268,18 @@
         },
         "error": {
           "loadFailed": "分配状況の取得に失敗しました",
-          "executeFailed": "分配の実行に失敗しました"
+          "executeFailed": "分配の実行に失敗しました",
+          "approvalIncomplete": "相続実行の同意が完了していません。",
+          "approvalTxExpired": "相続実行の同意トランザクションが期限切れです。再準備してください。",
+          "approvalTxUnavailable": "相続実行の同意トランザクションを確認できません。",
+          "approvalTxUnvalidated": "相続実行の同意トランザクションが未検証です。",
+          "approvalTxFailed": "相続実行の同意トランザクションが失敗しています。",
+          "heirWalletUnverified": "相続人の受取用ウォレットが未確認です。",
+          "walletMissing": "分配用ウォレットが未設定です。",
+          "insufficientBalance": "送金元の残高が不足しています。",
+          "planMissing": "相続対象の指図がありません。",
+          "assetMissing": "分配対象の資産がありません。",
+          "itemMissing": "分配対象がありません。"
         }
       },
       "nftReceive": {
@@ -358,7 +369,13 @@
           "txMissing": "署名対象トランザクションが取得できません",
           "signFailed": "署名の生成に失敗しました",
           "signedBlobRequired": "署名済みデータを入力してください",
-          "submitFailed": "署名の送信に失敗しました"
+          "submitFailed": "署名の送信に失敗しました",
+          "notInProgress": "相続実行が開始されていません。",
+          "signerListNotReady": "署名準備が完了していません。",
+          "walletNotVerified": "受取用ウォレットの所有確認が必要です。",
+          "approvalTxNotReady": "署名対象が未生成です。",
+          "signerMismatch": "署名者が一致しません。",
+          "memoMismatch": "署名対象が一致しません。"
         },
         "tx": {
           "title": "署名内容",
@@ -550,6 +567,7 @@
           "verifyTitle": "受取用ウォレットの所有確認",
           "registerTitle": "受取用ウォレットを登録",
           "description": "ウォレットアドレスの登録と所有確認を行います。",
+          "verifyHint": "ウォレットアドレスとシークレットを入力すると、所有確認を実行します。",
           "empty": {
             "title": "まずは登録してください",
             "body": "受取用ウォレットの登録後に所有確認が可能です。"
@@ -844,7 +862,9 @@
       "backToRegularKeyFailed": "RegularKeyの確認に戻れませんでした",
       "confirmFailed": "確認の記録に失敗しました",
       "regularKeyFailed": "RegularKeyの確認に失敗しました",
-      "stepUpdateFailed": "ステップの更新に失敗しました"
+      "stepUpdateFailed": "ステップの更新に失敗しました",
+      "insufficientBalance": "資産ウォレットの残高が不足しています。資産ウォレットにXRPを追加してください。",
+      "destinationPrefundInsufficient": "相続先ウォレットの預かり金が不足しています。資産ウォレットにXRPを追加してください。"
     },
     "prepare": {
       "description": "資産・準備金・相続人状況を確認します。",

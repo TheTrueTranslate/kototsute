@@ -192,12 +192,9 @@ export const shouldPollApprovalStatus = (input: {
   shouldFetchApprovalTx(input) && input.approvalStatus === "SUBMITTED";
 
 export const shouldShowSignerActions = (
-  approvalStatus?: string | null,
-  approvalNetworkStatus?: string | null
-) => approvalStatus !== "SUBMITTED" || approvalNetworkStatus === "EXPIRED";
-
-export const shouldShowSignerDetails = (approvalStatus?: string | null) =>
-  approvalStatus !== "SUBMITTED";
+  _approvalStatus?: string | null,
+  _approvalNetworkStatus?: string | null
+) => true;
 
 export const isApprovalCompleted = (input: {
   approvalStatus?: string | null;
@@ -345,12 +342,30 @@ export const resolveSignerListErrorMessage = (
   return message;
 };
 
+const caseDetailApiErrorByCode: Record<string, string> = {
+  DISTRIBUTION_WALLET_NOT_ACTIVATED: "cases.detail.signer.error.accountNotFound",
+  HEIR_MISSING: "cases.detail.distribution.disabled.noHeirs",
+  HEIR_WALLET_UNVERIFIED: "cases.detail.distribution.error.heirWalletUnverified",
+  SIGNER_LIST_NOT_READY: "cases.detail.signer.error.signerListNotReady",
+  WALLET_NOT_VERIFIED: "cases.detail.signer.error.walletNotVerified",
+  APPROVAL_TX_NOT_READY: "cases.detail.signer.error.approvalTxNotReady",
+  SIGNER_MISMATCH: "cases.detail.signer.error.signerMismatch",
+  MEMO_MISMATCH: "cases.detail.signer.error.memoMismatch"
+};
+
+const i18nKeyPattern = /^[a-z0-9]+(?:[._-][a-z0-9]+)+(?:\.[a-z0-9]+)*$/i;
+
 export const resolveCaseDetailApiErrorMessage = (error: ApiErrorLike, fallbackKey: string): string => {
-  if (error?.data?.code === "DISTRIBUTION_WALLET_NOT_ACTIVATED") {
-    return "cases.detail.signer.error.accountNotFound";
+  const code =
+    typeof error?.data?.code === "string" ? error.data.code.trim() : "";
+  if (code && caseDetailApiErrorByCode[code]) {
+    return caseDetailApiErrorByCode[code];
   }
-  if (typeof error?.message === "string" && error.message.length > 0) {
-    return error.message;
+  if (typeof error?.message === "string") {
+    const message = error.message.trim();
+    if (message && i18nKeyPattern.test(message)) {
+      return message;
+    }
   }
   return fallbackKey;
 };
@@ -628,16 +643,6 @@ export default function CaseDetailPage({
     caseData?.stage === "COMPLETED";
   const hasHeirWallet = Boolean(heirWallet?.address);
   const isHeirWalletVerified = heirWallet?.verificationStatus === "VERIFIED";
-  const heirWalletDestinationDisplay =
-    heirWalletChallenge?.address ??
-    (heirWalletVerifyLoading
-      ? t("cases.detail.wallet.memoIssuing")
-      : t("cases.detail.wallet.memoEmpty"));
-  const heirWalletMemoDisplay =
-    heirWalletChallenge?.challenge ??
-    (heirWalletVerifyLoading
-      ? t("cases.detail.wallet.memoIssuing")
-      : t("cases.detail.wallet.memoEmpty"));
   const heirWalletVerifyTxHashDisplay = (
     heirWallet?.verificationTxHash ??
     heirWalletVerifyTxHash ??
@@ -702,13 +707,13 @@ export default function CaseDetailPage({
   const signerStatusLabel = signerCompleted
     ? t("cases.detail.inheritance.steps.signerCompleted.title")
     : signerStatusLabelDefault;
-  const approvalReadyForDistribution = !isApprovalExpired && (signerCompleted || approvalCompleted);
+  const approvalReadyForDistribution = approvalCompleted;
   const nextAction = resolveInheritanceNextAction({
     claimStatus: deathClaim?.claim?.status ?? null,
     caseStage: caseData?.stage ?? null,
     signerStatus: signerList?.status ?? null,
     approvalStatus: approvalTx?.status ?? null,
-    signerCompleted
+    signerCompleted: approvalCompleted
   });
   const nextActionSteps = useMemo(
     () => [
@@ -720,9 +725,13 @@ export default function CaseDetailPage({
     [t]
   );
   const hasDeathClaim = Boolean(deathClaim?.claim?.claimId);
+  const deathClaimStatus = deathClaim?.claim?.status ?? null;
   const deathClaimStepCompleted =
-    hasDeathClaim && (caseData?.stage === "IN_PROGRESS" || caseData?.stage === "COMPLETED");
-  const signatureStepCompleted = Boolean(signerCompleted || approvalCompleted);
+    hasDeathClaim &&
+    (deathClaimStatus === "CONFIRMED" ||
+      caseData?.stage === "IN_PROGRESS" ||
+      caseData?.stage === "COMPLETED");
+  const signatureStepCompleted = approvalCompleted;
   const receiveStepCompleted = distribution?.status === "COMPLETED";
   const heirFlowSteps = useMemo(
     () => [
@@ -942,6 +951,8 @@ export default function CaseDetailPage({
     !signerSubmitting &&
     !signerSigning &&
     signerSignedBlob.trim().length > 0;
+  const shouldShowSignerSubmitAction =
+    approvalTx?.status !== "SUBMITTED" && !approvalCompleted && !signerList?.signedByMe;
 
   useEffect(() => {
     let active = true;
@@ -1216,6 +1227,23 @@ export default function CaseDetailPage({
     }, 60_000);
     return () => window.clearInterval(intervalId);
   }, [distribution?.status, fetchDistributionState]);
+
+  const handleDeathClaimChange = useCallback(
+    (nextClaim: DeathClaimSummary | null) => {
+      setDeathClaim(nextClaim);
+      if (nextClaim?.claim?.status !== "CONFIRMED") return;
+      setCaseData((previous) => {
+        if (!previous) return previous;
+        if (previous.stage === "COMPLETED" || previous.stage === "IN_PROGRESS") {
+          return previous;
+        }
+        return { ...previous, stage: "IN_PROGRESS" };
+      });
+      void fetchSignerList();
+      void fetchApprovalTx();
+    },
+    [fetchApprovalTx, fetchSignerList]
+  );
 
   const handlePrepareApproval = async () => {
     if (!caseId) return;
@@ -1954,7 +1982,7 @@ export default function CaseDetailPage({
                       </div>
                       <DeathClaimsPanel
                         initialClaim={initialDeathClaim ?? null}
-                        onClaimChange={setDeathClaim}
+                        onClaimChange={handleDeathClaimChange}
                       />
                     </div>
                   </div>
@@ -2050,17 +2078,19 @@ export default function CaseDetailPage({
                             ? t("cases.detail.signer.autoNote.ready")
                             : t("cases.detail.signer.autoNote.hint")}
                       </div>
-                      <div className={styles.signerActionRow}>
-                        <Button
-                          type="button"
-                          onClick={handleSubmitSignerSignature}
-                          disabled={!canSubmitSignature}
-                        >
-                          {signerSubmitting
-                            ? t("cases.detail.signer.actions.submitting")
-                            : t("cases.detail.signer.actions.submit")}
-                        </Button>
-                      </div>
+                      {shouldShowSignerSubmitAction ? (
+                        <div className={styles.signerActionRow}>
+                          <Button
+                            type="button"
+                            onClick={handleSubmitSignerSignature}
+                            disabled={!canSubmitSignature}
+                          >
+                            {signerSubmitting
+                              ? t("cases.detail.signer.actions.submitting")
+                              : t("cases.detail.signer.actions.submit")}
+                          </Button>
+                        </div>
+                      ) : null}
                       <div className={styles.signerSecretNote}>
                         {t("cases.detail.signer.secret.note")}
                       </div>
@@ -2650,20 +2680,22 @@ export default function CaseDetailPage({
                 }}
                 showVerifyPanel={true}
                 verifyPanel={{
-                  destination: heirWalletDestinationDisplay,
-                  memo: heirWalletMemoDisplay,
+                  destination: "",
+                  memo: "",
                   secret: heirWalletSecret,
                   onSecretChange: setHeirWalletSecret,
                   onSubmit: handleAutoVerifyHeirWallet,
                   isSubmitting: heirWalletSending,
                   submitDisabled: heirWalletSending || heirWalletVerifyLoading,
                   secretDisabled: heirWalletSending,
-                  verifiedTxHash: heirWalletVerifyTxHashDisplay
+                  verifiedTxHash: heirWalletVerifyTxHashDisplay,
+                  showVerificationDetails: false,
+                  verificationHint: t("cases.detail.wallet.dialog.verifyHint")
                 }}
                 classNames={{
                   form: styles.walletForm,
                   actions: styles.walletActions,
-                  verifyBox: styles.walletVerifyBox,
+                  verifyBox: styles.walletForm,
                   emptyState: styles.emptyState,
                   emptyTitle: styles.emptyTitle,
                   emptyBody: styles.emptyBody

@@ -39,6 +39,30 @@ describe("WalletVerifyPanel", () => {
     expect(html).toContain("シークレットで自動検証");
   });
 
+  it("hides destination and memo when details are disabled", () => {
+    const html = renderToString(
+      React.createElement(WalletVerifyPanel, {
+        destination: "rVerify",
+        memo: "abc",
+        secret: "sSecret",
+        onSecretChange: () => undefined,
+        onSubmit: () => undefined,
+        isSubmitting: false,
+        submitDisabled: false,
+        secretDisabled: false,
+        showVerificationDetails: false,
+        verificationHint: "ウォレットアドレスとシークレットを入力すると、所有確認を実行します。"
+      })
+    );
+
+    expect(html).not.toContain("Destination（運営確認用ウォレット）");
+    expect(html).not.toContain("<div class=\"label\">Memo</div>");
+    expect(html).toContain(
+      "ウォレットアドレスとシークレットを入力すると、所有確認を実行します。"
+    );
+    expect(html).toContain("シークレットは一時的に利用し、保存しません。");
+  });
+
   it("renders verified tx hash when provided", () => {
     const html = renderToString(
       React.createElement(WalletVerifyPanel, {

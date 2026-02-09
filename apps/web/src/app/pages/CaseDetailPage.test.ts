@@ -655,6 +655,36 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("受取用ウォレットを開く");
   });
 
+  it("moves to STEP 3 when death claim consent reaches confirmation", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "VERIFIED" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "CONFIRMED", submittedByUid: "heir" },
+        confirmedByMe: true,
+        confirmationsCount: 1,
+        requiredCount: 1,
+        files: []
+      },
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "WAITING",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("STEP 3/4");
+    expect(html).toContain("相続実行の同意");
+    expect(html).not.toContain("STEP 2/4");
+  });
+
   it("shows current death claim status text in death certificate block for heir", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
@@ -1012,6 +1042,8 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("分配を実行");
     expect(html).not.toContain("署名内容");
     expect(html).toContain("送信Tx");
+    expect(html).toContain('data-testid="signer-action-panel"');
+    expect(html).not.toContain("署名を送信");
     expect(html).not.toContain("送信後の状態");
     expect(html).not.toContain("署名の流れ");
     expect(html).not.toContain(
@@ -1021,7 +1053,7 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("1分ごとに自動更新します。");
   });
 
-  it("shows receive step when signer quorum is met even before approval tx validation", async () => {
+  it("keeps STEP 3 until approval tx is validated even when signer quorum is met", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
     caseHeirsData = [
@@ -1077,11 +1109,10 @@ describe("CaseDetailPage", () => {
       }
     });
 
-    expect(html).toContain("STEP 4/4");
-    expect(html).not.toContain("4/4: 受け取り");
-    expect(html).toContain("分配を実行");
-    expect(html).not.toContain("相続実行の同意が完了すると分配を実行できます。");
-    expect(html).not.toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>分配を実行/);
+    expect(html).toContain("STEP 3/4");
+    expect(html).not.toContain("STEP 4/4");
+    expect(html).toContain("相続実行の同意");
+    expect(html).not.toContain("分配を実行");
   });
 
   it("hides nft receive block when receivable items are empty", async () => {
@@ -1389,17 +1420,11 @@ describe("CaseDetailPage", () => {
     ).toBe(false);
   });
 
-  it("hides signer actions when approval is submitted", async () => {
+  it("keeps signer action panel visible when approval is submitted", async () => {
     const { shouldShowSignerActions } = await import("./CaseDetailPage");
-    expect(shouldShowSignerActions("SUBMITTED")).toBe(false);
+    expect(shouldShowSignerActions("SUBMITTED")).toBe(true);
     expect(shouldShowSignerActions("SUBMITTED", "EXPIRED")).toBe(true);
     expect(shouldShowSignerActions("PREPARED")).toBe(true);
-  });
-
-  it("hides signer details when approval is submitted", async () => {
-    const { shouldShowSignerDetails } = await import("./CaseDetailPage");
-    expect(shouldShowSignerDetails("SUBMITTED")).toBe(false);
-    expect(shouldShowSignerDetails("PREPARED")).toBe(true);
   });
 
   it("determines approval completion from network status", async () => {
@@ -1582,7 +1607,7 @@ describe("CaseDetailPage", () => {
     expect(html).not.toContain("登録/変更");
   });
 
-  it("shows copyable verification fields for heir wallet", async () => {
+  it("shows minimal verify form for heir wallet without destination and memo", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=wallet");
     heirWalletData = { address: "rHeir", verificationStatus: "PENDING" };
@@ -1594,9 +1619,12 @@ describe("CaseDetailPage", () => {
       initialWalletDialogMode: "verify"
     });
     expect(html).toContain('data-testid="wallet-ownership-verify-dialog"');
-    expect(html).toContain("Destination（運営確認用ウォレット）");
-    expect(html).toContain("システムの検証用アドレス");
-    expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).toContain("ウォレットアドレスとシークレットを入力すると、所有確認を実行します。");
+    expect(html).toContain("シークレットは一時的に利用し、保存しません。");
+    expect(html).not.toContain("Destination（運営確認用ウォレット）");
+    expect(html).not.toContain("システムの検証用アドレス");
+    expect(html).not.toContain("Memo");
+    expect(html).not.toContain("1 drops (=0.000001 XRP)");
     expect(html).not.toContain("Amount (drops)");
     expect(html).not.toContain("Amount (XRP)");
     expect(html).not.toContain("取引ハッシュ");
