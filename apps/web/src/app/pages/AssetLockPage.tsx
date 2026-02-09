@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Breadcrumbs from "../../features/shared/components/breadcrumbs";
@@ -55,6 +55,27 @@ type AssetLockPageProps = {
 
 type WalletActivationStatus = NonNullable<AssetLockState["wallet"]>["activationStatus"];
 
+const shouldStayOnTransferStepAfterRegularKeyClear = (
+  lock: AssetLockState | null | undefined
+) =>
+  lock?.method === "B" &&
+  lock?.methodStep === "REGULAR_KEY_CLEARED" &&
+  lock?.uiStep !== 4;
+
+const resolveDisplayStepIndex = (
+  lock: AssetLockState | null | undefined,
+  fallback: number
+) => {
+  if (shouldStayOnTransferStepAfterRegularKeyClear(lock)) {
+    return 1;
+  }
+  return resolveAssetLockStepIndex(lock?.uiStep, fallback);
+};
+
+const shouldShowAutoTransferTxHashes = (lock: AssetLockState | null | undefined) =>
+  lock?.method === "B" &&
+  (lock?.methodStep === "TRANSFER_DONE" || lock?.methodStep === "REGULAR_KEY_CLEARED");
+
 export default function AssetLockPage({
   initialLock = null,
   initialStep = 0,
@@ -75,7 +96,7 @@ export default function AssetLockPage({
     { id: "verify", title: t("assetLock.steps.verify") }
   ];
   const [stepIndex, setStepIndex] = useState(() =>
-    resolveAssetLockStepIndex(initialLock?.uiStep, initialStep)
+    resolveDisplayStepIndex(initialLock, initialStep)
   );
   const [lockState, setLockState] = useState<AssetLockState | null>(initialLock);
   const method = "B" as const;
@@ -108,6 +129,7 @@ export default function AssetLockPage({
   const [balances, setBalances] = useState<AssetLockBalances | null>(initialBalances);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [lockReloading, setLockReloading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
@@ -121,7 +143,6 @@ export default function AssetLockPage({
   const [transferSendSuccess, setTransferSendSuccess] = useState<string | null>(null);
   const prevUiStepRef = useRef<number | null>(null);
   const current = steps[stepIndex];
-  const showCombinedMethodBStep = method === "B" && current.id === "verify";
   const methodSteps = [
     {
       id: "REGULAR_KEY_SET",
@@ -159,13 +180,18 @@ export default function AssetLockPage({
 
   const resolveAssetAddress = (assetId: string) => assetAddressMap.get(assetId) ?? "";
 
-  const stepDisplayIndex = showCombinedMethodBStep ? 2 : stepIndex + 1;
+  const stepDisplayIndex = stepIndex + 1;
   const stepLabel = `${stepDisplayIndex} / ${steps.length}`;
   const regularKeyStatuses = lockState?.regularKeyStatuses ?? [];
+  const showWalletSummarySections =
+    method === "B" && (regularKeyStatuses.length > 0 || shouldShowAutoTransferTxHashes(lockState));
   const isLocked = lockState?.status === "LOCKED";
   const canComplete =
     (lockState?.items ?? []).length > 0 &&
     (lockState?.items ?? []).every((item) => item.status === "VERIFIED");
+  const pendingVerificationCount = (lockState?.items ?? []).filter(
+    (item) => item.status !== "VERIFIED"
+  ).length;
   const isPlanDataReady =
     !planLoading &&
     plans.every((plan) => planHeirsById[plan.planId] !== undefined);
@@ -194,6 +220,22 @@ export default function AssetLockPage({
     }
     return message;
   };
+
+  const autoTransferTxHashes = useMemo(
+    () =>
+      (lockState?.items ?? []).flatMap((item) => {
+        const txHash = typeof item.txHash === "string" ? item.txHash.trim() : "";
+        if (!txHash) return [];
+        return [
+          {
+            itemId: item.itemId,
+            assetLabel: item.assetLabel,
+            txHash
+          }
+        ];
+      }),
+    [lockState?.items]
+  );
 
   const handleOpenTransferDialog = (item: AssetLockState["items"][number]) => {
     setTransferDialogItem(item);
@@ -254,6 +296,27 @@ export default function AssetLockPage({
     }
   };
 
+  const loadLockState = useCallback(
+    async (input?: { silent?: boolean }) => {
+      if (!caseId) return;
+      if (!input?.silent) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const data = await getAssetLock(caseId);
+        setLockState(data);
+      } catch (err: any) {
+        setError(err?.message ?? "assetLock.error.lockFetch");
+      } finally {
+        if (!input?.silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [caseId]
+  );
+
   const loadBalances = async () => {
     if (!caseId) return;
     setBalanceLoading(true);
@@ -268,15 +331,19 @@ export default function AssetLockPage({
     }
   };
 
+  const handleReloadVerify = async () => {
+    setLockReloading(true);
+    try {
+      await Promise.all([loadBalances(), loadLockState({ silent: true })]);
+    } finally {
+      setLockReloading(false);
+    }
+  };
+
   useEffect(() => {
     if (!caseId || initialLock) return;
-    setLoading(true);
-    setError(null);
-    getAssetLock(caseId)
-      .then((data) => setLockState(data))
-      .catch((err: any) => setError(err?.message ?? "assetLock.error.lockFetch"))
-      .finally(() => setLoading(false));
-  }, [caseId, initialLock]);
+    void loadLockState();
+  }, [caseId, initialLock, loadLockState]);
 
   useEffect(() => {
     if (!caseId || current?.id !== "verify") return;
@@ -368,11 +435,11 @@ export default function AssetLockPage({
     if (typeof lockState?.uiStep !== "number") return;
     if (prevUiStepRef.current === lockState.uiStep) return;
     prevUiStepRef.current = lockState.uiStep;
-    const nextIndex = resolveAssetLockStepIndex(lockState.uiStep, stepIndex);
+    const nextIndex = resolveDisplayStepIndex(lockState, stepIndex);
     if (nextIndex !== stepIndex) {
       setStepIndex(nextIndex);
     }
-  }, [lockState?.uiStep, stepIndex]);
+  }, [lockState?.method, lockState?.methodStep, lockState?.uiStep, stepIndex]);
 
   useEffect(() => {
     if (!caseData || !user?.uid || typeof initialIsOwner === "boolean") return;
@@ -505,8 +572,21 @@ export default function AssetLockPage({
     setError(null);
     try {
       const data = await executeAssetLock(caseId);
+      const shouldStayOnTransferStep =
+        data.method === "B" && data.methodStep === "REGULAR_KEY_CLEARED";
+      if (shouldStayOnTransferStep) {
+        const transferIndex = 1;
+        setStepIndex(transferIndex);
+        const transferState = { ...data, uiStep: 3 };
+        setLockState(transferState);
+        const synced = await syncAssetLockStep(caseId, transferIndex);
+        if (synced) {
+          setLockState(synced);
+        }
+        return;
+      }
       setLockState(data);
-      const nextIndex = resolveAssetLockStepIndex(data.uiStep, 2);
+      const nextIndex = resolveDisplayStepIndex(data, 2);
       setStepIndex(nextIndex);
       const synced = await syncAssetLockStep(caseId, nextIndex);
       if (synced) {
@@ -538,6 +618,20 @@ export default function AssetLockPage({
     await handleExecute();
   };
 
+  const handleGoToVerify = async () => {
+    const nextIndex = 2;
+    setStepIndex(nextIndex);
+    if (!caseId) return;
+    try {
+      const synced = await syncAssetLockStep(caseId, nextIndex);
+      if (synced) {
+        setLockState(synced);
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "assetLock.error.stepUpdateFailed");
+    }
+  };
+
   const handleCopy = async (label: string, value: string) => {
     const result = await copyText(label, value);
     setCopyMessage(t(result.messageKey, result.values));
@@ -566,8 +660,8 @@ export default function AssetLockPage({
           type="button"
           size="sm"
           variant="outline"
-          onClick={loadBalances}
-          disabled={balanceLoading}
+          onClick={handleReloadVerify}
+          disabled={balanceLoading || lockReloading}
         >
           {t("assetLock.verify.reload")}
         </Button>
@@ -661,6 +755,11 @@ export default function AssetLockPage({
           ))}
         </div>
       )}
+      {pendingVerificationCount > 0 ? (
+        <div className={styles.verifyPendingNote}>
+          {t("assetLock.verify.pendingNote", { count: pendingVerificationCount })}
+        </div>
+      ) : null}
       <div className={styles.methodActions}>
         <Button
           type="button"
@@ -713,7 +812,7 @@ export default function AssetLockPage({
 
       <div className={styles.stepCard}>
         <div className={styles.stepTitle}>
-          {showCombinedMethodBStep ? t("assetLock.steps.transfer") : current.title}
+          {current.title}
         </div>
         {lockState?.wallet?.address ? (
           <div className={styles.walletCheckCard}>
@@ -740,6 +839,71 @@ export default function AssetLockPage({
             </div>
             {lockState.wallet.activationMessage ? (
               <div className={styles.walletCheckMessage}>{lockState.wallet.activationMessage}</div>
+            ) : null}
+            {showWalletSummarySections ? (
+              <div className={styles.walletSummaryArea}>
+                {regularKeyStatuses.length > 0 ? (
+                  <div className={styles.summarySection}>
+                    <div className={styles.regularKeyStatusTitle}>
+                      {t("assetLock.regularKey.resultTitle")}
+                    </div>
+                    <div className={styles.regularKeyStatusList}>
+                      {regularKeyStatuses.map((status) => (
+                        <div
+                          key={`${status.assetId}-${status.address}`}
+                          className={styles.regularKeyStatusItem}
+                        >
+                          <div className={styles.regularKeyStatusRow}>
+                            <div className={styles.regularKeyStatusLabel}>
+                              {status.assetLabel || status.address}
+                            </div>
+                            <div className={styles.regularKeyStatusValue}>
+                              {formatRegularKeyStatus(status.status)}
+                            </div>
+                          </div>
+                          {status.message ? (
+                            <div className={styles.regularKeyStatusMessage}>{status.message}</div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {shouldShowAutoTransferTxHashes(lockState) ? (
+                  <div className={styles.summarySection}>
+                    <div className={styles.regularKeyStatusTitle}>
+                      {t("assetLock.transfer.usedTxHashTitle")}
+                    </div>
+                    {autoTransferTxHashes.length > 0 ? (
+                      <div className={styles.regularKeyStatusList}>
+                        {autoTransferTxHashes.map((item) => (
+                          <div
+                            key={`${item.itemId}-${item.txHash}`}
+                            className={styles.regularKeyStatusItem}
+                          >
+                            <div className={styles.regularKeyStatusRow}>
+                              <div className={styles.regularKeyStatusLabel}>
+                                {item.assetLabel || item.itemId}
+                              </div>
+                              <XrplExplorerLink
+                                className={styles.balanceLink}
+                                value={item.txHash}
+                                resource="transaction"
+                              >
+                                {item.txHash}
+                              </XrplExplorerLink>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.planHint}>
+                        {t("assetLock.transfer.usedTxHashEmpty")}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -874,7 +1038,7 @@ export default function AssetLockPage({
             )}
           </div>
         ) : null}
-        {(current.id === "transfer" || (method === "B" && current.id === "verify")) ? (
+        {current.id === "transfer" ? (
           <div className={styles.stepBody}>
             <div className={styles.transferHint}>
               {t("assetLock.transfer.hint")}
@@ -885,9 +1049,13 @@ export default function AssetLockPage({
                   const currentIndex = methodSteps.findIndex(
                     (item) => item.id === (lockState?.methodStep ?? "")
                   );
+                  const isClearRegularKeyCompleted =
+                    lockState?.methodStep === "REGULAR_KEY_CLEARED";
                   const status =
                     currentIndex === -1
                       ? "pending"
+                      : isClearRegularKeyCompleted && index <= currentIndex
+                      ? "done"
                       : index < currentIndex
                       ? "done"
                       : index === currentIndex
@@ -942,33 +1110,6 @@ export default function AssetLockPage({
                     </Button>
                   </div>
                 ) : null}
-                {regularKeyStatuses.length > 0 ? (
-                  <div className={styles.regularKeyStatusCard}>
-                    <div className={styles.regularKeyStatusTitle}>
-                      {t("assetLock.regularKey.resultTitle")}
-                    </div>
-                    <div className={styles.regularKeyStatusList}>
-                      {regularKeyStatuses.map((status) => (
-                        <div
-                          key={`${status.assetId}-${status.address}`}
-                          className={styles.regularKeyStatusItem}
-                        >
-                          <div className={styles.regularKeyStatusRow}>
-                            <div className={styles.regularKeyStatusLabel}>
-                              {status.assetLabel || status.address}
-                            </div>
-                            <div className={styles.regularKeyStatusValue}>
-                              {formatRegularKeyStatus(status.status)}
-                            </div>
-                          </div>
-                          {status.message ? (
-                            <div className={styles.regularKeyStatusMessage}>{status.message}</div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 {lockState?.methodStep === "AUTO_TRANSFER" ? (
                   <div className={styles.methodActions}>
                     <Button
@@ -982,7 +1123,13 @@ export default function AssetLockPage({
                     </Button>
                   </div>
                 ) : null}
-                {showCombinedMethodBStep ? renderVerifySection() : null}
+                {lockState?.methodStep === "REGULAR_KEY_CLEARED" ? (
+                  <div className={styles.methodActions}>
+                    <Button type="button" onClick={handleGoToVerify}>
+                      {t("assetLock.actions.next")}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className={styles.transferList}>
@@ -1045,7 +1192,7 @@ export default function AssetLockPage({
             )}
           </div>
         ) : null}
-        {current.id === "verify" && method !== "B" ? renderVerifySection() : null}
+        {current.id === "verify" ? renderVerifySection() : null}
       </div>
 
       <Dialog

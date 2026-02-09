@@ -82,6 +82,10 @@
   @apply text-meta text-muted-foreground;
 }
 
+.walletSummaryArea {
+  @apply mt-2 grid gap-3 border-t border-border/60 pt-3;
+}
+
 .transferHint {
   @apply text-body-sm text-muted-foreground;
 }
@@ -195,6 +199,14 @@
 
 .regularKeyStatusList {
   @apply grid gap-2;
+}
+
+.summarySection {
+  @apply grid gap-2;
+}
+
+.summarySection + .summarySection {
+  @apply border-t border-border/60 pt-3;
 }
 
 .regularKeyStatusItem {
@@ -379,6 +391,10 @@
 
 .balanceNote {
   @apply text-meta text-muted-foreground;
+}
+
+.verifyPendingNote {
+  @apply mt-2 text-meta text-muted-foreground;
 }
 
 .balanceGrid {
