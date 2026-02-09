@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import styles from "./wallet-verify-panel.module.css";
 import { useTranslation } from "react-i18next";
+import XrplExplorerLink from "./xrpl-explorer-link";
 
 type WalletVerifyPanelProps = {
   destination: string;
@@ -13,6 +14,7 @@ type WalletVerifyPanelProps = {
   isSubmitting: boolean;
   submitDisabled: boolean;
   secretDisabled: boolean;
+  verifiedTxHash?: string | null;
 };
 
 export const WalletVerifyPanel = ({
@@ -23,9 +25,11 @@ export const WalletVerifyPanel = ({
   onSubmit,
   isSubmitting,
   submitDisabled,
-  secretDisabled
+  secretDisabled,
+  verifiedTxHash
 }: WalletVerifyPanelProps) => {
   const { t } = useTranslation();
+  const txHash = verifiedTxHash?.trim() || "";
   return (
     <div className={styles.panel} data-testid="wallet-verify-panel">
       <div className={styles.block}>
@@ -43,6 +47,16 @@ export const WalletVerifyPanel = ({
           </div>
         </div>
         <div className={styles.hint}>{t("walletVerify.memo.hint")}</div>
+        {txHash ? (
+          <div className={styles.row}>
+            <div>
+              <div className={styles.label}>{t("walletVerify.txHash.label")}</div>
+              <XrplExplorerLink value={txHash} resource="transaction" className={styles.value}>
+                {txHash}
+              </XrplExplorerLink>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <FormField label={t("walletVerify.secret.label")}>

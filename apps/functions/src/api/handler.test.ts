@@ -23,6 +23,25 @@ const storageMocks = vi.hoisted(() => {
   const bucket = vi.fn(() => ({ file }));
   return { getSignedUrl, download, file, bucket };
 });
+const sharedMocks = vi.hoisted(() => {
+  const sendXrpPayment = vi.fn(async () => ({ txHash: "tx-xrp" }));
+  const sendTokenPayment = vi.fn(async () => ({ txHash: "tx-token" }));
+  const sendSignerListSet = vi.fn(async () => ({ txHash: "tx-signer" }));
+  const clearRegularKey = vi.fn(async () => ({ txHash: "tx-clear-regular-key" }));
+  const createNftSellOffer = vi.fn(async () => ({ offerId: "offer-1", txHash: "tx-nft" }));
+  const createLocalXrplWallet = vi.fn(() => ({
+    address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+    seed: "sLocal"
+  }));
+  return {
+    sendXrpPayment,
+    sendTokenPayment,
+    sendSignerListSet,
+    clearRegularKey,
+    createNftSellOffer,
+    createLocalXrplWallet
+  };
+});
 
 type StoredDoc = Record<string, any>;
 type CollectionStore = Map<string, StoredDoc>;
@@ -233,15 +252,13 @@ vi.mock("@kototsute/shared", async () => {
     assetLabelUpdateSchema:
       (actual as any).assetLabelUpdateSchema ??
       (actual as any).assetCreateSchema.pick({ label: true }),
-    sendXrpPayment: async () => ({ txHash: "tx-xrp" }),
-    sendTokenPayment: async () => ({ txHash: "tx-token" }),
-    sendSignerListSet: async () => ({ txHash: "tx-signer" }),
-    createNftSellOffer: async () => ({ offerId: "offer-1", txHash: "tx-nft" }),
+    sendXrpPayment: sharedMocks.sendXrpPayment,
+    sendTokenPayment: sharedMocks.sendTokenPayment,
+    sendSignerListSet: sharedMocks.sendSignerListSet,
+    clearRegularKey: sharedMocks.clearRegularKey,
+    createNftSellOffer: sharedMocks.createNftSellOffer,
     getWalletAddressFromSeed: vi.fn(() => "rDest"),
-    createLocalXrplWallet: vi.fn(() => ({
-      address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-      seed: "sLocal"
-    }))
+    createLocalXrplWallet: sharedMocks.createLocalXrplWallet
   };
 });
 
@@ -375,6 +392,7 @@ describe("createApiHandler", () => {
     authState.existingEmails.clear();
     authState.users.clear();
     authTokens.clear();
+    vi.clearAllMocks();
   });
 
   const getAuthUser = async (authHeader: string | null | undefined) => {
@@ -1779,18 +1797,148 @@ describe("createApiHandler", () => {
     (globalThis as any).fetch = fetchOriginal;
   });
 
+  it("blocks asset lock start when lockable items are empty", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "wallet_propose") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+              master_seed: "sTestSeed"
+            }
+          })
+        };
+      }
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "1000000" } }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+    const db = getFirestore();
+
+    const planRef = db.collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "1",
+          ledgerIndex: 1,
+          tokens: [],
+          syncedAt: new Date("2024-01-01T00:00:00.000Z")
+        },
+        reserveXrp: "1",
+        reserveTokens: [],
+        reserveNfts: []
+      },
+      { merge: true }
+    );
+
+    const startRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "B" }
+      }) as any,
+      startRes as any
+    );
+
+    expect(startRes.statusCode).toBe(400);
+    expect(startRes.body?.code).toBe("NOT_READY");
+    expect(startRes.body?.message).toBe(
+      "ロック対象の資産がありません。資産を追加してから再実行してください。"
+    );
+    const lockSnap = await db.collection("cases").doc(caseId).collection("assetLock").doc("state").get();
+    expect(lockSnap.exists).toBe(false);
+    const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
+    expect(itemsSnap.docs.length).toBe(0);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
   it("starts asset lock and creates items", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     const fetchOriginal = (globalThis as any).fetch;
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        result: {
-          account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-          master_seed: "sTestSeed"
-        }
-      })
-    }));
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "wallet_propose") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+              master_seed: "sTestSeed"
+            }
+          })
+        };
+      }
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "10000000" } }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
     (globalThis as any).fetch = fetchMock;
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -1881,8 +2029,218 @@ describe("createApiHandler", () => {
     expect(lockSnap.data()?.methodStep).toBe("REGULAR_KEY_SET");
     expect(fetchMock).toHaveBeenCalled();
     expect(lockSnap.data()?.wallet?.address).toBe("rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe");
+    expect(lockSnap.data()?.wallet?.activationStatus).toBe("ACTIVATED");
     const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
     expect(itemsSnap.docs.length).toBe(2);
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("starts asset lock using live xrpl data when asset summary is missing", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "wallet_propose") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+              master_seed: "sTestSeed"
+            }
+          })
+        };
+      }
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "5000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "account_lines") {
+        return {
+          ok: true,
+          json: async () => ({ result: { lines: [] } })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+
+    const startRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "B" }
+      }) as any,
+      startRes as any
+    );
+
+    expect(startRes.statusCode).toBe(200);
+    expect(startRes.body?.data?.items?.length).toBeGreaterThan(0);
+    expect(startRes.body?.data?.items?.[0]?.plannedAmount).toBe("5000000");
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns pending activation status when distribution wallet is not activated", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "wallet_propose") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+              master_seed: "sTestSeed"
+            }
+          })
+        };
+      }
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { error: "actNotFound", error_message: "Account not found." }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const planRef = await getFirestore().collection(`cases/${caseId}/plans`).doc();
+    await planRef.set({
+      planId: planRef.id,
+      caseId,
+      ownerUid: "owner_1",
+      title: "指図A",
+      sharedAt: null,
+      heirUids: ["heir_1"],
+      heirs: [
+        {
+          uid: "heir_1",
+          email: "heir@example.com",
+          relationLabel: "長男",
+          relationOther: null
+        }
+      ],
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z")
+    });
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    const db = getFirestore();
+    await db.collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "10",
+          ledgerIndex: 1,
+          tokens: [],
+          syncedAt: new Date("2024-01-01T00:00:00.000Z")
+        },
+        reserveXrp: "1",
+        reserveTokens: [],
+        reserveNfts: []
+      },
+      { merge: true }
+    );
+
+    const startRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/start`,
+        body: { method: "B" }
+      }) as any,
+      startRes as any
+    );
+
+    expect(startRes.statusCode).toBe(200);
+    expect(startRes.body?.data?.wallet?.activationStatus).toBe("PENDING");
+    expect(startRes.body?.data?.wallet?.activationMessage).toContain("Account not found");
     (globalThis as any).fetch = fetchOriginal;
   });
 
@@ -1997,6 +2355,32 @@ describe("createApiHandler", () => {
       updatedAt: new Date("2024-01-01T00:00:00.000Z")
     });
 
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+    await getFirestore().collection(`cases/${caseId}/assets`).doc(assetId).set(
+      {
+        xrplSummary: {
+          status: "ok",
+          balanceXrp: "10",
+          ledgerIndex: 1,
+          tokens: [],
+          syncedAt: new Date("2024-01-01T00:00:00.000Z")
+        },
+        reserveXrp: "1",
+        reserveTokens: [],
+        reserveNfts: []
+      },
+      { merge: true }
+    );
+
     const startRes = createRes();
     await handler(
       authedReq("owner_1", "owner@example.com", {
@@ -2030,20 +2414,47 @@ describe("createApiHandler", () => {
           ok: true,
           json: async () => ({
             result: {
-              account_id: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+              account_id: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
               master_seed: "sWalletSeed"
             }
           })
         };
       }
       if (body?.method === "account_info") {
+        const account = body?.params?.[0]?.account;
+        if (account === "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: {
+                account_data: {
+                  Balance: "10000000",
+                  RegularKey: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+                },
+                ledger_index: 1
+              }
+            })
+          };
+        }
+        if (account === "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: {
+                account_data: {
+                  Balance: "10000000"
+                },
+                ledger_index: 1
+              }
+            })
+          };
+        }
         return {
           ok: true,
           json: async () => ({
             result: {
               account_data: {
-                Balance: "0",
-                RegularKey: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
+                Balance: "10000000"
               },
               ledger_index: 1
             }
@@ -2322,7 +2733,7 @@ describe("createApiHandler", () => {
     (globalThis as any).fetch = fetchOriginal;
   });
 
-  it("skips asset lock items when planned amount is zero", async () => {
+  it("rejects asset lock start when planned amount is zero", async () => {
     const fetchOriginal = (globalThis as any).fetch;
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -2411,9 +2822,15 @@ describe("createApiHandler", () => {
       startRes as any
     );
 
-    expect(startRes.statusCode).toBe(200);
+    expect(startRes.statusCode).toBe(400);
+    expect(startRes.body?.code).toBe("NOT_READY");
+    expect(startRes.body?.message).toBe(
+      "ロック対象の資産がありません。資産を追加してから再実行してください。"
+    );
     const itemsSnap = await db.collection("cases").doc(caseId).collection("assetLockItems").get();
     expect(itemsSnap.docs.length).toBe(0);
+    const lockSnap = await db.collection("cases").doc(caseId).collection("assetLock").doc("state").get();
+    expect(lockSnap.exists).toBe(false);
     (globalThis as any).fetch = fetchOriginal;
   });
 
@@ -2641,6 +3058,7 @@ describe("createApiHandler", () => {
     );
 
     expect(execRes.statusCode).toBe(200);
+    expect(execRes.body?.data?.status).toBe("LOCKED");
     expect(execRes.body?.data?.items ?? []).toHaveLength(1);
     expect(execRes.body?.data?.items?.[0]?.status).toBe("VERIFIED");
     expect(execRes.body?.data?.items?.[0]?.txHash).toBe("tx-xrp");
@@ -2648,12 +3066,16 @@ describe("createApiHandler", () => {
     expect(itemSnap.data()?.status).toBe("VERIFIED");
     const lockSnap = await db.collection("cases").doc(caseId).collection("assetLock").doc("state").get();
     expect(lockSnap.data()?.methodStep).toBe("REGULAR_KEY_CLEARED");
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledTimes(1);
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAddress: "rFrom" })
+    );
     const caseSnap = await db.collection("cases").doc(caseId).get();
     expect(caseSnap.data()?.stage).toBe("WAITING");
     (globalThis as any).fetch = fetchOriginal;
   });
 
-  it("executes asset lock for method B even when items are empty", async () => {
+  it("rejects asset lock execute for method B when items are empty", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
 
     const handler = createApiHandler({
@@ -2703,11 +3125,474 @@ describe("createApiHandler", () => {
       execRes as any
     );
 
-    expect(execRes.statusCode).toBe(200);
-    expect(execRes.body?.data?.items ?? []).toHaveLength(0);
-    expect(execRes.body?.data?.methodStep).toBe("REGULAR_KEY_CLEARED");
+    expect(execRes.statusCode).toBe(400);
+    expect(execRes.body?.code).toBe("ASSET_LOCK_ITEMS_EMPTY");
+    expect(sharedMocks.clearRegularKey).not.toHaveBeenCalled();
+    const lockSnap = await db.collection("cases").doc(caseId).collection("assetLock").doc("state").get();
+    expect(lockSnap.data()?.status).toBe("READY");
     const caseSnap = await db.collection("cases").doc(caseId).get();
-    expect(caseSnap.data()?.stage).toBe("WAITING");
+    expect(caseSnap.data()?.stage).not.toBe("WAITING");
+  });
+
+  it("rebuilds asset lock items on execute when items are missing", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "100000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "10000000", reserve_inc: "2000000" } }
+            }
+          })
+        };
+      }
+      return { ok: true, json: async () => ({ result: {} }) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+    const db = getFirestore();
+
+    await db.collection(`cases/${caseId}/assets`).doc("asset-1").set({
+      label: "XRP Wallet",
+      address: "rFrom",
+      xrplSummary: {
+        status: "ok",
+        balanceXrp: "10",
+        ledgerIndex: 1,
+        tokens: [],
+        syncedAt: new Date("2024-01-01T00:00:00.000Z")
+      },
+      reserveXrp: "1",
+      reserveTokens: [],
+      reserveNfts: []
+    });
+
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "B",
+      wallet: {
+        address: "rDest",
+        seedEncrypted: encryptPayload("seed")
+      },
+      regularKeyStatuses: [
+        {
+          assetId: "asset-1",
+          assetLabel: "XRP Wallet",
+          address: "rFrom",
+          status: "VERIFIED",
+          message: null
+        }
+      ]
+    });
+
+    const execRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/execute`
+      }) as any,
+      execRes as any
+    );
+
+    expect(execRes.statusCode).toBe(200);
+    expect(execRes.body?.data?.status).toBe("LOCKED");
+    expect((execRes.body?.data?.items ?? []).length).toBeGreaterThan(0);
+    expect(sharedMocks.sendXrpPayment).toHaveBeenCalled();
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("executes asset lock when legacy item misses assetId but has assetAddress", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "100000000", OwnerCount: 0 } }
+          })
+        };
+      }
+      if (body?.method === "tx") {
+        return {
+          ok: true,
+          json: async () => ({ result: { validated: true, hash: body?.params?.[0]?.transaction } })
+        };
+      }
+      if (body?.method === "submit_multisigned") {
+        return {
+          ok: true,
+          json: async () => ({ result: { engine_result: "tesSUCCESS", tx_json: {} } })
+        };
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "10000000", reserve_inc: "2000000" } }
+            }
+          })
+        };
+      }
+      return { ok: true, json: async () => ({ result: {} }) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "B",
+      wallet: {
+        address: "rDest",
+        seedEncrypted: encryptPayload("seed")
+      },
+      regularKeyStatuses: [
+        {
+          assetId: "",
+          assetLabel: "Wallet",
+          address: "rFrom",
+          status: "VERIFIED",
+          message: null
+        }
+      ]
+    });
+    const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+    await itemRef.set({
+      itemId: itemRef.id,
+      assetLabel: "XRP",
+      assetAddress: "rFrom",
+      token: null,
+      plannedAmount: "1",
+      status: "PENDING",
+      txHash: null,
+      error: null
+    });
+
+    const execRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/asset-lock/execute`
+      }) as any,
+      execRes as any
+    );
+
+    expect(execRes.statusCode).toBe(200);
+    expect(execRes.body?.data?.status).toBe("LOCKED");
+    expect(sharedMocks.sendXrpPayment).toHaveBeenCalled();
+    expect(sharedMocks.clearRegularKey).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAddress: "rFrom" })
+    );
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("rejects execute when distribution wallet is still inactive after transfer", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        const account = body?.params?.[0]?.account;
+        if (account === "rFrom") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: { account_data: { Balance: "100000000", OwnerCount: 0 } }
+            })
+          };
+        }
+        if (account === "rDest") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: { error: "actNotFound", error_message: "Account not found." }
+            })
+          };
+        }
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "10000000", reserve_inc: "2000000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    try {
+      const handler = createApiHandler({
+        repo: new InMemoryAssetRepository(),
+        caseRepo: new FirestoreCaseRepository(),
+        now: () => new Date("2024-01-01T00:00:00.000Z"),
+        getAuthUser,
+        getOwnerUidForRead: async (uid) => uid
+      });
+
+      const createCaseRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: "/v1/cases",
+          body: { ownerDisplayName: "山田" }
+        }) as any,
+        createCaseRes as any
+      );
+      const caseId = createCaseRes.body?.data?.caseId;
+
+      const db = getFirestore();
+      await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+        address: "rFrom",
+        reserveXrp: "0",
+        label: "Wallet"
+      });
+      await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+        status: "READY",
+        method: "B",
+        wallet: {
+          address: "rDest",
+          seedEncrypted: encryptPayload("seed")
+        },
+        regularKeyStatuses: [
+          {
+            assetId: "asset-1",
+            assetLabel: "Wallet",
+            address: "rFrom",
+            status: "VERIFIED",
+            message: null
+          }
+        ]
+      });
+
+      const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+      await itemRef.set({
+        itemId: itemRef.id,
+        assetId: "asset-1",
+        assetLabel: "XRP",
+        assetAddress: "rFrom",
+        token: null,
+        plannedAmount: "10000000",
+        status: "PENDING",
+        txHash: null,
+        error: null
+      });
+
+      const execRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: `/v1/cases/${caseId}/asset-lock/execute`
+        }) as any,
+        execRes as any
+      );
+
+      expect(execRes.statusCode).toBe(400);
+      expect(execRes.body?.code).toBe("DISTRIBUTION_WALLET_NOT_ACTIVATED");
+      expect(sharedMocks.sendXrpPayment).toHaveBeenCalledTimes(1);
+
+      const caseSnap = await db.collection("cases").doc(caseId).get();
+      expect(caseSnap.data()?.stage).not.toBe("WAITING");
+      expect(caseSnap.data()?.assetLockStatus).not.toBe("LOCKED");
+    } finally {
+      (globalThis as any).fetch = fetchOriginal;
+    }
+  });
+
+  it("prefunds distribution wallet before asset transfer when destination is inactive", async () => {
+    process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
+    const fetchOriginal = (globalThis as any).fetch;
+    let destinationActivated = false;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method === "account_info") {
+        const account = body?.params?.[0]?.account;
+        if (account === "rFrom") {
+          return {
+            ok: true,
+            json: async () => ({
+              result: { account_data: { Balance: "100000000", OwnerCount: 0 } }
+            })
+          };
+        }
+        if (account === "rDest") {
+          if (!destinationActivated) {
+            return {
+              ok: true,
+              json: async () => ({
+                result: { error: "actNotFound", error_message: "Account not found." }
+              })
+            };
+          }
+          return {
+            ok: true,
+            json: async () => ({
+              result: { account_data: { Balance: "1000000", OwnerCount: 0 } }
+            })
+          };
+        }
+      }
+      if (body?.method === "server_state") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              state: { validated_ledger: { reserve_base: "10000000", reserve_inc: "2000000" } }
+            }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+    sharedMocks.sendXrpPayment.mockImplementation(async (input) => {
+      if (input.to === "rDest" && input.amountDrops === "10000000") {
+        destinationActivated = true;
+        return { txHash: "tx-activation" };
+      }
+      return { txHash: "tx-xrp" };
+    });
+
+    try {
+      const handler = createApiHandler({
+        repo: new InMemoryAssetRepository(),
+        caseRepo: new FirestoreCaseRepository(),
+        now: () => new Date("2024-01-01T00:00:00.000Z"),
+        getAuthUser,
+        getOwnerUidForRead: async (uid) => uid
+      });
+
+      const createCaseRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: "/v1/cases",
+          body: { ownerDisplayName: "山田" }
+        }) as any,
+        createCaseRes as any
+      );
+      const caseId = createCaseRes.body?.data?.caseId;
+
+      const db = getFirestore();
+      await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+        address: "rFrom",
+        reserveXrp: "0",
+        label: "Wallet"
+      });
+      await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+        status: "READY",
+        method: "B",
+        wallet: {
+          address: "rDest",
+          seedEncrypted: encryptPayload("seed")
+        },
+        regularKeyStatuses: [
+          {
+            assetId: "asset-1",
+            assetLabel: "Wallet",
+            address: "rFrom",
+            status: "VERIFIED",
+            message: null
+          }
+        ]
+      });
+
+      const itemRef = db.collection("cases").doc(caseId).collection("assetLockItems").doc();
+      await itemRef.set({
+        itemId: itemRef.id,
+        assetId: "asset-1",
+        assetLabel: "XRP",
+        assetAddress: "rFrom",
+        token: null,
+        plannedAmount: "20000000",
+        status: "PENDING",
+        txHash: null,
+        error: null
+      });
+
+      const execRes = createRes();
+      await handler(
+        authedReq("owner_1", "owner@example.com", {
+          method: "POST",
+          path: `/v1/cases/${caseId}/asset-lock/execute`
+        }) as any,
+        execRes as any
+      );
+
+      expect(execRes.statusCode).toBe(200);
+      expect(execRes.body?.data?.status).toBe("LOCKED");
+      expect(sharedMocks.sendXrpPayment).toHaveBeenCalledTimes(2);
+      expect(sharedMocks.sendXrpPayment).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          fromAddress: "rFrom",
+          to: "rDest",
+          amountDrops: "10000000"
+        })
+      );
+      expect(sharedMocks.sendXrpPayment).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          fromAddress: "rFrom",
+          to: "rDest",
+          amountDrops: "10000000"
+        })
+      );
+    } finally {
+      (globalThis as any).fetch = fetchOriginal;
+    }
   });
 
   it("adjusts xrp amount before execute when balance is short", async () => {
@@ -3072,6 +3957,158 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.destination?.balanceXrp).toBe("20");
     expect(res.body?.data?.sources?.[0]?.assetId).toBe("asset-1");
     expect(res.body?.data?.sources?.[0]?.balanceXrp).toBe("10");
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns destination balance as zero when locked state destination is not found", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method !== "account_info") {
+        return { ok: false, json: async () => ({}) };
+      }
+      const account = body?.params?.[0]?.account;
+      if (account === "rFrom") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "10000000" } }
+          })
+        };
+      }
+      if (account === "rDest") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { error: "actNotFound", error_message: "Account not found." }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+      address: "rFrom",
+      reserveXrp: "0",
+      label: "Wallet"
+    });
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "LOCKED",
+      method: "B",
+      wallet: { address: "rDest" }
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/asset-lock/balances`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.destination?.status).toBe("ok");
+    expect(res.body?.data?.destination?.balanceXrp).toBe("0");
+    expect(res.body?.data?.destination?.message).toBeNull();
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
+  it("returns destination balance as zero when case is locked and destination account is missing", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body?.method !== "account_info") {
+        return { ok: false, json: async () => ({}) };
+      }
+      const account = body?.params?.[0]?.account;
+      if (account === "rFrom") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { account_data: { Balance: "10000000" } }
+          })
+        };
+      }
+      if (account === "rDest") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: { error: "actNotFound", error_message: "Account not found." }
+          })
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({ assetLockStatus: "LOCKED" }, { merge: true });
+    await db.collection("cases").doc(caseId).collection("assets").doc("asset-1").set({
+      address: "rFrom",
+      reserveXrp: "0",
+      label: "Wallet"
+    });
+    await db.collection("cases").doc(caseId).collection("assetLock").doc("state").set({
+      status: "READY",
+      method: "B",
+      methodStep: "REGULAR_KEY_CLEARED",
+      wallet: { address: "rDest" }
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/asset-lock/balances`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.destination?.status).toBe("ok");
+    expect(res.body?.data?.destination?.balanceXrp).toBe("0");
+    expect(res.body?.data?.destination?.message).toBeNull();
     (globalThis as any).fetch = fetchOriginal;
   });
 
@@ -3480,6 +4517,7 @@ describe("createApiHandler", () => {
     );
     expect(detailRes.body?.data?.address).toBe("rHeirWallet");
     expect(detailRes.body?.data?.verificationStatus).toBe("VERIFIED");
+    expect(detailRes.body?.data?.verificationTxHash).toBe("tx_hash");
   });
 
   it("forbids owner from managing heir wallet", async () => {
@@ -3666,6 +4704,53 @@ describe("createApiHandler", () => {
       detailRes as any
     );
     expect(detailRes.body?.data?.label).toBe("新しい資産名");
+  });
+
+  it("returns verification tx hash in asset detail", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new FirestoreCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const createCaseRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: "/v1/cases",
+        body: { ownerDisplayName: "山田" }
+      }) as any,
+      createCaseRes as any
+    );
+    const caseId = createCaseRes.body?.data?.caseId;
+
+    const assetCreateRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/assets`,
+        body: { label: "XRP Wallet", address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" }
+      }) as any,
+      assetCreateRes as any
+    );
+    const assetId = assetCreateRes.body?.data?.assetId;
+
+    await getFirestore()
+      .collection(`cases/${caseId}/assets`)
+      .doc(assetId)
+      .set({ verificationTxHash: "TX_HASH_001" }, { merge: true });
+
+    const detailRes = createRes();
+    await handler(
+      authedReq("owner_1", "owner@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/assets/${assetId}`
+      }) as any,
+      detailRes as any
+    );
+    expect(detailRes.body?.data?.verificationTxHash).toBe("TX_HASH_001");
   });
 
   it("rejects case asset deletion when related plan exists", async () => {
@@ -4683,6 +5768,52 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.[0]?.tokenId).toBe("nft-1");
   });
 
+  it("records receive tx hash for distribution nft item", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_distribution_receive_tx";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/distribution/state/items`).doc("item-1").set({
+      type: "NFT",
+      tokenId: "nft-1",
+      offerId: "offer-1",
+      heirUid: "heir_1",
+      heirAddress: "rHeir",
+      status: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/items/item-1/receive`,
+      body: { txHash: "tx-receive-1" }
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.receiveTxHash).toBe("tx-receive-1");
+    expect(res.body?.data?.receiveStatus).toBe("SUBMITTED");
+
+    const itemSnap = await db
+      .collection(`cases/${caseId}/distribution/state/items`)
+      .doc("item-1")
+      .get();
+    expect(itemSnap.data()?.receiveTxHash).toBe("tx-receive-1");
+    expect(itemSnap.data()?.receiveStatus).toBe("SUBMITTED");
+  });
+
   it("rejects distribution execute when approval tx is not validated", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     const fetchOriginal = (globalThis as any).fetch;
@@ -4876,6 +6007,8 @@ describe("createApiHandler", () => {
 
     const stateSnap = await db.collection(`cases/${caseId}/distribution`).doc("state").get();
     expect(stateSnap.data()?.totalCount).toBe(1);
+    const caseStageSnap = await db.collection("cases").doc(caseId).get();
+    expect(caseStageSnap.data()?.stage).toBe("COMPLETED");
     const itemsSnap = await db
       .collection(`cases/${caseId}/distribution`)
       .doc("state")
@@ -5271,6 +6404,8 @@ describe("createApiHandler", () => {
     expect(itemSnap.data()?.status).toBe("SKIPPED");
     const stateSnap = await stateRef.get();
     expect(stateSnap.data()?.escalationCount).toBe(1);
+    const caseSnap = await db.collection("cases").doc(caseId).get();
+    expect(caseSnap.data()?.stage).toBe("IN_PROGRESS");
     (globalThis as any).fetch = fetchOriginal;
   });
 
@@ -5766,6 +6901,62 @@ describe("createApiHandler", () => {
     (globalThis as any).fetch = fetchOriginal;
   });
 
+  it("returns approval tx expired status when submitted tx is dropped after last ledger", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { error: "txnNotFound", error_message: "Transaction not found." }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { state: { validated_ledger: { seq: 20 } } }
+        })
+      });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted_dropped";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock", LastLedgerSequence: 10 },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_3"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.networkStatus).toBe("EXPIRED");
+
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
   it("accepts signed blob and records signature", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -5820,5 +7011,61 @@ describe("createApiHandler", () => {
       .doc("heir_1")
       .get();
     expect(sigSnap.data()?.signedBlob).toBe("blob-heir");
+  });
+
+  it("returns submitted tx hash when signer quorum is reached", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_signer_submit_hash";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 1,
+      entries: [{ account: "rSystem", weight: 1 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      systemSignedBlob: "blob-system",
+      status: "PREPARED"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/signer-list/sign`,
+        body: { signedBlob: "blob-heir" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    expect(res.body?.data?.submittedTxHash).toBe("tx-final");
+
+    const approvalSnap = await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").get();
+    expect(approvalSnap.data()?.status).toBe("SUBMITTED");
+    expect(approvalSnap.data()?.submittedTxHash).toBe("tx-final");
   });
 });

@@ -38,4 +38,23 @@ describe("WalletVerifyPanel", () => {
     expect(html).toContain("Memo");
     expect(html).toContain("シークレットで自動検証");
   });
+
+  it("renders verified tx hash when provided", () => {
+    const html = renderToString(
+      React.createElement(WalletVerifyPanel, {
+        destination: "rVerify",
+        memo: "abc",
+        secret: "sSecret",
+        onSecretChange: () => undefined,
+        onSubmit: () => undefined,
+        isSubmitting: false,
+        submitDisabled: false,
+        secretDisabled: false,
+        verifiedTxHash: "ABC123"
+      })
+    );
+
+    expect(html).toContain("検証に使用したTx Hash");
+    expect(html).toContain("ABC123");
+  });
 });

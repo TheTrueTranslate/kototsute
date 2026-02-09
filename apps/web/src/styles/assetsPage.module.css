@@ -66,14 +66,6 @@
   @apply mt-6 flex items-center justify-end;
 }
 
-.typeSummary {
-  @apply mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-muted/40 px-5 py-4;
-}
-
-.typeSummaryText {
-  @apply text-body text-foreground;
-}
-
 .typeGrid {
   @apply mt-4 grid gap-4 sm:grid-cols-2;
 }

@@ -74,8 +74,13 @@ vi.mock("../api/assets", () => ({
 vi.mock("../../features/shared/components/ui/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) =>
     React.createElement("div", null, children),
-  DialogContent: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
+  DialogContent: ({
+    children,
+    ...props
+  }: {
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => React.createElement("div", props, children),
   DialogHeader: ({ children }: { children: React.ReactNode }) =>
     React.createElement("div", null, children),
   DialogFooter: ({ children }: { children: React.ReactNode }) =>
@@ -140,6 +145,12 @@ const render = async (props?: Record<string, unknown>) => {
 };
 
 describe("AssetDetailPage", () => {
+  it("closes verify dialog when verification is completed", async () => {
+    const { shouldCloseVerifyDialogOnSuccess } = await import("./AssetDetailPage");
+    expect(shouldCloseVerifyDialogOnSuccess("VERIFIED")).toBe(true);
+    expect(shouldCloseVerifyDialogOnSuccess("PENDING")).toBe(false);
+  });
+
   it("highlights verify action only when unverified and unlocked", async () => {
     const { shouldHighlightVerifyOwnership } = await import("./AssetDetailPage");
     expect(shouldHighlightVerifyOwnership("UNVERIFIED", false)).toBe(true);
@@ -188,6 +199,19 @@ describe("AssetDetailPage", () => {
     const html = await render();
     expect(html).toContain("ウォレット情報");
     expect(html).toContain("相続予定数");
+  });
+
+  it("shows verification tx hash in overview when available", async () => {
+    const html = await render({
+      initialAsset: {
+        ...defaultInitialAsset,
+        verificationStatus: "VERIFIED",
+        verificationTxHash: "ABC123"
+      }
+    });
+    expect(html).toContain("検証Tx Hash");
+    expect(html).toContain("ABC123");
+    expect(html).toContain("https://testnet.xrpl.org/transactions/ABC123");
   });
 
   it("shows none in inheritance section when token and nft are empty", async () => {
@@ -246,13 +270,36 @@ describe("AssetDetailPage", () => {
     expect(html).toContain("owner@example.com");
   });
 
+  it("localizes asset history summary by type instead of raw stored title", async () => {
+    const html = await render({
+      initialTab: "history",
+      initialHistoryItems: [
+        {
+          historyId: "history-2",
+          type: "ASSET_SYNCED",
+          title: "RAW_ASSET_HISTORY_TITLE",
+          detail: "残高 10 XRP",
+          actorUid: "owner_1",
+          actorEmail: "owner@example.com",
+          createdAt: "2024-01-04T00:00:00.000Z",
+          meta: null
+        }
+      ]
+    });
+    expect(html).toContain("ウォレット情報を同期");
+    expect(html).not.toContain("RAW_ASSET_HISTORY_TITLE");
+  });
+
   it("renders auto verify guidance without tx hash input", async () => {
     const html = await render();
+    expect(html).toContain('data-testid="wallet-ownership-verify-dialog"');
     expect(html).toContain("data-testid=\"wallet-verify-panel\"");
     expect(html).toContain("シークレットで自動検証");
     expect(html).toContain("Destination（運営確認用ウォレット）");
     expect(html).toContain("システムの検証用アドレス");
     expect(html).toContain("1 drops (=0.000001 XRP)");
+    expect(html).not.toContain("登録日");
+    expect(html).not.toContain("更新日");
     expect(html).not.toContain("TX Hash");
     expect(html).not.toContain("Destinationをコピー");
     expect(html).not.toContain("Memoをコピー");

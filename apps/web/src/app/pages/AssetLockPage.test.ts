@@ -294,6 +294,39 @@ it("shows balances on verify step", async () => {
   expect(html).toContain("https://testnet.xrpl.org/accounts/rDest");
 });
 
+it("shows inheritance wallet address confirmation with activation status", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 3,
+    methodStep: "REGULAR_KEY_SET",
+    wallet: {
+      address: "rDest",
+      activationStatus: "PENDING",
+      activationMessage: "Account not found."
+    },
+    items: []
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 2,
+        initialMethod: "B"
+      })
+    )
+  );
+  expect(html).toContain("相続用ウォレット");
+  expect(html).toContain("rDest");
+  expect(html).toContain('href="https://testnet.xrpl.org/accounts/rDest"');
+  expect(html).toContain('data-xrpl-explorer-link="true"');
+  expect(html).toContain("未アクティベート");
+  expect(html).toContain("Account not found.");
+});
+
 it("shows pending message when account is not found", async () => {
   const { default: AssetLockPage } = await import("./AssetLockPage");
   const lock: AssetLockState = {
@@ -455,6 +488,7 @@ it("shows regular key verification statuses", async () => {
   expect(html).toContain("RegularKeyの確認結果");
   expect(html).toContain("未確認");
   expect(html).toContain("RegularKeyが一致しません");
+  expect(html.indexOf("RegularKeyの確認結果")).toBeLessThan(html.indexOf("方式Bは自動送金"));
 });
 
 it("hides back button after auto transfer completes", async () => {
@@ -596,6 +630,226 @@ it("shows verification results on the final step", async () => {
   expect(html).toContain(">ABC</a>");
   expect(html).not.toContain(">https://testnet.xrpl.org/transactions/ABC</a>");
   expect(html).toContain("資産ロックが完了しました");
+  expect(html).not.toContain("ケース詳細に戻ります");
+});
+
+it("does not auto-show verify section after RegularKey clear in method B", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 3,
+    methodStep: "REGULAR_KEY_CLEARED",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B",
+        initialBalances: {
+          destination: { address: "rDest", balanceXrp: "20", status: "ok", message: null },
+          sources: [{ assetId: "a1", address: "rFrom", balanceXrp: "10", status: "ok", message: null }]
+        }
+      })
+    )
+  );
+  expect(html).toContain("方式Bは自動送金");
+  expect(html).not.toContain("送金先");
+  expect(html).not.toContain("20 XRP");
+  expect(html).toContain("次に進む");
+  expect(html).not.toContain("進行中");
+  expect(html).toContain("STEP");
+  expect(html).toContain("2 / 3");
+});
+
+it("keeps STEP 3/3 after continue when method step is REGULAR_KEY_CLEARED", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 4,
+    methodStep: "REGULAR_KEY_CLEARED",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B",
+        initialBalances: {
+          destination: { address: "rDest", balanceXrp: "20", status: "ok", message: null },
+          sources: [{ assetId: "a1", address: "rFrom", balanceXrp: "10", status: "ok", message: null }]
+        }
+      })
+    )
+  );
+  expect(html).toContain("3 / 3");
+  expect(html).toContain("送金先");
+  expect(html).not.toContain("方式Bは自動送金");
+  expect(html).not.toContain("次に進む");
+});
+
+it("renders verify section on STEP 3/3 in method B when uiStep is verify", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 4,
+    methodStep: "TRANSFER_DONE",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B",
+        initialBalances: {
+          destination: { address: "rDest", balanceXrp: "20", status: "ok", message: null },
+          sources: [{ assetId: "a1", address: "rFrom", balanceXrp: "10", status: "ok", message: null }]
+        }
+      })
+    )
+  );
+  expect(html).toContain("3 / 3");
+  expect(html).toContain("送金先");
+  expect(html).not.toContain("方式Bは自動送金");
+});
+
+it("shows tx hash used for auto transfer with explorer link", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 3,
+    methodStep: "REGULAR_KEY_CLEARED",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B"
+      })
+    )
+  );
+  expect(html).toContain("送金に利用したTx Hash");
+  expect(html.indexOf("送金に利用したTx Hash")).toBeLessThan(html.indexOf("方式Bは自動送金"));
+  expect(html).toContain('href="https://testnet.xrpl.org/transactions/ABC"');
+  expect(html).toContain(">ABC</a>");
+});
+
+it("shows regular key results and tx hashes in a single summary card", async () => {
+  const { default: AssetLockPage } = await import("./AssetLockPage");
+  const lock: AssetLockState = {
+    status: "READY",
+    method: "B",
+    uiStep: 3,
+    methodStep: "REGULAR_KEY_CLEARED",
+    wallet: { address: "rDest" },
+    items: [
+      {
+        itemId: "i1",
+        assetId: "a1",
+        assetLabel: "Test Wallet",
+        token: null,
+        plannedAmount: "1",
+        status: "VERIFIED",
+        txHash: "ABC",
+        error: null
+      }
+    ],
+    regularKeyStatuses: [
+      {
+        assetId: "asset-1",
+        assetLabel: "Test Wallet",
+        address: "rFrom",
+        status: "VERIFIED",
+        message: null
+      }
+    ]
+  };
+  const html = renderToString(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(AssetLockPage, {
+        initialLock: lock,
+        initialStep: 3,
+        initialMethod: "B"
+      })
+    )
+  );
+  const walletIndex = html.indexOf("相続用ウォレット");
+  const regularKeyIndex = html.indexOf("RegularKeyの確認結果");
+  const txHashIndex = html.indexOf("送金に利用したTx Hash");
+  expect(walletIndex).toBeGreaterThanOrEqual(0);
+  expect(regularKeyIndex).toBeGreaterThan(walletIndex);
+  expect(txHashIndex).toBeGreaterThan(regularKeyIndex);
+  expect(html).toContain("RegularKeyの確認結果");
+  expect(html).toContain("送金に利用したTx Hash");
+  expect((html.match(/walletCheckCard/g) ?? []).length).toBe(1);
+  expect((html.match(/regularKeyStatusCard/g) ?? []).length).toBe(0);
 });
 
 it("shows complete action when all items are verified", async () => {
@@ -668,6 +922,7 @@ it("disables complete action when items are not verified", async () => {
   );
   expect(html).toContain("完了する");
   expect(html).toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>完了する/);
+  expect(html).toContain("検証待ちの送金が1件あります。再取得で最新状態を確認してください。");
 });
 
 it("shows regular key signing action when method step is REGULAR_KEY_SET", async () => {

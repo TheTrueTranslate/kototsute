@@ -159,22 +159,6 @@
       "success": "パスワード再設定メールを送信しました。"
     }
   },
-  "home": {
-    "title": "ログイン後ホーム（仮）",
-    "lead": "認証後に表示されるホームは現在準備中です。",
-    "footer": {
-      "login": "ログインへ戻る",
-      "register": "新規登録"
-    },
-    "placeholder": {
-      "lead": "ここから被相続人が相続人を招待する導線を配置予定です。",
-      "items": {
-        "invite": "招待リンクの発行",
-        "cases": "相続案件の一覧",
-        "timeline": "状況のタイムライン"
-      }
-    }
-  },
   "cases": {
     "title": "ケース",
     "detail": {
@@ -340,7 +324,7 @@
         },
         "prepare": {
           "title": "同意の準備",
-          "hint": "相続人の同意を進めるために、署名対象を作成します。",
+          "hint": "相続人の同意を進めるために、署名対象を作成します。処理中の場合は数十秒待ってから実行してください。",
           "action": "相続同意の準備を始める",
           "loading": "準備中...",
           "success": "同意の準備が完了しました。シークレットを入力して署名を進めてください。",
@@ -370,7 +354,7 @@
         "error": {
           "statusLoadFailed": "署名状況の取得に失敗しました",
           "loadFailed": "署名対象の取得に失敗しました",
-          "accountNotFound": "分配用ウォレットがXRPL上で未有効です。分配用ウォレットへXRPを入金後、同意の準備を再実行してください。",
+          "accountNotFound": "分配用ウォレットがXRPL上でまだ有効化されていません。処理中の可能性があるため、数十秒待ってから同意の準備を再実行してください。",
           "txMissing": "署名対象トランザクションが取得できません",
           "signFailed": "署名の生成に失敗しました",
           "signedBlobRequired": "署名済みデータを入力してください",
@@ -400,11 +384,12 @@
         },
         "guide": {
           "title": "署名の流れ",
+          "summary": "同意内容を確認し、シークレット入力で署名を作成して送信します。必要な署名がそろうと相続実行へ進みます。",
           "steps": {
-            "tx": "署名対象は、相続用ウォレット（資産ロック時に作成）から相続人へ分配するXRPLトランザクションです。",
-            "secret": "シークレットを入力すると署名を自動で作成します（サーバーには送信しません）。",
-            "submit": "署名を送信すると同意が反映されます。",
-            "autoExecute": "必要な署名が揃うと相続実行の送信が自動で行われます。"
+            "tx": "まず、相続実行への同意内容を確認します。",
+            "secret": "次に、シークレットを入力して署名を作成します。",
+            "submit": "続けて、署名を送信して同意を反映します。",
+            "autoExecute": "必要な署名がそろうと、相続実行へ進みます。"
           }
         },
         "secret": {
@@ -438,7 +423,7 @@
           },
           "preparing": {
             "title": "相続人同意の準備中",
-            "description": "同意の準備を始めてください。"
+            "description": "同意の準備を始めてください。処理中の場合は数十秒待ってから実行してください。"
           },
           "awaitingSign": {
             "title": "相続人同意 受付中",
@@ -453,11 +438,17 @@
           "title": "相続の手順",
           "progress": "STEP {{current}}/{{total}}",
           "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "reviewReset": "現在のSTEPに戻る",
           "steps": {
             "wallet": "受取用ウォレットを登録",
             "deathClaim": "死亡診断書",
             "signature": "署名",
             "receive": "受け取り"
+          },
+          "review": {
+            "title": "受取用ウォレットの確認",
+            "body": "受取用ウォレットの登録・所有確認はウォレットタブで見直せます。",
+            "action": "受取用ウォレットを開く"
           },
           "walletGate": {
             "title": "先に受取用ウォレットを登録してください",
@@ -630,7 +621,7 @@
   "assets": {
     "types": {
       "xrp": {
-        "label": "XRPウォレット",
+        "label": "XPRLウォレット",
         "desc": "ウォレットアドレスを登録します"
       },
       "bank": {
@@ -649,20 +640,33 @@
     "new": {
       "title": "資産登録",
       "section": {
-        "type": "資産タイプ"
+        "type": "追加対象"
       },
-      "type": {
-        "unavailable": "準備中",
-        "next": "次へ",
-        "change": "変更する",
-        "unselected": "未選択"
+      "wallet": {
+        "title": "XRPLウォレット",
+        "desc": "XRPLウォレットアドレスを登録します"
+      },
+      "supplement": {
+        "title": "以下は補足資産として管理できます",
+        "examples": {
+          "stablecoin": "ステーブルコイン",
+          "realEstate": "不動産",
+          "stock": "株式",
+          "corporateBond": "社債",
+          "membership": "会員権",
+          "digitalAsset": "デジタル資産"
+        }
       },
       "form": {
         "label": "ラベル",
         "labelPlaceholder": "例: 自分のウォレット",
-        "address": "XRPアドレス",
+        "address": "XRPLアドレス",
         "addressPlaceholder": "r...",
-        "submit": "登録する"
+        "submit": "追加する"
+      },
+      "success": {
+        "created": "XRPLウォレットを追加しました",
+        "back": "戻る"
       },
       "error": {
         "caseIdMissing": "ケースIDが取得できません",
@@ -698,7 +702,8 @@
         "labelUpdateError": "資産名の更新に失敗しました",
         "createdAt": "登録日",
         "updatedAt": "更新日",
-        "status": "ステータス"
+        "status": "ステータス",
+        "verifyTxHash": "検証Tx Hash"
       },
       "wallet": {
         "title": "ウォレット情報",
@@ -762,6 +767,36 @@
           "verifyConfirmed": "検証完了",
           "synced": "同期",
           "syncLog": "同期ログ"
+        },
+        "items": {
+          "created": {
+            "summary": "資産を登録"
+          },
+          "updated": {
+            "summary": "資産名を更新"
+          },
+          "deleted": {
+            "summary": "資産を削除"
+          },
+          "reserve": {
+            "summary": "留保設定を更新"
+          },
+          "verifyRequested": {
+            "summary": "所有権検証を開始"
+          },
+          "verifyConfirmed": {
+            "summary": "所有権検証を完了"
+          },
+          "synced": {
+            "summary": "ウォレット情報を同期",
+            "detailBalance": "残高 {{balanceXrp}} XRP"
+          },
+          "syncLog": {
+            "summary": "同期ログ",
+            "success": "同期成功",
+            "failed": "同期失敗",
+            "detailSuccess": "Ledger {{ledgerIndex}} / 残高 {{balanceXrp}} XRP"
+          }
         }
       },
       "delete": {
@@ -791,7 +826,7 @@
       "transfer": "送金実行/入力",
       "verify": "送金完了"
     },
-    "completed": "資産ロックが完了しました。{{seconds}}秒でケース詳細に戻ります。",
+    "completed": "資産ロックが完了しました。",
     "validation": {
       "noPlans": "相続対象の指図がありません",
       "missingHeirs": "相続人が未設定の指図があります",
@@ -816,6 +851,15 @@
       "confirm": "確認しました",
       "confirming": "記録中...",
       "waitingOwner": "被相続人の確認待ちです。"
+    },
+    "walletCheck": {
+      "title": "相続用ウォレット",
+      "addressLabel": "ウォレットアドレス",
+      "status": {
+        "activated": "アクティベート済み",
+        "pending": "未アクティベート",
+        "error": "確認エラー"
+      }
     },
     "planPreview": {
       "title": "指図プレビュー",
@@ -858,6 +902,7 @@
       "starting": "開始中...",
       "executeAuto": "自動送金を実行",
       "executing": "送金中...",
+      "next": "次に進む",
       "complete": "完了する",
       "completing": "完了中...",
       "completed": "完了済み",
@@ -907,6 +952,8 @@
     "transfer": {
       "hint": "方式Bは自動送金（RegularKey確認後）です。",
       "emptyTargets": "送金対象がありません",
+      "usedTxHashTitle": "送金に利用したTx Hash",
+      "usedTxHashEmpty": "表示できるTx Hashがありません",
       "type": {
         "token": "トークン送金",
         "xrp": "XRP送金"
@@ -931,6 +978,7 @@
       "balanceTitle": "ウォレット残高 (XRP)",
       "reload": "再取得",
       "note": "反映に時間がかかる場合があります。必要に応じて再取得してください。",
+      "pendingNote": "検証待ちの送金が{{count}}件あります。再取得で最新状態を確認してください。",
       "loadingBalances": "残高を取得中...",
       "destination": "送金先",
       "source": "送金元",
@@ -1138,6 +1186,37 @@
         "empty": {
           "title": "履歴はまだありません",
           "body": "指図の操作履歴がここに表示されます。"
+        },
+        "items": {
+          "planCreated": {
+            "title": "指図を作成"
+          },
+          "planTitleUpdated": {
+            "title": "指図タイトルを更新"
+          },
+          "planHeirAdded": {
+            "title": "相続人を追加"
+          },
+          "planHeirRemoved": {
+            "title": "相続人を削除"
+          },
+          "planAssetAdded": {
+            "title": "資産を追加"
+          },
+          "planAllocationUpdated": {
+            "title": "配分を更新"
+          },
+          "planNftAllocationsUpdated": {
+            "title": "NFT割当を更新"
+          },
+          "planAssetRemoved": {
+            "title": "資産を削除"
+          },
+          "detail": {
+            "title": "タイトル: {{title}}",
+            "heirWithRelation": "{{relation}} / {{email}}",
+            "heirEmail": "{{email}}"
+          }
         }
       },
       "error": {
@@ -1234,6 +1313,25 @@
       "title": "通知はまだありません",
       "body": "招待や指図の更新があると表示されます。"
     },
+    "items": {
+      "inviteSent": {
+        "title": "相続人招待が届きました",
+        "body": "相続人招待を受け取りました。"
+      },
+      "inviteAccepted": {
+        "title": "招待が受諾されました",
+        "body": "招待が受諾されました。"
+      },
+      "inviteDeclined": {
+        "title": "招待が辞退されました",
+        "body": "招待が辞退されました。"
+      },
+      "caseInviteSent": {
+        "title": "ケース招待が届きました",
+        "body": "{{ownerName}}さんからケース招待が届きました。",
+        "fallbackOwner": "招待者"
+      }
+    },
     "error": {
       "loadFailed": "通知の取得に失敗しました",
       "markReadFailed": "既読更新に失敗しました",
@@ -1323,6 +1421,9 @@
     },
     "upload": {
       "label": "ファイルを追加",
+      "choose": "ファイル選択",
+      "noneSelected": "選択されていません",
+      "selectedCount": "{{count}}件選択中",
       "action": "アップロード",
       "actioning": "アップロード中...",
       "disabled": "差し戻し時のみファイルを追加できます。運営確認中は追加できません。"
@@ -1392,6 +1493,9 @@
     "memo": {
       "label": "Memo",
       "hint": "1 drops (=0.000001 XRP) を送信します。"
+    },
+    "txHash": {
+      "label": "検証に使用したTx Hash"
     },
     "secret": {
       "label": "シークレット",

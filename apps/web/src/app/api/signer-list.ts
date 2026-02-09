@@ -66,5 +66,6 @@ export const submitSignerSignature = async (caseId: string, signedBlob: string) 
     signaturesCount: number;
     requiredCount: number;
     signedByMe: boolean;
+    submittedTxHash?: string | null;
   };
 };

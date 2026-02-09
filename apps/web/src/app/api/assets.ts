@@ -56,6 +56,7 @@ export type AssetDetail = {
   updatedAt: string;
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED";
   verificationChallenge: string | null;
+  verificationTxHash?: string | null;
   verificationAddress: string;
   reserveXrp: string;
   reserveTokens: AssetReserveToken[];

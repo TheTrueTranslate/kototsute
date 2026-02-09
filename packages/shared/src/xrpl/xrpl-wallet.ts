@@ -133,6 +133,29 @@ export const sendSignerListSet = async (input: {
   }
 };
 
+export const clearRegularKey = async (input: { fromSeed: string; fromAddress: string }) => {
+  const client = new Client(getXrplWsUrl());
+  await client.connect();
+  try {
+    const wallet = Wallet.fromSeed(input.fromSeed);
+    const prepared = await client.autofill({
+      TransactionType: "SetRegularKey",
+      Account: input.fromAddress
+    });
+    const signed = wallet.sign(prepared);
+    const result = await client.submit(signed.tx_blob);
+    const engineResult = result?.result?.engine_result;
+    if (engineResult && !["tesSUCCESS", "terQUEUED"].includes(engineResult)) {
+      throw new Error(`XRPL submit failed: ${engineResult}`);
+    }
+    return {
+      txHash: signed.hash ?? result?.result?.tx_json?.hash ?? ""
+    };
+  } finally {
+    await client.disconnect();
+  }
+};
+
 export const setTrustLine = async (input: {
   fromSeed: string;
   fromAddress: string;

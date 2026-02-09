@@ -23,6 +23,59 @@ type NotificationsTableProps = {
   onRead: (notificationId: string) => void;
 };
 
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
+const translateStoredValue = (value: string, t: TranslateFn) => {
+  if (value.startsWith("notifications.")) {
+    return t(value);
+  }
+  return value;
+};
+
+const resolveCaseInviteOwnerName = (notification: NotificationItem) => {
+  const ownerFromRelated = notification.related?.ownerDisplayName;
+  if (typeof ownerFromRelated === "string" && ownerFromRelated.trim()) {
+    return ownerFromRelated.trim();
+  }
+  const matched = notification.body.match(/^(.+?)さんから招待が届きました。?$/);
+  if (!matched) return null;
+  return matched[1]?.trim() || null;
+};
+
+export const localizeNotificationContent = (notification: NotificationItem, t: TranslateFn) => {
+  switch (notification.type) {
+    case "INVITE_SENT":
+      return {
+        title: t("notifications.items.inviteSent.title"),
+        body: t("notifications.items.inviteSent.body")
+      };
+    case "INVITE_ACCEPTED":
+      return {
+        title: t("notifications.items.inviteAccepted.title"),
+        body: t("notifications.items.inviteAccepted.body")
+      };
+    case "INVITE_DECLINED":
+      return {
+        title: t("notifications.items.inviteDeclined.title"),
+        body: t("notifications.items.inviteDeclined.body")
+      };
+    case "CASE_INVITE_SENT": {
+      const ownerName =
+        resolveCaseInviteOwnerName(notification) ??
+        t("notifications.items.caseInviteSent.fallbackOwner");
+      return {
+        title: t("notifications.items.caseInviteSent.title"),
+        body: t("notifications.items.caseInviteSent.body", { ownerName })
+      };
+    }
+    default:
+      return {
+        title: translateStoredValue(notification.title, t),
+        body: translateStoredValue(notification.body, t)
+      };
+  }
+};
+
 export function NotificationsTable({ notifications, onRead }: NotificationsTableProps) {
   const { t, i18n } = useTranslation();
   return (
@@ -32,14 +85,16 @@ export function NotificationsTable({ notifications, onRead }: NotificationsTable
         <div>{t("notifications.table.receivedAt")}</div>
         <div className={styles.tableHeaderAction}>{t("notifications.table.action")}</div>
       </div>
-      {notifications.map((notification) => (
+      {notifications.map((notification) => {
+        const localized = localizeNotificationContent(notification, t);
+        return (
         <div
           key={notification.notificationId}
           className={[styles.tableRow, notification.isRead ? "" : styles.rowUnread].filter(Boolean).join(" ")}
         >
           <div className={styles.cellMain}>
-            <div className={styles.cellTitle}>{notification.title}</div>
-            <div className={styles.cellBody}>{notification.body}</div>
+            <div className={styles.cellTitle}>{localized.title}</div>
+            <div className={styles.cellBody}>{localized.body}</div>
           </div>
           <div className={styles.cellMeta}>
             {formatDate(notification.createdAt, i18n.language)}
@@ -57,7 +112,8 @@ export function NotificationsTable({ notifications, onRead }: NotificationsTable
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

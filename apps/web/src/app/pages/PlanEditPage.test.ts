@@ -76,4 +76,14 @@ describe("PlanEditPage", () => {
     );
     expect(first).toBe(second);
   });
+
+  it("localizes relation label when translation key is stored", async () => {
+    const { localizePlanRelationLabel } = await import("./PlanEditPage");
+    const localized = localizePlanRelationLabel(
+      "relations.eldestSon",
+      null,
+      (key) => (key === "relations.eldestSon" ? "長男" : key)
+    );
+    expect(localized).toBe("長男");
+  });
 });

@@ -34,6 +34,108 @@ const formatAllocationValue = (value: number, unitType: "PERCENT" | "AMOUNT") =>
   if (!Number.isFinite(value)) return "-";
   return unitType === "PERCENT" ? `${value}%` : `${value}`;
 };
+const relationOtherKey = getRelationOptionKey(relationOtherValue);
+
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
+const readMetaString = (meta: Record<string, unknown> | null, key: string) => {
+  const value = meta?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+};
+
+const parseLegacyTitleDetail = (detail: string | null) => {
+  if (!detail) return null;
+  const matched = detail.match(/^タイトル:\s*(.+)$/);
+  return matched?.[1]?.trim() || null;
+};
+
+const parseLegacyHeirDetail = (detail: string | null) => {
+  if (!detail) return { relationLabel: null as string | null, email: null as string | null };
+  const [relationRaw, emailRaw] = detail.split("/").map((value) => value.trim());
+  return {
+    relationLabel: relationRaw || null,
+    email: emailRaw || null
+  };
+};
+
+const localizeRelationLabel = (
+  relationLabel: string | null,
+  relationOther: string | null | undefined,
+  t: TranslateFn
+) => {
+  if (!relationLabel) return null;
+  const relationKey = getRelationOptionKey(relationLabel);
+  if (relationKey === relationOtherKey) {
+    return relationOther?.trim() || t("relations.other");
+  }
+  return relationKey ? t(relationKey) : relationLabel;
+};
+
+export const localizePlanHistoryEntry = (entry: PlanHistoryEntry, t: TranslateFn) => {
+  const meta = entry.meta;
+  const resolveAssetDetail = () => readMetaString(meta, "assetLabel") ?? entry.detail;
+  const resolveTitleDetail = () => {
+    const title = readMetaString(meta, "title") ?? readMetaString(meta, "nextTitle") ?? parseLegacyTitleDetail(entry.detail);
+    return title ? t("plans.detail.history.items.detail.title", { title }) : null;
+  };
+  const resolveHeirDetail = () => {
+    const legacy = parseLegacyHeirDetail(entry.detail);
+    const relationLabel = readMetaString(meta, "relationLabel") ?? legacy.relationLabel;
+    const relationOther = readMetaString(meta, "relationOther");
+    const email = readMetaString(meta, "email") ?? legacy.email;
+    const relation = localizeRelationLabel(relationLabel, relationOther, t);
+    if (relation && email) {
+      return t("plans.detail.history.items.detail.heirWithRelation", { relation, email });
+    }
+    if (email) return t("plans.detail.history.items.detail.heirEmail", { email });
+    return relation;
+  };
+
+  switch (entry.type) {
+    case "PLAN_CREATED":
+      return {
+        title: t("plans.detail.history.items.planCreated.title"),
+        detail: resolveTitleDetail()
+      };
+    case "PLAN_TITLE_UPDATED":
+      return {
+        title: t("plans.detail.history.items.planTitleUpdated.title"),
+        detail: resolveTitleDetail()
+      };
+    case "PLAN_HEIR_ADDED":
+      return {
+        title: t("plans.detail.history.items.planHeirAdded.title"),
+        detail: resolveHeirDetail()
+      };
+    case "PLAN_HEIR_REMOVED":
+      return {
+        title: t("plans.detail.history.items.planHeirRemoved.title"),
+        detail: resolveHeirDetail()
+      };
+    case "PLAN_ASSET_ADDED":
+      return {
+        title: t("plans.detail.history.items.planAssetAdded.title"),
+        detail: resolveAssetDetail()
+      };
+    case "PLAN_ALLOCATION_UPDATED":
+      return {
+        title: t("plans.detail.history.items.planAllocationUpdated.title"),
+        detail: resolveAssetDetail()
+      };
+    case "PLAN_NFT_ALLOCATIONS_UPDATED":
+      return {
+        title: t("plans.detail.history.items.planNftAllocationsUpdated.title"),
+        detail: entry.detail
+      };
+    case "PLAN_ASSET_REMOVED":
+      return {
+        title: t("plans.detail.history.items.planAssetRemoved.title"),
+        detail: resolveAssetDetail()
+      };
+    default:
+      return { title: entry.title, detail: entry.detail };
+  }
+};
 
 type TabKey = "assets" | "heirs" | "history";
 const allTabKeys: TabKey[] = ["assets", "heirs", "history"];
@@ -202,10 +304,10 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
 
   const renderRelationLabel = (relationLabel?: string | null, relationOther?: string | null) => {
     if (!relationLabel) return t("common.unset");
-    if (relationLabel === relationOtherValue) {
+    const relationKey = getRelationOptionKey(relationLabel);
+    if (relationKey === relationOtherKey) {
       return relationOther?.trim() ? relationOther : t("relations.other");
     }
-    const relationKey = getRelationOptionKey(relationLabel);
     return relationKey ? t(relationKey) : relationLabel;
   };
 
@@ -396,24 +498,27 @@ export default function CasePlanDetailPage({ initialCaseData = null }: CasePlanD
             </div>
           ) : (
             <div className={styles.list}>
-              {history.map((entry) => (
-                <div key={entry.historyId} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <div className={styles.historyTitle}>
-                      <span>{entry.title}</span>
-                      {entry.detail ? (
-                        <span className={styles.badgeMuted}>{entry.detail}</span>
-                      ) : null}
-                    </div>
-                    <div className={styles.historyMeta}>
-                      <span className={styles.historyTime}>{formatDateTime(entry.createdAt)}</span>
-                      {entry.actorEmail ? (
-                        <span className={styles.badgeMuted}>{entry.actorEmail}</span>
-                      ) : null}
+              {history.map((entry) => {
+                const localized = localizePlanHistoryEntry(entry, t);
+                return (
+                  <div key={entry.historyId} className={styles.row}>
+                    <div className={styles.rowMain}>
+                      <div className={styles.historyTitle}>
+                        <span>{localized.title}</span>
+                        {localized.detail ? (
+                          <span className={styles.badgeMuted}>{localized.detail}</span>
+                        ) : null}
+                      </div>
+                      <div className={styles.historyMeta}>
+                        <span className={styles.historyTime}>{formatDateTime(entry.createdAt)}</span>
+                        {entry.actorEmail ? (
+                          <span className={styles.badgeMuted}>{entry.actorEmail}</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

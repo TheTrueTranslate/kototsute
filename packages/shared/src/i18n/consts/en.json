@@ -159,22 +159,6 @@
       "success": "Password reset email sent."
     }
   },
-  "home": {
-    "title": "Post-login Home (WIP)",
-    "lead": "The authenticated home is under construction.",
-    "footer": {
-      "login": "Back to sign in",
-      "register": "Sign up"
-    },
-    "placeholder": {
-      "lead": "We plan to add entry points for inviting heirs here.",
-      "items": {
-        "invite": "Issue invite links",
-        "cases": "List of inheritance cases",
-        "timeline": "Status timeline"
-      }
-    }
-  },
   "cases": {
     "title": "Cases",
     "detail": {
@@ -340,7 +324,7 @@
         },
         "prepare": {
           "title": "Prepare consent",
-          "hint": "Create signable payload for heirs' consent.",
+          "hint": "Create signable payload for heirs' consent. If processing is still in progress, wait a few tens of seconds before running it.",
           "action": "Start preparing consent",
           "loading": "Preparing...",
           "success": "Preparation completed. Enter your secret to proceed.",
@@ -370,7 +354,7 @@
         "error": {
           "statusLoadFailed": "Failed to load signing status",
           "loadFailed": "Failed to load signable payload",
-          "accountNotFound": "The distribution wallet is not activated on XRPL. Fund the distribution wallet with XRP, then run consent preparation again.",
+          "accountNotFound": "The distribution wallet is not yet activated on XRPL. If processing is still in progress, wait a few tens of seconds, then run consent preparation again.",
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",
@@ -400,11 +384,12 @@
         },
         "guide": {
           "title": "Signing flow",
+          "summary": "Review the consent details, enter your secret, and submit your signature. Once enough signatures are collected, inheritance execution proceeds.",
           "steps": {
-            "tx": "The signable payload is an XRPL transaction that distributes from the inheritance wallet (created at asset lock) to heirs.",
-            "secret": "Enter your secret to auto-create the signature (not sent to server).",
-            "submit": "Submit the signature to record consent.",
-            "autoExecute": "Once required signatures are collected, submission is automated."
+            "tx": "First, review what you are consenting to for inheritance execution.",
+            "secret": "Next, enter your secret to create your signature.",
+            "submit": "Then, submit your signature to record your consent.",
+            "autoExecute": "When enough signatures are collected, inheritance execution proceeds."
           }
         },
         "secret": {
@@ -438,7 +423,7 @@
           },
           "preparing": {
             "title": "Preparing heir consent",
-            "description": "Start preparing consent."
+            "description": "Start preparing consent. If processing is still in progress, wait a few tens of seconds before running it."
           },
           "awaitingSign": {
             "title": "Heir consent in progress",
@@ -453,11 +438,17 @@
           "title": "Inheritance flow",
           "progress": "STEP {{current}}/{{total}}",
           "stepLabel": "{{current}}/{{total}}: {{step}}",
+          "reviewReset": "Back to current step",
           "steps": {
             "wallet": "Register receiving wallet",
             "deathClaim": "Death certificate",
             "signature": "Sign",
             "receive": "Receive"
+          },
+          "review": {
+            "title": "Review receiving wallet",
+            "body": "You can revisit receiving wallet registration and ownership verification in the Wallet tab.",
+            "action": "Open receiving wallet"
           },
           "walletGate": {
             "title": "Register a receiving wallet first",
@@ -630,7 +621,7 @@
   "assets": {
     "types": {
       "xrp": {
-        "label": "XRP wallet",
+        "label": "XPRL Wallet",
         "desc": "Register a wallet address"
       },
       "bank": {
@@ -649,20 +640,33 @@
     "new": {
       "title": "Add asset",
       "section": {
-        "type": "Asset type"
+        "type": "Primary asset"
       },
-      "type": {
-        "unavailable": "Coming soon",
-        "next": "Next",
-        "change": "Change",
-        "unselected": "Not selected"
+      "wallet": {
+        "title": "XRPL Wallet",
+        "desc": "Register an XRPL wallet address"
+      },
+      "supplement": {
+        "title": "The following can be managed as supplemental assets",
+        "examples": {
+          "stablecoin": "Stablecoin",
+          "realEstate": "Real estate",
+          "stock": "Stocks",
+          "corporateBond": "Corporate bonds",
+          "membership": "Membership rights",
+          "digitalAsset": "Digital assets"
+        }
       },
       "form": {
         "label": "Label",
         "labelPlaceholder": "e.g. My wallet",
-        "address": "XRP address",
+        "address": "XRPL address",
         "addressPlaceholder": "r...",
-        "submit": "Register"
+        "submit": "Add"
+      },
+      "success": {
+        "created": "XRPL wallet added",
+        "back": "Back"
       },
       "error": {
         "caseIdMissing": "Case ID is missing",
@@ -698,7 +702,8 @@
         "labelUpdateError": "Failed to update asset name",
         "createdAt": "Registered",
         "updatedAt": "Updated",
-        "status": "Status"
+        "status": "Status",
+        "verifyTxHash": "Verification Tx Hash"
       },
       "wallet": {
         "title": "Wallet info",
@@ -762,6 +767,36 @@
           "verifyConfirmed": "Verification completed",
           "synced": "Synced",
           "syncLog": "Sync log"
+        },
+        "items": {
+          "created": {
+            "summary": "Asset registered"
+          },
+          "updated": {
+            "summary": "Asset name updated"
+          },
+          "deleted": {
+            "summary": "Asset deleted"
+          },
+          "reserve": {
+            "summary": "Reserve settings updated"
+          },
+          "verifyRequested": {
+            "summary": "Ownership verification started"
+          },
+          "verifyConfirmed": {
+            "summary": "Ownership verification completed"
+          },
+          "synced": {
+            "summary": "Wallet data synced",
+            "detailBalance": "Balance {{balanceXrp}} XRP"
+          },
+          "syncLog": {
+            "summary": "Sync log",
+            "success": "Sync succeeded",
+            "failed": "Sync failed",
+            "detailSuccess": "Ledger {{ledgerIndex}} / Balance {{balanceXrp}} XRP"
+          }
         }
       },
       "delete": {
@@ -791,7 +826,7 @@
       "transfer": "Send / input",
       "verify": "Transfer complete"
     },
-    "completed": "Asset lock completed. Returning to case details in {{seconds}} seconds.",
+    "completed": "Asset lock completed.",
     "validation": {
       "noPlans": "No plans available for inheritance",
       "missingHeirs": "Some plans have no heirs set",
@@ -816,6 +851,15 @@
       "confirm": "Confirmed",
       "confirming": "Recording...",
       "waitingOwner": "Waiting for the owner's confirmation."
+    },
+    "walletCheck": {
+      "title": "Inheritance wallet",
+      "addressLabel": "Wallet address",
+      "status": {
+        "activated": "Activated",
+        "pending": "Not activated",
+        "error": "Activation check error"
+      }
     },
     "planPreview": {
       "title": "Plan preview",
@@ -858,6 +902,7 @@
       "starting": "Starting...",
       "executeAuto": "Execute auto transfer",
       "executing": "Transferring...",
+      "next": "Continue",
       "complete": "Complete",
       "completing": "Completing...",
       "completed": "Completed",
@@ -907,6 +952,8 @@
     "transfer": {
       "hint": "Method B uses automatic transfer (after RegularKey confirmation).",
       "emptyTargets": "No transfer targets.",
+      "usedTxHashTitle": "Tx hashes used for transfer",
+      "usedTxHashEmpty": "No tx hashes available to display.",
       "type": {
         "token": "Token transfer",
         "xrp": "XRP transfer"
@@ -931,6 +978,7 @@
       "balanceTitle": "Wallet balance (XRP)",
       "reload": "Refresh",
       "note": "It may take time to reflect. Refresh if needed.",
+      "pendingNote": "{{count}} transfers are still awaiting verification. Refresh to load the latest status.",
       "loadingBalances": "Loading balances...",
       "destination": "Destination",
       "source": "Source",
@@ -1138,6 +1186,37 @@
         "empty": {
           "title": "No history yet",
           "body": "Plan activity will appear here."
+        },
+        "items": {
+          "planCreated": {
+            "title": "Plan created"
+          },
+          "planTitleUpdated": {
+            "title": "Plan title updated"
+          },
+          "planHeirAdded": {
+            "title": "Heir added"
+          },
+          "planHeirRemoved": {
+            "title": "Heir removed"
+          },
+          "planAssetAdded": {
+            "title": "Asset added"
+          },
+          "planAllocationUpdated": {
+            "title": "Allocation updated"
+          },
+          "planNftAllocationsUpdated": {
+            "title": "NFT allocation updated"
+          },
+          "planAssetRemoved": {
+            "title": "Asset removed"
+          },
+          "detail": {
+            "title": "Title: {{title}}",
+            "heirWithRelation": "{{relation}} / {{email}}",
+            "heirEmail": "{{email}}"
+          }
         }
       },
       "error": {
@@ -1234,6 +1313,25 @@
       "title": "No notifications yet",
       "body": "Invites and plan updates will appear here."
     },
+    "items": {
+      "inviteSent": {
+        "title": "Heir invite received",
+        "body": "You have received an heir invite."
+      },
+      "inviteAccepted": {
+        "title": "Invite accepted",
+        "body": "Your invite was accepted."
+      },
+      "inviteDeclined": {
+        "title": "Invite declined",
+        "body": "Your invite was declined."
+      },
+      "caseInviteSent": {
+        "title": "Case invite received",
+        "body": "You received a case invite from {{ownerName}}.",
+        "fallbackOwner": "an inviter"
+      }
+    },
     "error": {
       "loadFailed": "Failed to load notifications",
       "markReadFailed": "Failed to mark as read",
@@ -1323,6 +1421,9 @@
     },
     "upload": {
       "label": "Add files",
+      "choose": "Choose files",
+      "noneSelected": "No files selected",
+      "selectedCount": "{{count}} selected",
       "action": "Upload",
       "actioning": "Uploading...",
       "disabled": "You can add files only when rejected. File uploads are disabled during admin review."
@@ -1392,6 +1493,9 @@
     "memo": {
       "label": "Memo",
       "hint": "We will send 1 drops (=0.000001 XRP)."
+    },
+    "txHash": {
+      "label": "Tx hash used for verification"
     },
     "secret": {
       "label": "Secret",

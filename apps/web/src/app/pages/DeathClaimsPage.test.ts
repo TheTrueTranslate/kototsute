@@ -264,4 +264,33 @@ describe("DeathClaimsPage", () => {
     const html = await render();
     expect(html).toContain("死亡診断書");
   });
+
+  it("disables submit action when no files are uploaded in empty state", async () => {
+    const html = await render({
+      initialClaim: {
+        claim: null,
+        files: [],
+        confirmationsCount: 0,
+        requiredCount: 0,
+        confirmedByMe: false
+      },
+      initialLoading: false
+    });
+    expect(html).toContain('accept="application/pdf,image/jpeg,image/png"');
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>死亡診断書を提出<\/button>/);
+  });
+
+  it("shows localized unselected file status in empty state", async () => {
+    const html = await render({
+      initialClaim: {
+        claim: null,
+        files: [],
+        confirmationsCount: 0,
+        requiredCount: 0,
+        confirmedByMe: false
+      },
+      initialLoading: false
+    });
+    expect(html).toContain("選択されていません");
+  });
 });

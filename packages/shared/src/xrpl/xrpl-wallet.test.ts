@@ -43,6 +43,7 @@ vi.mock("xrpl", () => ({
 }));
 
 import {
+  clearRegularKey,
   createLocalXrplWallet,
   getWalletAddressFromSeed,
   issueAndSendToken,
@@ -117,6 +118,21 @@ describe("xrpl-wallet", () => {
         Account: "rFrom",
         SignerQuorum: 2,
         SignerEntries: [{ SignerEntry: { Account: "rSigner", SignerWeight: 1 } }]
+      })
+    );
+    expect(result.txHash).toBe("SIGNED_HASH");
+  });
+
+  it("clears regular key", async () => {
+    const result = await clearRegularKey({
+      fromSeed: "seed",
+      fromAddress: "rFrom"
+    });
+
+    expect(mocks.autofill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TransactionType: "SetRegularKey",
+        Account: "rFrom"
       })
     );
     expect(result.txHash).toBe("SIGNED_HASH");

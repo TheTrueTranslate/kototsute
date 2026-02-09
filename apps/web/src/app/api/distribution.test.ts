@@ -22,4 +22,14 @@ describe("distribution api", () => {
       method: "GET"
     });
   });
+
+  it("calls receive tx record endpoint", async () => {
+    const { recordDistributionReceiveTx } = await import("./distribution");
+    const { apiFetch } = await import("../../features/shared/lib/api");
+    await recordDistributionReceiveTx("case-1", "item-1", "tx-1");
+    expect(apiFetch).toHaveBeenCalledWith("/v1/cases/case-1/distribution/items/item-1/receive", {
+      method: "POST",
+      body: JSON.stringify({ txHash: "tx-1" })
+    });
+  });
 });

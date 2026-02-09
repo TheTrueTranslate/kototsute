@@ -69,10 +69,15 @@ export const relationOptionKeys: Record<RelationOption, string> = {
 };
 
 export const relationOtherValue: RelationOption = relationOptions[relationOptions.length - 1];
+const relationOptionKeySet = new Set(Object.values(relationOptionKeys));
+const relationOtherKey = relationOptionKeys[relationOtherValue];
 
 export const getRelationOptionKey = (value?: string | null) => {
-  if (!value) return null;
-  return (relationOptionKeys as Record<string, string>)[value] ?? null;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (relationOptionKeySet.has(normalized)) return normalized;
+  return (relationOptionKeys as Record<string, string>)[normalized] ?? null;
 };
 
 const relationLabelSchema = z
@@ -90,7 +95,7 @@ const validateRelationOther = (
   values: { relationLabel: string; relationOther?: string },
   ctx: z.RefinementCtx
 ) => {
-  if (values.relationLabel === relationOtherValue && !values.relationOther?.trim()) {
+  if (getRelationOptionKey(values.relationLabel) === relationOtherKey && !values.relationOther?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["relationOther"],

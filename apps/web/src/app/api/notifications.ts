@@ -6,7 +6,14 @@ export type NotificationItem = {
   type: string;
   title: string;
   body: string;
-  related: { kind: string; id: string } | null;
+  related:
+    | {
+        kind: string;
+        id: string;
+        caseId?: string;
+        ownerDisplayName?: string;
+      }
+    | null;
   isRead: boolean;
   createdAt: string;
 };

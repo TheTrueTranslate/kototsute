@@ -31,7 +31,8 @@ import {
   type AssetReserveToken
 } from "../api/assets";
 import { getCase, type CaseSummary } from "../api/cases";
-import { WalletVerifyPanel } from "../../features/shared/components/wallet-verify-panel";
+import { WalletOwnershipVerifyDialog } from "../../features/shared/components/wallet-ownership-verify-dialog";
+import XrplExplorerLink from "../../features/shared/components/xrpl-explorer-link";
 import { autoVerifyWalletOwnership } from "../../features/shared/lib/wallet-verify";
 import {
   createPaymentTx,
@@ -70,6 +71,113 @@ export const shouldHighlightVerifyOwnership = (
   isLocked: boolean
 ) => verificationStatus !== "VERIFIED" && !isLocked;
 
+export const shouldCloseVerifyDialogOnSuccess = (
+  verificationStatus: AssetDetail["verificationStatus"] | null | undefined
+) => verificationStatus === "VERIFIED";
+
+type TranslateFn = (key: string, values?: Record<string, unknown>) => string;
+
+const readHistoryMetaString = (meta: Record<string, unknown> | null, key: string) => {
+  const value = meta?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+};
+
+const parseLegacySyncBalance = (detail: string | null) => {
+  if (!detail) return null;
+  const matched = detail.match(/^残高\s+(.+)\s+XRP$/);
+  return matched?.[1]?.trim() || null;
+};
+
+const parseLegacySyncLogDetail = (detail: string | null) => {
+  if (!detail) return null;
+  const matched = detail.match(/^Ledger\s+(.+)\s+\/\s+残高\s+(.+)\s+XRP$/);
+  if (!matched) return null;
+  return {
+    ledgerIndex: matched[1]?.trim() || "-",
+    balanceXrp: matched[2]?.trim() || "-"
+  };
+};
+
+const translateStoredHistoryValue = (value: string, t: TranslateFn) => {
+  if (value.startsWith("assets.")) return t(value);
+  return value;
+};
+
+export const localizeAssetHistoryItem = (item: AssetHistoryItem, t: TranslateFn) => {
+  switch (item.type) {
+    case "ASSET_CREATED":
+      return {
+        summary: t("assets.detail.history.items.created.summary"),
+        detail: item.detail
+      };
+    case "ASSET_UPDATED":
+      return {
+        summary: t("assets.detail.history.items.updated.summary"),
+        detail: item.detail
+      };
+    case "ASSET_DELETED":
+      return {
+        summary: t("assets.detail.history.items.deleted.summary"),
+        detail: item.detail
+      };
+    case "ASSET_RESERVE_UPDATED":
+      return {
+        summary: t("assets.detail.history.items.reserve.summary"),
+        detail: item.detail
+      };
+    case "ASSET_VERIFY_REQUESTED":
+      return {
+        summary: t("assets.detail.history.items.verifyRequested.summary"),
+        detail: item.detail
+      };
+    case "ASSET_VERIFY_CONFIRMED":
+      return {
+        summary: t("assets.detail.history.items.verifyConfirmed.summary"),
+        detail: item.detail
+      };
+    case "ASSET_SYNCED": {
+      const balanceXrp = readHistoryMetaString(item.meta, "balanceXrp") ?? parseLegacySyncBalance(item.detail);
+      return {
+        summary: t("assets.detail.history.items.synced.summary"),
+        detail: balanceXrp
+          ? t("assets.detail.history.items.synced.detailBalance", { balanceXrp })
+          : item.detail
+      };
+    }
+    case "SYNC_LOG": {
+      const status = readHistoryMetaString(item.meta, "status");
+      const legacy = parseLegacySyncLogDetail(item.detail);
+      const ledgerIndex =
+        readHistoryMetaString(item.meta, "ledgerIndex") ?? legacy?.ledgerIndex ?? "-";
+      const balanceXrp = readHistoryMetaString(item.meta, "balanceXrp") ?? legacy?.balanceXrp ?? "-";
+      if (status === "ok") {
+        return {
+          summary: t("assets.detail.history.items.syncLog.success"),
+          detail: t("assets.detail.history.items.syncLog.detailSuccess", {
+            ledgerIndex,
+            balanceXrp
+          })
+        };
+      }
+      if (status === "error") {
+        return {
+          summary: t("assets.detail.history.items.syncLog.failed"),
+          detail: item.detail
+        };
+      }
+      return {
+        summary: t("assets.detail.history.items.syncLog.summary"),
+        detail: item.detail
+      };
+    }
+    default:
+      return {
+        summary: translateStoredHistoryValue(item.title, t),
+        detail: item.detail
+      };
+  }
+};
+
 export default function AssetDetailPage({
   initialAsset,
   initialHistoryItems,
@@ -89,6 +197,7 @@ export default function AssetDetailPage({
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
   const [verifySecret, setVerifySecret] = useState("");
   const [verifySending, setVerifySending] = useState(false);
+  const [verifyTxHash, setVerifyTxHash] = useState<string | null>(null);
   const [verifyChallengeLoading, setVerifyChallengeLoading] = useState(false);
   const [challenge, setChallenge] = useState<
     | {
@@ -161,6 +270,18 @@ export default function AssetDetailPage({
     (verifyChallengeLoading
       ? t("assets.detail.verify.memoIssuing")
       : t("assets.detail.verify.memoEmpty"));
+  const verifyTxHashDisplay = (asset?.verificationTxHash ?? verifyTxHash ?? "").trim();
+  const verifyAlerts = [
+    verifyError ? { variant: "error" as const, message: t(verifyError) } : null,
+    verifySuccess ? { variant: "success" as const, message: t(verifySuccess) } : null
+  ].filter(
+    (
+      item
+    ): item is {
+      variant: "error" | "success";
+      message: string;
+    } => item !== null
+  );
 
   useEffect(() => {
     if (!caseId || initialCaseData) return;
@@ -223,11 +344,12 @@ export default function AssetDetailPage({
   }, [asset?.assetId]);
 
   const loadAsset = async (options?: { includeXrpl?: boolean }) => {
-    if (!caseId || !assetId) return;
+    if (!caseId || !assetId) return null;
     const detail = await getAsset(caseId, assetId, {
       includeXrpl: Boolean(options?.includeXrpl)
     });
     setAsset(detail);
+    return detail;
   };
 
   const loadHistory = async () => {
@@ -302,6 +424,7 @@ export default function AssetDetailPage({
     if (!caseId || !assetId) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifyTxHash(null);
     setVerifyChallengeLoading(true);
     try {
       const result = await requestVerifyChallenge(caseId, assetId);
@@ -443,6 +566,7 @@ export default function AssetDetailPage({
     if (!caseId || !assetId || !asset) return;
     setVerifyError(null);
     setVerifySuccess(null);
+    setVerifyTxHash(null);
     setVerifySending(true);
     try {
       const result = await autoVerifyWalletOwnership(
@@ -461,10 +585,18 @@ export default function AssetDetailPage({
       );
       setChallenge(result.challenge);
       setVerifySecret("");
+      setVerifyTxHash(result.txHash);
       setVerifySuccess("assets.detail.verify.success");
-      await loadAsset();
+      const latestAsset = await loadAsset();
       if (tab === "history") {
         await loadHistory();
+      }
+      if (
+        shouldCloseVerifyDialogOnSuccess(
+          latestAsset?.verificationStatus ?? asset?.verificationStatus
+        )
+      ) {
+        setVerifyOpen(false);
       }
     } catch (err: any) {
       setVerifyError(err?.message ?? "assets.detail.verify.error");
@@ -552,14 +684,6 @@ export default function AssetDetailPage({
                 </div>
                 <div className={styles.metaGrid}>
                   <div>
-                    <div className={styles.metaLabel}>{t("assets.detail.overview.createdAt")}</div>
-                    <div className={styles.metaValue}>{formatDate(asset.createdAt)}</div>
-                  </div>
-                  <div>
-                    <div className={styles.metaLabel}>{t("assets.detail.overview.updatedAt")}</div>
-                    <div className={styles.metaValue}>{formatDate(asset.updatedAt)}</div>
-                  </div>
-                  <div>
                     <div className={styles.metaLabel}>{t("assets.detail.overview.status")}</div>
                     <div className={styles.metaValue}>
                       <div className={styles.statusRow}>
@@ -581,6 +705,18 @@ export default function AssetDetailPage({
                       </div>
                     </div>
                   </div>
+                  {verifyTxHashDisplay ? (
+                    <div>
+                      <div className={styles.metaLabel}>{t("assets.detail.overview.verifyTxHash")}</div>
+                      <XrplExplorerLink
+                        value={verifyTxHashDisplay}
+                        resource="transaction"
+                        className={styles.metaValue}
+                      >
+                        {verifyTxHashDisplay}
+                      </XrplExplorerLink>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -869,38 +1005,26 @@ export default function AssetDetailPage({
                 </div>
               </div>
 
-              <Dialog open={verifyOpen} onOpenChange={setVerifyOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t("assets.detail.verify.title")}</DialogTitle>
-                    <DialogDescription>
-                      {t("assets.detail.verify.description")}
-                    </DialogDescription>
-                  </DialogHeader>
-                  {verifyError ? (
-                    <FormAlert variant="error">{t(verifyError)}</FormAlert>
-                  ) : null}
-                  {verifySuccess ? (
-                    <FormAlert variant="success">{t(verifySuccess)}</FormAlert>
-                  ) : null}
-
-                  <WalletVerifyPanel
-                    destination={asset.verificationAddress}
-                    memo={memoDisplay}
-                    secret={verifySecret}
-                    onSecretChange={setVerifySecret}
-                    onSubmit={handleAutoVerify}
-                    isSubmitting={verifySending}
-                    submitDisabled={isLocked || verifySending || verifyChallengeLoading}
-                    secretDisabled={isLocked || verifySending}
-                  />
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="ghost">{t("common.close")}</Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <WalletOwnershipVerifyDialog
+                open={verifyOpen}
+                onOpenChange={setVerifyOpen}
+                title={t("assets.detail.verify.title")}
+                description={t("assets.detail.verify.description")}
+                closeLabel={t("common.close")}
+                alerts={verifyAlerts}
+                showVerifyPanel={true}
+                verifyPanel={{
+                  destination: asset.verificationAddress,
+                  memo: memoDisplay,
+                  secret: verifySecret,
+                  onSecretChange: setVerifySecret,
+                  onSubmit: handleAutoVerify,
+                  isSubmitting: verifySending,
+                  submitDisabled: isLocked || verifySending || verifyChallengeLoading,
+                  secretDisabled: isLocked || verifySending,
+                  verifiedTxHash: verifyTxHashDisplay
+                }}
+              />
             </div>
           ) : null}
 
@@ -922,6 +1046,7 @@ export default function AssetDetailPage({
                   <div className={styles.logList}>
                     {historyItems.map((item) => {
                       const label = historyTypeLabels[item.type] ?? item.type;
+                      const localizedHistory = localizeAssetHistoryItem(item, t);
                       const status =
                         item.meta && typeof item.meta.status === "string"
                           ? item.meta.status
@@ -946,10 +1071,10 @@ export default function AssetDetailPage({
                               >
                                 {label}
                               </span>
-                              <div className={styles.logSummary}>{item.title}</div>
+                              <div className={styles.logSummary}>{localizedHistory.summary}</div>
                             </div>
                             <div className={styles.logMessage}>
-                              {item.detail ?? t("assets.detail.history.emptyDetail")}
+                              {localizedHistory.detail ?? t("assets.detail.history.emptyDetail")}
                             </div>
                             {actorLabel ? (
                               <div className={styles.logActor}>
