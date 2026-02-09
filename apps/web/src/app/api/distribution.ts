@@ -40,10 +40,31 @@ export type DistributionItem = {
   heirUid?: string | null;
   heirAddress?: string | null;
   status?: string | null;
+  txHash?: string | null;
+  receiveStatus?: string | null;
+  receiveTxHash?: string | null;
+  receiveError?: string | null;
   error?: string | null;
 };
 
 export const listDistributionItems = async (caseId: string) => {
   const result = await apiFetch(`/v1/cases/${caseId}/distribution/items`, { method: "GET" });
   return result.data as DistributionItem[];
+};
+
+export const recordDistributionReceiveTx = async (
+  caseId: string,
+  itemId: string,
+  txHash: string
+) => {
+  const result = await apiFetch(`/v1/cases/${caseId}/distribution/items/${itemId}/receive`, {
+    method: "POST",
+    body: JSON.stringify({ txHash })
+  });
+  return result.data as {
+    itemId: string;
+    receiveTxHash: string;
+    receiveStatus: string;
+    receivedAt?: string | null;
+  };
 };

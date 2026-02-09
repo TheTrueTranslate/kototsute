@@ -1388,7 +1388,8 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
 
-    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    const approvalRef = caseRef.collection("signerList").doc("approvalTx");
+    const approvalSnap = await approvalRef.get();
     if (!approvalSnap.exists) {
       return jsonError(c, 404, "NOT_FOUND", "ApprovalTx not found");
     }
@@ -1406,7 +1407,23 @@ export const casesRoutes = () => {
     if (approval.status === "SUBMITTED" && submittedTxHash) {
       const result = await fetchXrplTx(submittedTxHash);
       if (!result.ok) {
-        networkStatus = "NOT_FOUND";
+        const lastLedgerRaw = (approval.txJson as any)?.LastLedgerSequence;
+        const lastLedger =
+          typeof lastLedgerRaw === "number"
+            ? lastLedgerRaw
+            : typeof lastLedgerRaw === "string"
+              ? Number(lastLedgerRaw)
+              : NaN;
+        if (Number.isFinite(lastLedger)) {
+          const ledgerResult = await fetchXrplValidatedLedgerIndex();
+          if (ledgerResult.ok && ledgerResult.ledgerIndex >= lastLedger) {
+            networkStatus = "EXPIRED";
+          } else {
+            networkStatus = "NOT_FOUND";
+          }
+        } else {
+          networkStatus = "NOT_FOUND";
+        }
       } else {
         const tx = result.tx as any;
         const validated = Boolean(tx?.validated);
@@ -1554,6 +1571,65 @@ export const casesRoutes = () => {
     return jsonOk(c, items);
   });
 
+  app.post(":caseId/distribution/items/:itemId/receive", async (c) => {
+    const auth = c.get("auth");
+    const caseId = c.req.param("caseId");
+    const itemId = c.req.param("itemId");
+    const body = await c.req.json().catch(() => ({}));
+    const txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
+    if (!itemId) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "itemIdは必須です");
+    }
+    if (!txHash) {
+      return jsonError(c, 400, "VALIDATION_ERROR", "txHashは必須です");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Case not found");
+    }
+
+    const caseData = caseSnap.data() ?? {};
+    const memberUids = Array.isArray(caseData.memberUids) ? caseData.memberUids : [];
+    if (caseData.ownerUid === auth.uid || !memberUids.includes(auth.uid)) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const itemRef = caseRef.collection("distribution").doc("state").collection("items").doc(itemId);
+    const itemSnap = await itemRef.get();
+    if (!itemSnap.exists) {
+      return jsonError(c, 404, "NOT_FOUND", "Item not found");
+    }
+    const item = itemSnap.data() ?? {};
+    if (String(item.type ?? "") !== "NFT") {
+      return jsonError(c, 400, "VALIDATION_ERROR", "NFT受取対象ではありません");
+    }
+    if (typeof item.heirUid === "string" && item.heirUid && item.heirUid !== auth.uid) {
+      return jsonError(c, 403, "FORBIDDEN", "権限がありません");
+    }
+
+    const now = c.get("deps").now();
+    await itemRef.set(
+      {
+        receiveTxHash: txHash,
+        receiveStatus: "SUBMITTED",
+        receiveError: null,
+        receivedAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
+    return jsonOk(c, {
+      itemId,
+      receiveTxHash: txHash,
+      receiveStatus: "SUBMITTED",
+      receivedAt: now
+    });
+  });
+
   app.post(":caseId/distribution/execute", async (c) => {
     const auth = c.get("auth");
     const caseId = c.req.param("caseId");
@@ -1572,7 +1648,8 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "NOT_READY", "相続中のみ実行できます");
     }
 
-    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    const approvalRef = caseRef.collection("signerList").doc("approvalTx");
+    const approvalSnap = await approvalRef.get();
     const approval = approvalSnap.data() ?? {};
     const submittedTxHash =
       typeof approval.submittedTxHash === "string" ? approval.submittedTxHash : null;
@@ -1581,6 +1658,24 @@ export const casesRoutes = () => {
     }
     const approvalTxResult = await fetchXrplTx(submittedTxHash);
     if (!approvalTxResult.ok) {
+      const lastLedgerRaw = (approval.txJson as any)?.LastLedgerSequence;
+      const lastLedger =
+        typeof lastLedgerRaw === "number"
+          ? lastLedgerRaw
+          : typeof lastLedgerRaw === "string"
+            ? Number(lastLedgerRaw)
+            : NaN;
+      if (Number.isFinite(lastLedger)) {
+        const ledgerResult = await fetchXrplValidatedLedgerIndex();
+        if (ledgerResult.ok && ledgerResult.ledgerIndex >= lastLedger) {
+          return jsonError(
+            c,
+            400,
+            "NOT_READY",
+            "相続実行の同意トランザクションの期限が切れています"
+          );
+        }
+      }
       return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションを確認できません");
     }
     const approvalTx = approvalTxResult.tx as any;
@@ -2277,7 +2372,8 @@ export const casesRoutes = () => {
       return jsonError(c, 400, "WALLET_NOT_VERIFIED", "ウォレットが未確認です");
     }
 
-    const approvalSnap = await caseRef.collection("signerList").doc("approvalTx").get();
+    const approvalRef = caseRef.collection("signerList").doc("approvalTx");
+    const approvalSnap = await approvalRef.get();
     if (!approvalSnap.exists) {
       return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "署名対象が未生成です");
     }
@@ -2308,6 +2404,10 @@ export const casesRoutes = () => {
     const signaturesCount = signaturesSnap.docs.length;
     const heirCount = Math.max(0, memberUids.length - 1);
     const requiredCount = Math.max(1, Math.floor(heirCount / 2) + 1);
+    let submittedTxHash =
+      typeof approvalData?.submittedTxHash === "string"
+        ? approvalData.submittedTxHash
+        : null;
 
     if (
       signaturesCount >= requiredCount &&
@@ -2320,17 +2420,19 @@ export const casesRoutes = () => {
       ];
       const combined = combineMultisignedBlobs(blobs);
       const submitResult = await submitMultisignedTx(combined.txJson);
-      await approvalSnap.ref.set(
+      submittedTxHash =
+        typeof submitResult.txHash === "string" ? submitResult.txHash : null;
+      await approvalRef.set(
         {
           status: "SUBMITTED",
-          submittedTxHash: submitResult.txHash ?? null,
+          submittedTxHash,
           updatedAt: now
         },
         { merge: true }
       );
     }
 
-    return jsonOk(c, { signaturesCount, requiredCount, signedByMe: true });
+    return jsonOk(c, { signaturesCount, requiredCount, signedByMe: true, submittedTxHash });
   });
 
   app.post(":caseId/assets", async (c) => {

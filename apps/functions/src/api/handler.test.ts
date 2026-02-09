@@ -5768,6 +5768,52 @@ describe("createApiHandler", () => {
     expect(res.body?.data?.[0]?.tokenId).toBe("nft-1");
   });
 
+  it("records receive tx hash for distribution nft item", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_distribution_receive_tx";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/distribution/state/items`).doc("item-1").set({
+      type: "NFT",
+      tokenId: "nft-1",
+      offerId: "offer-1",
+      heirUid: "heir_1",
+      heirAddress: "rHeir",
+      status: "VERIFIED"
+    });
+
+    const req = authedReq("heir_1", "heir@example.com", {
+      method: "POST",
+      path: `/v1/cases/${caseId}/distribution/items/item-1/receive`,
+      body: { txHash: "tx-receive-1" }
+    });
+    const res = createRes();
+    await handler(req as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.receiveTxHash).toBe("tx-receive-1");
+    expect(res.body?.data?.receiveStatus).toBe("SUBMITTED");
+
+    const itemSnap = await db
+      .collection(`cases/${caseId}/distribution/state/items`)
+      .doc("item-1")
+      .get();
+    expect(itemSnap.data()?.receiveTxHash).toBe("tx-receive-1");
+    expect(itemSnap.data()?.receiveStatus).toBe("SUBMITTED");
+  });
+
   it("rejects distribution execute when approval tx is not validated", async () => {
     process.env.ASSET_LOCK_ENCRYPTION_KEY = Buffer.from("a".repeat(32)).toString("base64");
     const fetchOriginal = (globalThis as any).fetch;
@@ -6855,6 +6901,62 @@ describe("createApiHandler", () => {
     (globalThis as any).fetch = fetchOriginal;
   });
 
+  it("returns approval tx expired status when submitted tx is dropped after last ledger", async () => {
+    const fetchOriginal = (globalThis as any).fetch;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { error: "txnNotFound", error_message: "Transaction not found." }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          result: { state: { validated_ledger: { seq: 20 } } }
+        })
+      });
+    (globalThis as any).fetch = fetchMock;
+
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_submitted_dropped";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS"
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock", LastLedgerSequence: 10 },
+      status: "SUBMITTED",
+      submittedTxHash: "tx_hash_3"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "GET",
+        path: `/v1/cases/${caseId}/signer-list/approval-tx`
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.networkStatus).toBe("EXPIRED");
+
+    (globalThis as any).fetch = fetchOriginal;
+  });
+
   it("accepts signed blob and records signature", async () => {
     const handler = createApiHandler({
       repo: new InMemoryAssetRepository(),
@@ -6909,5 +7011,61 @@ describe("createApiHandler", () => {
       .doc("heir_1")
       .get();
     expect(sigSnap.data()?.signedBlob).toBe("blob-heir");
+  });
+
+  it("returns submitted tx hash when signer quorum is reached", async () => {
+    const handler = createApiHandler({
+      repo: new InMemoryAssetRepository(),
+      caseRepo: new InMemoryCaseRepository(),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+      getAuthUser,
+      getOwnerUidForRead: async (uid) => uid
+    });
+
+    const caseId = "case_signer_submit_hash";
+    const db = getFirestore();
+    await db.collection("cases").doc(caseId).set({
+      caseId,
+      ownerUid: "owner_1",
+      memberUids: ["owner_1", "heir_1"],
+      stage: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("state").set({
+      status: "SET",
+      quorum: 1,
+      entries: [{ account: "rSystem", weight: 1 }],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").set({
+      memo: "memo_abc",
+      txJson: { TransactionType: "Payment", Account: "rLock" },
+      systemSignedBlob: "blob-system",
+      status: "PREPARED"
+    });
+    await db.collection(`cases/${caseId}/heirWallets`).doc("heir_1").set({
+      address: "rHeir",
+      verificationStatus: "VERIFIED"
+    });
+
+    const res = createRes();
+    await handler(
+      authedReq("heir_1", "heir@example.com", {
+        method: "POST",
+        path: `/v1/cases/${caseId}/signer-list/sign`,
+        body: { signedBlob: "blob-heir" }
+      }) as any,
+      res as any
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.data?.signaturesCount).toBe(1);
+    expect(res.body?.data?.submittedTxHash).toBe("tx-final");
+
+    const approvalSnap = await db.collection(`cases/${caseId}/signerList`).doc("approvalTx").get();
+    expect(approvalSnap.data()?.status).toBe("SUBMITTED");
+    expect(approvalSnap.data()?.submittedTxHash).toBe("tx-final");
   });
 });
