@@ -384,11 +384,12 @@
         },
         "guide": {
           "title": "Signing flow",
+          "summary": "Review the consent details, enter your secret, and submit your signature. Once enough signatures are collected, inheritance execution proceeds.",
           "steps": {
-            "tx": "The signable payload is an XRPL transaction that distributes from the inheritance wallet (created at asset lock) to heirs.",
-            "secret": "Enter your secret to auto-create the signature (not sent to server).",
-            "submit": "Submit the signature to record consent.",
-            "autoExecute": "Once required signatures are collected, submission is automated."
+            "tx": "First, review what you are consenting to for inheritance execution.",
+            "secret": "Next, enter your secret to create your signature.",
+            "submit": "Then, submit your signature to record your consent.",
+            "autoExecute": "When enough signatures are collected, inheritance execution proceeds."
           }
         },
         "secret": {
@@ -901,6 +902,7 @@
       "starting": "Starting...",
       "executeAuto": "Execute auto transfer",
       "executing": "Transferring...",
+      "next": "Continue",
       "complete": "Complete",
       "completing": "Completing...",
       "completed": "Completed",
@@ -950,6 +952,8 @@
     "transfer": {
       "hint": "Method B uses automatic transfer (after RegularKey confirmation).",
       "emptyTargets": "No transfer targets.",
+      "usedTxHashTitle": "Tx hashes used for transfer",
+      "usedTxHashEmpty": "No tx hashes available to display.",
       "type": {
         "token": "Token transfer",
         "xrp": "XRP transfer"
@@ -974,6 +978,7 @@
       "balanceTitle": "Wallet balance (XRP)",
       "reload": "Refresh",
       "note": "It may take time to reflect. Refresh if needed.",
+      "pendingNote": "{{count}} transfers are still awaiting verification. Refresh to load the latest status.",
       "loadingBalances": "Loading balances...",
       "destination": "Destination",
       "source": "Source",
