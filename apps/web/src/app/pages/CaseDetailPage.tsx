@@ -34,6 +34,7 @@ import {
   executeDistribution,
   getDistributionState,
   listDistributionItems,
+  recordDistributionReceiveTx,
   type DistributionItem,
   type DistributionState
 } from "../api/distribution";
@@ -164,6 +165,21 @@ export const shouldFetchApprovalTx = (input: {
   return true;
 };
 
+export const shouldFetchDistributionData = (input: {
+  isHeir: boolean;
+  tab: string | null;
+  caseId?: string | null;
+  canAccessDeathClaims: boolean;
+  caseStage?: string | null;
+}) => {
+  if (!input.isHeir) return false;
+  if (input.tab !== "death-claims") return false;
+  if (!input.caseId) return false;
+  if (!input.canAccessDeathClaims) return false;
+  if (input.caseStage !== "IN_PROGRESS" && input.caseStage !== "COMPLETED") return false;
+  return true;
+};
+
 export const shouldPollApprovalStatus = (input: {
   isHeir: boolean;
   tab: string | null;
@@ -175,8 +191,10 @@ export const shouldPollApprovalStatus = (input: {
 }) =>
   shouldFetchApprovalTx(input) && input.approvalStatus === "SUBMITTED";
 
-export const shouldShowSignerActions = (approvalStatus?: string | null) =>
-  approvalStatus !== "SUBMITTED";
+export const shouldShowSignerActions = (
+  approvalStatus?: string | null,
+  approvalNetworkStatus?: string | null
+) => approvalStatus !== "SUBMITTED" || approvalNetworkStatus === "EXPIRED";
 
 export const shouldShowSignerDetails = (approvalStatus?: string | null) =>
   approvalStatus !== "SUBMITTED";
@@ -284,6 +302,7 @@ export const resolvePrepareDisabledReason = (input: {
   totalHeirCount: number;
   unverifiedHeirCount: number;
   approvalTx: ApprovalTxSummary | null;
+  approvalNetworkStatus?: string | null;
 }): LocalizedMessage | null => {
   if (!input.caseData) return { key: "cases.detail.prepare.disabled.noCase" };
   if (input.caseData.stage !== "IN_PROGRESS") {
@@ -293,7 +312,9 @@ export const resolvePrepareDisabledReason = (input: {
     input.approvalTx?.status === "PREPARED" ||
     input.approvalTx?.status === "SUBMITTED" ||
     Boolean(input.approvalTx?.txJson);
-  if (input.signerStatusKey === "SET" && approvalPrepared) {
+  const isApprovalExpired =
+    input.approvalTx?.status === "SUBMITTED" && input.approvalNetworkStatus === "EXPIRED";
+  if (input.signerStatusKey === "SET" && approvalPrepared && !isApprovalExpired) {
     return { key: "cases.detail.prepare.disabled.completed" };
   }
   if (input.totalHeirCount === 0) {
@@ -500,7 +521,7 @@ export default function CaseDetailPage({
   const [nftReceiveExecuting, setNftReceiveExecuting] = useState(false);
   const [nftReceiveError, setNftReceiveError] = useState<string | null>(null);
   const [nftReceiveResults, setNftReceiveResults] = useState<
-    Record<string, { status: NftReceiveStatus; error?: string | null }>
+    Record<string, { status: NftReceiveStatus; error?: string | null; txHash?: string | null }>
   >({});
   const [prepareLoading, setPrepareLoading] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -532,14 +553,6 @@ export default function CaseDetailPage({
       NOT_READY: t("cases.detail.signer.status.notReady"),
       SET: t("cases.detail.signer.status.set"),
       FAILED: t("cases.detail.signer.status.failed")
-    }),
-    [t]
-  );
-  const approvalStatusLabels = useMemo(
-    () => ({
-      PREPARED: t("cases.detail.signer.approvalStatus.prepared"),
-      SUBMITTED: t("cases.detail.signer.approvalStatus.submitted"),
-      FAILED: t("cases.detail.signer.approvalStatus.failed")
     }),
     [t]
   );
@@ -662,39 +675,34 @@ export default function CaseDetailPage({
       : relationOtherValue;
   };
   const signerStatusKey = signerList?.status ?? "NOT_READY";
-  const signerStatusLabel = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
-  const approvalStatusLabel = approvalTx?.status
-    ? approvalStatusLabels[approvalTx.status as keyof typeof approvalStatusLabels] ??
-      approvalTx.status
-    : t("cases.detail.signer.approvalStatus.unset");
-  const approvalSubmittedTxHash = approvalTx?.submittedTxHash ?? "";
+  const signerStatusLabelDefault = signerStatusLabels[signerStatusKey] ?? signerStatusKey;
   const approvalNetworkStatus = approvalTx?.networkStatus ?? null;
   const approvalNetworkStatusLabel = approvalNetworkStatus
     ? approvalNetworkStatusLabels[approvalNetworkStatus] ?? approvalNetworkStatus
     : approvalTx?.status === "SUBMITTED"
       ? t("cases.detail.signer.networkStatus.pending")
       : "-";
-  const approvalNetworkDetail = approvalTx?.networkResult
-    ? `${approvalNetworkStatusLabel} (${approvalTx.networkResult})`
-    : approvalNetworkStatusLabel;
   const approvalCompleted = isApprovalCompleted({
     approvalStatus: approvalTx?.status ?? null,
     networkStatus: approvalNetworkStatus,
     networkResult: approvalTx?.networkResult ?? null
   });
-  const canReprepareApproval = approvalNetworkStatus === "EXPIRED";
+  const approvalSubmittedTxHash = (approvalTx?.submittedTxHash ?? "").trim();
+  const isApprovalExpired =
+    approvalTx?.status === "SUBMITTED" && approvalNetworkStatus === "EXPIRED";
   const approvalTxJson = approvalTx?.txJson ?? null;
+  const signerActionTxJson = isApprovalExpired ? null : approvalTxJson;
   const approvalTxJsonText = approvalTxJson ? JSON.stringify(approvalTxJson, null, 2) : "";
-  const showSignerDetails = shouldShowSignerDetails(approvalTx?.status ?? null);
-  const approvalSubmitted = Boolean(
-    approvalTx?.status === "SUBMITTED" || approvalSubmittedTxHash
-  );
   const signerCompleted = Boolean(
     signerList &&
       Number.isFinite(signerList.signaturesCount) &&
       Number.isFinite(signerList.requiredCount) &&
       signerList.signaturesCount >= signerList.requiredCount
   );
+  const signerStatusLabel = signerCompleted
+    ? t("cases.detail.inheritance.steps.signerCompleted.title")
+    : signerStatusLabelDefault;
+  const approvalReadyForDistribution = !isApprovalExpired && (signerCompleted || approvalCompleted);
   const nextAction = resolveInheritanceNextAction({
     claimStatus: deathClaim?.claim?.status ?? null,
     caseStage: caseData?.stage ?? null,
@@ -714,7 +722,7 @@ export default function CaseDetailPage({
   const hasDeathClaim = Boolean(deathClaim?.claim?.claimId);
   const deathClaimStepCompleted =
     hasDeathClaim && (caseData?.stage === "IN_PROGRESS" || caseData?.stage === "COMPLETED");
-  const signatureStepCompleted = Boolean(approvalCompleted);
+  const signatureStepCompleted = Boolean(signerCompleted || approvalCompleted);
   const receiveStepCompleted = distribution?.status === "COMPLETED";
   const heirFlowSteps = useMemo(
     () => [
@@ -761,9 +769,17 @@ export default function CaseDetailPage({
         signerStatusKey,
         totalHeirCount,
         unverifiedHeirCount,
-        approvalTx
+        approvalTx,
+        approvalNetworkStatus
       }),
-    [caseData, signerStatusKey, totalHeirCount, unverifiedHeirCount, approvalTx]
+    [
+      caseData,
+      signerStatusKey,
+      totalHeirCount,
+      unverifiedHeirCount,
+      approvalTx,
+      approvalNetworkStatus
+    ]
   );
   const canPollApprovalStatus = useMemo(
     () =>
@@ -797,7 +813,7 @@ export default function CaseDetailPage({
   const distributionDisabledReason = useMemo(() => {
     return resolveDistributionDisabledReason({
       caseData,
-      approvalCompleted,
+      approvalCompleted: approvalReadyForDistribution,
       totalHeirCount,
       unverifiedHeirCount,
       distribution,
@@ -805,7 +821,7 @@ export default function CaseDetailPage({
     });
   }, [
     caseData,
-    approvalCompleted,
+    approvalReadyForDistribution,
     totalHeirCount,
     unverifiedHeirCount,
     distribution,
@@ -823,11 +839,24 @@ export default function CaseDetailPage({
     if (!user?.uid) return baseItems;
     return baseItems.filter((item) => !item.heirUid || item.heirUid === user.uid);
   }, [distributionItems, user?.uid]);
+  const distributionTxHashes = useMemo(() => {
+    const seen = new Set<string>();
+    const hashes: string[] = [];
+    for (const item of distributionItems) {
+      const txHash = typeof item.txHash === "string" ? item.txHash.trim() : "";
+      if (!txHash || seen.has(txHash)) continue;
+      seen.add(txHash);
+      hashes.push(txHash);
+    }
+    return hashes;
+  }, [distributionItems]);
   const nftReceiveStats = useMemo(() => {
     let success = 0;
     let failed = 0;
     for (const item of nftReceiveItems) {
-      const status = nftReceiveResults[item.itemId]?.status ?? "PENDING";
+      const status =
+        nftReceiveResults[item.itemId]?.status ??
+        (item.receiveStatus === "FAILED" ? "FAILED" : item.receiveTxHash ? "SUCCESS" : "PENDING");
       if (status === "SUCCESS") success += 1;
       if (status === "FAILED") failed += 1;
     }
@@ -1123,10 +1152,25 @@ export default function CaseDetailPage({
   ]);
 
   useEffect(() => {
-    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+    if (!canPollApprovalStatus) return;
+    const intervalId = window.setInterval(() => {
+      void fetchApprovalTx();
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [canPollApprovalStatus, fetchApprovalTx]);
+
+  useEffect(() => {
+    if (
+      !shouldFetchDistributionData({
+        isHeir,
+        tab,
+        caseId,
+        canAccessDeathClaims,
+        caseStage: caseData?.stage ?? null
+      })
+    ) {
       return;
     }
-    if (caseData?.stage !== "IN_PROGRESS") return;
     void fetchDistributionState();
   }, [
     isHeir,
@@ -1138,10 +1182,17 @@ export default function CaseDetailPage({
   ]);
 
   useEffect(() => {
-    if (!isHeir || tab !== "death-claims" || !caseId || !canAccessDeathClaims) {
+    if (
+      !shouldFetchDistributionData({
+        isHeir,
+        tab,
+        caseId,
+        canAccessDeathClaims,
+        caseStage: caseData?.stage ?? null
+      })
+    ) {
       return;
     }
-    if (caseData?.stage !== "IN_PROGRESS") return;
     void fetchDistributionItems();
   }, [
     isHeir,
@@ -1172,7 +1223,7 @@ export default function CaseDetailPage({
     setPrepareError(null);
     setPrepareSuccess(null);
     try {
-      await prepareApprovalTx(caseId);
+      await prepareApprovalTx(caseId, isApprovalExpired ? { force: true } : undefined);
       setPrepareSuccess("cases.detail.signer.prepare.success");
       setSignerSignedBlob("");
       autoSignKeyRef.current = "";
@@ -1188,36 +1239,6 @@ export default function CaseDetailPage({
         setPrepareError("cases.detail.prepare.disabled.notInProgress");
       } else {
         setPrepareError(resolveCaseDetailApiErrorMessage(err, "cases.detail.signer.prepare.error.failed"));
-      }
-    } finally {
-      setPrepareLoading(false);
-    }
-  };
-
-  const handleReprepareApproval = async () => {
-    if (!caseId) return;
-    setPrepareLoading(true);
-    setPrepareError(null);
-    setPrepareSuccess(null);
-    try {
-      await prepareApprovalTx(caseId, { force: true });
-      setPrepareSuccess("cases.detail.signer.prepare.reprepareSuccess");
-      setSignerSignedBlob("");
-      autoSignKeyRef.current = "";
-      await fetchSignerList();
-      await fetchApprovalTx();
-    } catch (err: any) {
-      const code = err?.data?.code;
-      if (code === "HEIR_WALLET_UNVERIFIED" || code === "WALLET_NOT_VERIFIED") {
-        setPrepareError("cases.detail.prepare.disabled.unverified");
-      } else if (code === "HEIR_MISSING") {
-        setPrepareError("cases.detail.prepare.disabled.noHeirs");
-      } else if (code === "NOT_READY") {
-        setPrepareError("cases.detail.signer.prepare.error.submitted");
-      } else {
-        setPrepareError(
-          resolveCaseDetailApiErrorMessage(err, "cases.detail.signer.prepare.error.reprepareFailed")
-        );
       }
     } finally {
       setPrepareLoading(false);
@@ -1270,23 +1291,54 @@ export default function CaseDetailPage({
       const offerId = item.offerId;
       if (!offerId) continue;
       try {
-        await acceptNftSellOffer({
+        const result = await acceptNftSellOffer({
           buyerSeed: seed,
           buyerAddress: heirWallet.address,
           offerId
         });
+        const txHash = (result.txHash ?? "").trim();
+        if (txHash) {
+          await recordDistributionReceiveTx(caseId, item.itemId, txHash);
+        }
+        setDistributionItems((prev) =>
+          prev.map((entry) =>
+            entry.itemId === item.itemId
+              ? {
+                  ...entry,
+                  receiveStatus: "SUBMITTED",
+                  receiveTxHash: txHash || entry.receiveTxHash || null,
+                  receiveError: null
+                }
+              : entry
+          )
+        );
         setNftReceiveResults((prev) => ({
           ...prev,
-          [item.itemId]: { status: "SUCCESS", error: null }
+          [item.itemId]: { status: "SUCCESS", error: null, txHash: txHash || null }
         }));
       } catch (err: any) {
+        const message = resolveCaseDetailApiErrorMessage(
+          err,
+          "cases.detail.nftReceive.error.acceptFailed"
+        );
         setNftReceiveResults((prev) => ({
           ...prev,
           [item.itemId]: {
             status: "FAILED",
-            error: err?.message ?? "cases.detail.nftReceive.error.acceptFailed"
+            error: message
           }
         }));
+        setDistributionItems((prev) =>
+          prev.map((entry) =>
+            entry.itemId === item.itemId
+              ? {
+                  ...entry,
+                  receiveStatus: "FAILED",
+                  receiveError: message
+                }
+              : entry
+          )
+        );
       }
     }
     setNftReceiveExecuting(false);
@@ -1464,6 +1516,19 @@ export default function CaseDetailPage({
         requiredCount: result.requiredCount,
         signedByMe: result.signedByMe
       }));
+      const submittedTxHash =
+        typeof result.submittedTxHash === "string" ? result.submittedTxHash.trim() : "";
+      if (submittedTxHash) {
+        setApprovalTx((prev) => ({
+          memo: prev?.memo ?? null,
+          txJson: prev?.txJson ?? null,
+          status: "SUBMITTED",
+          systemSignedHash: prev?.systemSignedHash ?? null,
+          submittedTxHash,
+          networkStatus: prev?.networkStatus ?? "PENDING",
+          networkResult: prev?.networkResult ?? null
+        }));
+      }
       setSignerSignedBlob("");
       setSignerSeed("");
       void fetchApprovalTx();
@@ -1942,6 +2007,18 @@ export default function CaseDetailPage({
                       : t("cases.detail.signer.mySignature.unsigned")}
                   </div>
                 </div>
+                {approvalSubmittedTxHash ? (
+                  <div className={styles.signerRow}>
+                    <div className={styles.signerLabel}>
+                      {t("cases.detail.signer.tx.sentLabel")}
+                    </div>
+                    <div className={styles.signerValue}>
+                      <XrplExplorerLink value={approvalSubmittedTxHash} resource="transaction">
+                        {approvalSubmittedTxHash}
+                      </XrplExplorerLink>
+                    </div>
+                  </div>
+                ) : null}
                 {approvalCompleted ? (
                   <div className={styles.signerRow}>
                     <div className={styles.signerLabel}>
@@ -1953,183 +2030,9 @@ export default function CaseDetailPage({
                   </div>
                 ) : null}
               </div>
-              <div className={styles.signerGuide}>
-                <div className={styles.signerGuideTitle}>{t("cases.detail.signer.guide.title")}</div>
-                <ol className={styles.signerGuideList}>
-                  <li>{t("cases.detail.signer.guide.steps.tx")}</li>
-                  <li>{t("cases.detail.signer.guide.steps.secret")}</li>
-                  <li>{t("cases.detail.signer.guide.steps.submit")}</li>
-                  <li>{t("cases.detail.signer.guide.steps.autoExecute")}</li>
-                </ol>
-              </div>
-              {showSignerDetails ? (
-                <div className={styles.signerTxSection}>
-                  <div className={styles.signerTxHeader}>
-                    <div className={styles.signerTxHeaderMain}>
-                      <div className={styles.signerTxTitle}>
-                        {t("cases.detail.signer.tx.title")}
-                      </div>
-                      <div className={styles.signerTxHint}>
-                        {t("cases.detail.signer.tx.hint")}
-                      </div>
-                    </div>
-                    <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
-                  </div>
-                  {approvalSubmitted ? (
-                    <div className={styles.signerTxStatus}>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>
-                            {t("cases.detail.signer.tx.sentLabel")}
-                          </div>
-                          <div className={styles.signerTxValue}>
-                            {approvalSubmittedTxHash ? (
-                              <XrplExplorerLink value={approvalSubmittedTxHash} resource="transaction">
-                                {approvalSubmittedTxHash}
-                              </XrplExplorerLink>
-                            ) : (
-                              "-"
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className={styles.signerTxRow}>
-                        <div>
-                          <div className={styles.signerTxLabel}>
-                            {t("cases.detail.signer.tx.afterLabel")}
-                          </div>
-                          <div className={styles.signerTxValue}>
-                            {approvalNetworkDetail}
-                          </div>
-                        </div>
-                        {canReprepareApproval ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleReprepareApproval}
-                            disabled={prepareLoading}
-                          >
-                            {t("cases.detail.signer.tx.actions.reprepare")}
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void fetchApprovalTx()}
-                          disabled={approvalLoading || !canPollApprovalStatus}
-                        >
-                          {t("cases.detail.signer.tx.actions.reload")}
-                        </Button>
-                      </div>
-                      {canReprepareApproval ? (
-                        <div className={styles.signerTxNote}>
-                          {t("cases.detail.signer.tx.note.expired")}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {approvalLoading ? (
-                    <div className={styles.muted}>{t("cases.detail.signer.tx.loading")}</div>
-                  ) : null}
-                  {approvalTxJson ? (
-                    <div className={styles.collapsible}>
-                      <div className={styles.collapsibleBody}>
-                        <div className={styles.collapsibleText}>
-                          <div className={styles.collapsibleTitle}>
-                            {t("cases.detail.signer.tx.details.title")}
-                          </div>
-                        </div>
-                        <div className={styles.signerTxGrid}>
-                          <div className={styles.signerTxRow}>
-                            <div>
-                              <div className={styles.signerTxLabel}>
-                                {t("cases.detail.signer.tx.memoLabel")}
-                              </div>
-                              <div className={styles.signerTxValue}>
-                                {approvalTx?.memo ?? "-"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={styles.muted}>{t("cases.detail.signer.tx.empty")}</div>
-                  )}
-                </div>
-              ) : (
-                <div className={styles.signerTxSection}>
-                  <div className={styles.signerTxHeader}>
-                    <div className={styles.signerTxHeaderMain}>
-                      <div className={styles.signerTxTitle}>
-                        {t("cases.detail.signer.tx.afterTitle")}
-                      </div>
-                      <div className={styles.signerTxHint}>
-                        {t("cases.detail.signer.tx.afterHint")}
-                      </div>
-                    </div>
-                    <span className={styles.signerTxBadge}>{approvalStatusLabel}</span>
-                  </div>
-                  <div className={styles.signerTxStatus}>
-                    <div className={styles.signerTxRow}>
-                      <div>
-                        <div className={styles.signerTxLabel}>
-                          {t("cases.detail.signer.tx.sentLabel")}
-                        </div>
-                        <div className={styles.signerTxValue}>
-                          {approvalSubmittedTxHash ? (
-                            <XrplExplorerLink value={approvalSubmittedTxHash} resource="transaction">
-                              {approvalSubmittedTxHash}
-                            </XrplExplorerLink>
-                          ) : (
-                            "-"
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className={styles.signerTxRow}>
-                      <div>
-                        <div className={styles.signerTxLabel}>
-                          {t("cases.detail.signer.tx.afterLabel")}
-                        </div>
-                        <div className={styles.signerTxValue}>
-                          {approvalNetworkDetail}
-                        </div>
-                      </div>
-                      {canReprepareApproval ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleReprepareApproval}
-                          disabled={prepareLoading}
-                        >
-                          {t("cases.detail.signer.tx.actions.reprepare")}
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void fetchApprovalTx()}
-                        disabled={approvalLoading || !canPollApprovalStatus}
-                      >
-                        {t("cases.detail.signer.tx.actions.reload")}
-                      </Button>
-                    </div>
-                    {canReprepareApproval ? (
-                      <div className={styles.signerTxNote}>
-                        {t("cases.detail.signer.tx.note.expired")}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              )}
-              {shouldShowSignerActions(approvalTx?.status ?? null) ? (
+              {shouldShowSignerActions(approvalTx?.status ?? null, approvalNetworkStatus) ? (
                 <div className={styles.signerActionPanel} data-testid="signer-action-panel">
-                  {approvalTxJson ? (
+                  {signerActionTxJson ? (
                     <>
                       <FormField label={t("cases.detail.signer.secret.label")}>
                         <Input
@@ -2251,6 +2154,22 @@ export default function CaseDetailPage({
                     })}
                   </div>
                 </div>
+                <div className={styles.signerRow}>
+                  <div className={styles.signerLabel}>{t("cases.detail.signer.tx.sentLabel")}</div>
+                  <div className={styles.signerValue}>
+                    {distributionTxHashes.length > 0 ? (
+                      <div className={styles.distributionTxHashList}>
+                        {distributionTxHashes.map((txHash) => (
+                          <XrplExplorerLink key={txHash} value={txHash} resource="transaction">
+                            {txHash}
+                          </XrplExplorerLink>
+                        ))}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </div>
+                </div>
               </div>
               <div className={styles.distributionActions}>
                 <Button
@@ -2302,9 +2221,20 @@ export default function CaseDetailPage({
                       <div className={styles.nftReceiveNote}>{t("common.loading")}</div>
                     ) : (
                       nftReceiveItems.map((item) => {
-                        const status = nftReceiveResults[item.itemId]?.status ?? "PENDING";
+                        const status =
+                          nftReceiveResults[item.itemId]?.status ??
+                          (item.receiveStatus === "FAILED"
+                            ? "FAILED"
+                            : item.receiveTxHash
+                              ? "SUCCESS"
+                              : "PENDING");
                         const statusLabel = nftReceiveStatusLabels[status] ?? status;
-                        const itemError = resolveMessage(nftReceiveResults[item.itemId]?.error);
+                        const itemError = resolveMessage(
+                          nftReceiveResults[item.itemId]?.error ?? item.receiveError
+                        );
+                        const itemTxHash =
+                          nftReceiveResults[item.itemId]?.txHash ??
+                          (typeof item.receiveTxHash === "string" ? item.receiveTxHash : null);
                         return (
                           <div key={item.itemId} className={styles.nftReceiveItem}>
                             <div className={styles.nftReceiveItemRow}>
@@ -2323,6 +2253,18 @@ export default function CaseDetailPage({
                                 {statusLabel}
                               </span>
                             </div>
+                            {itemTxHash ? (
+                              <div className={styles.nftReceiveItemRow}>
+                                <span className={styles.nftReceiveItemLabel}>
+                                  {t("walletVerify.txHash.label")}
+                                </span>
+                                <span className={styles.nftReceiveItemValue}>
+                                  <XrplExplorerLink value={itemTxHash} resource="transaction">
+                                    {itemTxHash}
+                                  </XrplExplorerLink>
+                                </span>
+                              </div>
+                            ) : null}
                             {itemError ? (
                               <div className={styles.nftReceiveItemError}>{itemError}</div>
                             ) : null}

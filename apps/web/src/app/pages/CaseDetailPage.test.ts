@@ -407,6 +407,18 @@ describe("CaseDetailPage", () => {
     expect(shouldFetch).toBe(true);
   });
 
+  it("fetches distribution data when inheritance is completed", async () => {
+    const { shouldFetchDistributionData } = await import("./CaseDetailPage");
+    const shouldFetch = shouldFetchDistributionData({
+      isHeir: true,
+      tab: "death-claims",
+      caseId: "case-1",
+      canAccessDeathClaims: true,
+      caseStage: "COMPLETED"
+    });
+    expect(shouldFetch).toBe(true);
+  });
+
   it("allows prepare when signer list is set but approval tx is missing", async () => {
     const { resolvePrepareDisabledReason } = await import("./CaseDetailPage");
     const reason = resolvePrepareDisabledReason({
@@ -443,6 +455,34 @@ describe("CaseDetailPage", () => {
       totalHeirCount: 1,
       unverifiedHeirCount: 0,
       approvalTx: null
+    });
+    expect(reason).toBeNull();
+  });
+
+  it("allows prepare retry when approval tx is expired", async () => {
+    const { resolvePrepareDisabledReason } = await import("./CaseDetailPage");
+    const reason = resolvePrepareDisabledReason({
+      caseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      },
+      signerStatusKey: "SET",
+      totalHeirCount: 1,
+      unverifiedHeirCount: 0,
+      approvalNetworkStatus: "EXPIRED",
+      approvalTx: {
+        memo: null,
+        txJson: {},
+        status: "SUBMITTED",
+        submittedTxHash: "tx-hash",
+        systemSignedHash: null,
+        networkResult: null
+      }
     });
     expect(reason).toBeNull();
   });
@@ -804,6 +844,68 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("分配を実行");
   });
 
+  it("shows transfer tx hashes in receive step content", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "approval-tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
+      initialDistributionItems: [
+        {
+          itemId: "dist-1",
+          status: "VERIFIED",
+          txHash: "dist-tx-hash-1"
+        },
+        {
+          itemId: "dist-2",
+          status: "VERIFIED",
+          txHash: "dist-tx-hash-2"
+        }
+      ],
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("dist-tx-hash-1");
+    expect(html).toContain('href="https://testnet.xrpl.org/transactions/dist-tx-hash-1"');
+    expect(html).toContain("dist-tx-hash-2");
+    expect(html).toContain('href="https://testnet.xrpl.org/transactions/dist-tx-hash-2"');
+  });
+
   it("shows distribution section and hides nft receive when receivable items are empty", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
@@ -908,16 +1010,35 @@ describe("CaseDetailPage", () => {
     expect(html).toContain("STEP 3/4");
     expect(html).not.toContain("3/4: 署名");
     expect(html).not.toContain("分配を実行");
+    expect(html).not.toContain("署名内容");
+    expect(html).toContain("送信Tx");
+    expect(html).not.toContain("送信後の状態");
+    expect(html).not.toContain("署名の流れ");
+    expect(html).not.toContain(
+      "同意内容を確認し、シークレット入力で署名を作成して送信します。必要な署名がそろうと相続実行へ進みます。"
+    );
     expect(html).toContain('href="https://testnet.xrpl.org/transactions/tx-hash"');
     expect(html).not.toContain("1分ごとに自動更新します。");
   });
 
-  it("keeps signature step even when signer quorum is met but approval tx is not validated", async () => {
+  it("shows receive step when signer quorum is met even before approval tx validation", async () => {
     authUser = { uid: "heir" };
     searchParams = new URLSearchParams("tab=death-claims");
+    caseHeirsData = [
+      {
+        inviteId: "invite-1",
+        email: "heir1@example.com",
+        relationLabel: "長男",
+        relationOther: null,
+        acceptedByUid: "heir_1",
+        acceptedAt: "2024-01-02",
+        walletStatus: "VERIFIED"
+      }
+    ];
 
     const html = await render({
       initialIsOwner: false,
+      initialHeirs: caseHeirsData,
       initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
       initialDeathClaim: {
         claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
@@ -956,9 +1077,11 @@ describe("CaseDetailPage", () => {
       }
     });
 
-    expect(html).toContain("STEP 3/4");
-    expect(html).not.toContain("3/4: 署名");
-    expect(html).not.toContain("分配を実行");
+    expect(html).toContain("STEP 4/4");
+    expect(html).not.toContain("4/4: 受け取り");
+    expect(html).toContain("分配を実行");
+    expect(html).not.toContain("相続実行の同意が完了すると分配を実行できます。");
+    expect(html).not.toMatch(/<button[^>]*\sdisabled(=|>)[^>]*>分配を実行/);
   });
 
   it("hides nft receive block when receivable items are empty", async () => {
@@ -1048,6 +1171,64 @@ describe("CaseDetailPage", () => {
       }
     });
     expect(html).toContain("NFT受取");
+  });
+
+  it("shows received tx hash in nft receive block", async () => {
+    authUser = { uid: "heir" };
+    searchParams = new URLSearchParams("tab=death-claims");
+    const html = await render({
+      initialIsOwner: false,
+      initialHeirWallet: { address: "rHeir", verificationStatus: "PENDING" },
+      initialDeathClaim: {
+        claim: { claimId: "claim-1", status: "ADMIN_APPROVED", submittedByUid: "heir" },
+        confirmedByMe: false,
+        confirmationsCount: 0,
+        requiredCount: 1,
+        files: []
+      },
+      initialSignerList: {
+        status: "SET",
+        quorum: 1,
+        signaturesCount: 1,
+        requiredCount: 1,
+        signedByMe: true
+      },
+      initialApprovalTx: {
+        status: "SUBMITTED",
+        txJson: {
+          Account: "rSource",
+          Destination: "rDestination",
+          Amount: "1000"
+        },
+        memo: "memo",
+        submittedTxHash: "tx-hash",
+        networkStatus: "VALIDATED",
+        networkResult: "tesSUCCESS"
+      },
+      initialDistributionItems: [
+        {
+          itemId: "dist-1",
+          type: "NFT",
+          offerId: "offer-1",
+          heirUid: "heir",
+          status: "PENDING",
+          tokenId: "000ABC",
+          receiveTxHash: "tx-receive-hash"
+        }
+      ],
+      initialCaseData: {
+        caseId: "case-1",
+        ownerUid: "owner",
+        ownerDisplayName: "山田",
+        stage: "IN_PROGRESS",
+        assetLockStatus: "LOCKED",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01"
+      }
+    });
+
+    expect(html).toContain("tx-receive-hash");
+    expect(html).toContain('href="https://testnet.xrpl.org/transactions/tx-receive-hash"');
   });
 
   it("shows only prepare action before approval tx is generated", async () => {
@@ -1211,6 +1392,7 @@ describe("CaseDetailPage", () => {
   it("hides signer actions when approval is submitted", async () => {
     const { shouldShowSignerActions } = await import("./CaseDetailPage");
     expect(shouldShowSignerActions("SUBMITTED")).toBe(false);
+    expect(shouldShowSignerActions("SUBMITTED", "EXPIRED")).toBe(true);
     expect(shouldShowSignerActions("PREPARED")).toBe(true);
   });
 
