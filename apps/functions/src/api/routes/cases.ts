@@ -1645,7 +1645,7 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
     if (caseData.stage !== "IN_PROGRESS") {
-      return jsonError(c, 400, "NOT_READY", "相続中のみ実行できます");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.disabled.notInProgress");
     }
 
     const approvalRef = caseRef.collection("signerList").doc("approvalTx");
@@ -1654,7 +1654,7 @@ export const casesRoutes = () => {
     const submittedTxHash =
       typeof approval.submittedTxHash === "string" ? approval.submittedTxHash : null;
     if (approval.status !== "SUBMITTED" || !submittedTxHash) {
-      return jsonError(c, 400, "NOT_READY", "相続実行の同意が完了していません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.approvalIncomplete");
     }
     const approvalTxResult = await fetchXrplTx(submittedTxHash);
     if (!approvalTxResult.ok) {
@@ -1672,11 +1672,11 @@ export const casesRoutes = () => {
             c,
             400,
             "NOT_READY",
-            "相続実行の同意トランザクションの期限が切れています"
+            "cases.detail.distribution.error.approvalTxExpired"
           );
         }
       }
-      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションを確認できません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.approvalTxUnavailable");
     }
     const approvalTx = approvalTxResult.tx as any;
     const approvalValidated = Boolean(approvalTx?.validated);
@@ -1699,19 +1699,19 @@ export const casesRoutes = () => {
             c,
             400,
             "NOT_READY",
-            "相続実行の同意トランザクションの期限が切れています"
+            "cases.detail.distribution.error.approvalTxExpired"
           );
         }
       }
-      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションが未検証です");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.approvalTxUnvalidated");
     }
     if (approvalResult && approvalResult !== "tesSUCCESS") {
-      return jsonError(c, 400, "NOT_READY", "相続実行の同意トランザクションが失敗しています");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.approvalTxFailed");
     }
 
     const heirUids = memberUids.filter((uid) => uid !== caseData.ownerUid);
     if (heirUids.length === 0) {
-      return jsonError(c, 400, "HEIR_MISSING", "相続人が未登録です");
+      return jsonError(c, 400, "HEIR_MISSING", "cases.detail.distribution.disabled.noHeirs");
     }
     const heirWalletSnaps = await Promise.all(
       heirUids.map((uid) => caseRef.collection("heirWallets").doc(uid).get())
@@ -1723,7 +1723,7 @@ export const casesRoutes = () => {
       return { uid: heirUids[index] ?? "", address, verified };
     });
     if (heirWallets.some((wallet) => !wallet.verified)) {
-      return jsonError(c, 400, "HEIR_WALLET_UNVERIFIED", "相続人の受取用ウォレットが未確認です");
+      return jsonError(c, 400, "HEIR_WALLET_UNVERIFIED", "cases.detail.distribution.error.heirWalletUnverified");
     }
     const heirWalletMap = new Map(
       heirWallets.map((wallet) => [wallet.uid, wallet.address])
@@ -1734,7 +1734,7 @@ export const casesRoutes = () => {
     const lockWalletAddress = lockData?.wallet?.address;
     const lockSeedEncrypted = lockData?.wallet?.seedEncrypted;
     if (!lockWalletAddress || !lockSeedEncrypted) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "分配用ウォレットが未設定です");
+      return jsonError(c, 400, "VALIDATION_ERROR", "cases.detail.distribution.error.walletMissing");
     }
     const lockSeed = decryptPayload(lockSeedEncrypted);
 
@@ -1803,7 +1803,7 @@ export const casesRoutes = () => {
             const feeDrops = BigInt(itemsToAttempt.length) * feePerTxDrops;
             const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
             if (availableDrops <= 0n) {
-              return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+              return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.insufficientBalance");
             }
             if (totalXrpDrops > availableDrops) {
               for (const { doc, item } of itemsToAttempt) {
@@ -1959,12 +1959,12 @@ export const casesRoutes = () => {
       return heirUids.length > 0;
     });
     if (eligiblePlans.length === 0) {
-      return jsonError(c, 400, "NOT_READY", "相続対象の指図がありません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.planMissing");
     }
 
     const assetLockItemsSnap = await caseRef.collection("assetLockItems").get();
     if (assetLockItemsSnap.empty) {
-      return jsonError(c, 400, "NOT_READY", "分配対象の資産がありません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.assetMissing");
     }
 
     type AssetTotals = {
@@ -2171,7 +2171,7 @@ export const casesRoutes = () => {
     }
 
     if (distributionItems.length === 0) {
-      return jsonError(c, 400, "NOT_READY", "分配対象がありません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.itemMissing");
     }
 
     const feePerTxDrops = 12n;
@@ -2197,7 +2197,7 @@ export const casesRoutes = () => {
     const feeDrops = BigInt(distributionItems.length) * feePerTxDrops;
     const availableDrops = balanceDrops - requiredReserveDrops - feeDrops;
     if (availableDrops <= 0n) {
-      return jsonError(c, 400, "NOT_READY", "送金元の残高が不足しています");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.distribution.error.insufficientBalance");
     }
     const totalXrpDrops = distributionItems.reduce((total, item) => {
       if (item.token || item.type === "NFT") return total;
@@ -2340,7 +2340,7 @@ export const casesRoutes = () => {
     const signedBlob =
       typeof body?.signedBlob === "string" ? body.signedBlob.trim() : "";
     if (!signedBlob) {
-      return jsonError(c, 400, "VALIDATION_ERROR", "signedBlobは必須です");
+      return jsonError(c, 400, "VALIDATION_ERROR", "cases.detail.signer.error.signedBlobRequired");
     }
 
     const db = getFirestore();
@@ -2355,13 +2355,13 @@ export const casesRoutes = () => {
       return jsonError(c, 403, "FORBIDDEN", "権限がありません");
     }
     if (caseData.stage !== "IN_PROGRESS") {
-      return jsonError(c, 400, "NOT_READY", "相続実行が開始されていません");
+      return jsonError(c, 400, "NOT_READY", "cases.detail.signer.error.notInProgress");
     }
 
     const signerRef = caseRef.collection("signerList").doc("state");
     const signerSnap = await signerRef.get();
     if (!signerSnap.exists || signerSnap.data()?.status !== "SET") {
-      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "署名準備が完了していません");
+      return jsonError(c, 400, "SIGNER_LIST_NOT_READY", "cases.detail.signer.error.signerListNotReady");
     }
 
     const walletSnap = await caseRef.collection("heirWallets").doc(auth.uid).get();
@@ -2369,27 +2369,27 @@ export const casesRoutes = () => {
     const address = typeof wallet.address === "string" ? wallet.address : "";
     const isVerified = wallet.verificationStatus === "VERIFIED";
     if (!address || !isVerified) {
-      return jsonError(c, 400, "WALLET_NOT_VERIFIED", "ウォレットが未確認です");
+      return jsonError(c, 400, "WALLET_NOT_VERIFIED", "cases.detail.signer.error.walletNotVerified");
     }
 
     const approvalRef = caseRef.collection("signerList").doc("approvalTx");
     const approvalSnap = await approvalRef.get();
     if (!approvalSnap.exists) {
-      return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "署名対象が未生成です");
+      return jsonError(c, 400, "APPROVAL_TX_NOT_READY", "cases.detail.signer.error.approvalTxNotReady");
     }
     const approvalData = approvalSnap.data() ?? {};
     const decoded: any = decodeSignedBlob(signedBlob);
     const signers = Array.isArray(decoded?.Signers) ? decoded.Signers : [];
     const hasSigner = signers.some((entry: any) => entry?.Signer?.Account === address);
     if (!hasSigner) {
-      return jsonError(c, 400, "SIGNER_MISMATCH", "署名者が一致しません");
+      return jsonError(c, 400, "SIGNER_MISMATCH", "cases.detail.signer.error.signerMismatch");
     }
     const memoHex = Buffer.from(String(approvalData.memo ?? ""), "utf8")
       .toString("hex")
       .toUpperCase();
     const memoValue = decoded?.Memos?.[0]?.Memo?.MemoData ?? "";
     if (memoHex && memoValue !== memoHex) {
-      return jsonError(c, 400, "MEMO_MISMATCH", "署名対象が一致しません");
+      return jsonError(c, 400, "MEMO_MISMATCH", "cases.detail.signer.error.memoMismatch");
     }
 
     const now = c.get("deps").now();
@@ -4032,12 +4032,11 @@ export const casesRoutes = () => {
       const availableDrops = balanceDrops - totalReserveDrops - feeDrops;
       availableDropsByAsset.set(assetId, availableDrops);
       if (availableDrops <= 0n) {
-        const labelSuffix = asset.label ? `「${asset.label}」` : "";
         return jsonError(
           c,
           400,
           "INSUFFICIENT_BALANCE",
-          `資産ウォレット${labelSuffix}の残高が不足しています。資産ウォレットにXRPを追加してください。`
+          "assetLock.error.insufficientBalance"
         );
       }
       const xrpEntry = itemsForAsset.find((entry) => !entry.data?.token);
@@ -4116,7 +4115,7 @@ export const casesRoutes = () => {
           c,
           400,
           "INSUFFICIENT_BALANCE",
-          "相続先ウォレットの預かり金が不足しています。資産ウォレットにXRPを追加してください。"
+          "assetLock.error.destinationPrefundInsufficient"
         );
       }
 
@@ -4160,7 +4159,7 @@ export const casesRoutes = () => {
         c,
         400,
         "DISTRIBUTION_WALLET_NOT_ACTIVATED",
-        "分配用ウォレットがXRPL上でまだ有効化されていません。処理中の可能性があるため、数十秒待ってから同意の準備を再実行してください。"
+        "cases.detail.signer.error.accountNotFound"
       );
     }
 

@@ -3441,6 +3441,7 @@ describe("createApiHandler", () => {
 
       expect(execRes.statusCode).toBe(400);
       expect(execRes.body?.code).toBe("DISTRIBUTION_WALLET_NOT_ACTIVATED");
+      expect(execRes.body?.message).toBe("cases.detail.signer.error.accountNotFound");
       expect(sharedMocks.sendXrpPayment).toHaveBeenCalledTimes(1);
 
       const caseSnap = await db.collection("cases").doc(caseId).get();
@@ -3793,6 +3794,7 @@ describe("createApiHandler", () => {
 
     expect(execRes.statusCode).toBe(400);
     expect(execRes.body?.code).toBe("INSUFFICIENT_BALANCE");
+    expect(execRes.body?.message).toBe("assetLock.error.insufficientBalance");
     (globalThis as any).fetch = fetchOriginal;
   });
 

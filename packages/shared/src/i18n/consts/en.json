@@ -268,7 +268,18 @@
         },
         "error": {
           "loadFailed": "Failed to load distribution status",
-          "executeFailed": "Failed to execute distribution"
+          "executeFailed": "Failed to execute distribution",
+          "approvalIncomplete": "Consent for inheritance execution is not complete.",
+          "approvalTxExpired": "Consent transaction expired. Please re-prepare.",
+          "approvalTxUnavailable": "Unable to verify the consent transaction.",
+          "approvalTxUnvalidated": "Consent transaction is not yet validated.",
+          "approvalTxFailed": "Consent transaction failed.",
+          "heirWalletUnverified": "Some heir receiving wallets are not verified.",
+          "walletMissing": "Distribution wallet is not configured.",
+          "insufficientBalance": "Insufficient source wallet balance.",
+          "planMissing": "No eligible plans found for distribution.",
+          "assetMissing": "No assets available for distribution.",
+          "itemMissing": "No distribution targets available."
         }
       },
       "nftReceive": {
@@ -358,7 +369,13 @@
           "txMissing": "Signable transaction is unavailable",
           "signFailed": "Failed to create signature",
           "signedBlobRequired": "Please enter signed data",
-          "submitFailed": "Failed to submit signature"
+          "submitFailed": "Failed to submit signature",
+          "notInProgress": "Inheritance execution has not started.",
+          "signerListNotReady": "Signature preparation is not complete.",
+          "walletNotVerified": "Receiving wallet ownership verification is required.",
+          "approvalTxNotReady": "Signable payload has not been generated.",
+          "signerMismatch": "Signer does not match.",
+          "memoMismatch": "Signed payload does not match the target."
         },
         "tx": {
           "title": "Signing details",
@@ -844,7 +861,9 @@
       "backToRegularKeyFailed": "Failed to return to RegularKey check",
       "confirmFailed": "Failed to record confirmation",
       "regularKeyFailed": "Failed to verify RegularKey",
-      "stepUpdateFailed": "Failed to update step"
+      "stepUpdateFailed": "Failed to update step",
+      "insufficientBalance": "Asset wallet balance is insufficient. Please add XRP to the asset wallet.",
+      "destinationPrefundInsufficient": "Escrowed funds for the destination wallet are insufficient. Please add XRP to the asset wallet."
     },
     "prepare": {
       "description": "Check assets, reserves, and heirs.",
